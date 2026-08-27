@@ -1,0 +1,96 @@
+@import 'tailwindcss';
+
+@theme {
+    --color-boracay: #00A896;
+    --color-boracay-dark: #007F73;
+    --color-boracay-light: #E1F7F3;
+    --color-philippine-gold: #F4B41A;
+    --color-palawan-sand: #FDFBF7;
+    --color-volcanic-teal: #0B252B;
+    --color-benguet-charcoal: #2C3531;
+    --color-island-white: #FFFFFF;
+}
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+@source '../../resources/views/**/*.blade.php';
+@source '../**/*.blade.php';
+@source '../**/*.js';
+
+@layer base {
+    html {
+        background-color: var(--color-palawan-sand);
+    }
+
+    body {
+        min-height: 100vh;
+        background-color: var(--color-palawan-sand);
+        color: var(--color-benguet-charcoal);
+    }
+
+    button,
+    a,
+    input,
+    select,
+    textarea {
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    button:focus-visible,
+    a:focus-visible,
+    input:focus-visible,
+    select:focus-visible,
+    textarea:focus-visible {
+        outline: 3px solid color-mix(in srgb, var(--color-philippine-gold) 75%, transparent);
+        outline-offset: 2px;
+    }
+}
+
+@layer components {
+    .tm-card {
+        border: 1px solid color-mix(in srgb, var(--color-boracay) 12%, transparent);
+        border-radius: 1rem;
+        background-color: var(--color-island-white);
+        box-shadow: 0 10px 30px rgb(44 53 49 / 6%);
+    }
+
+    .tm-primary-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 0.75rem;
+        background-color: var(--color-boracay);
+        padding: 0.75rem 1.25rem;
+        font-weight: 600;
+        color: var(--color-benguet-charcoal);
+        transition: background-color 150ms ease, color 150ms ease, transform 150ms ease;
+    }
+
+    .tm-primary-button:hover {
+        background-color: var(--color-boracay-dark);
+        color: white;
+        transform: translateY(-1px);
+    }
+
+    .tm-gold-badge {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 9999px;
+        background-color: color-mix(in srgb, var(--color-philippine-gold) 22%, transparent);
+        padding: 0.25rem 0.75rem;
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--color-benguet-charcoal);
+    }
+}
+
+.dark {
+    color-scheme: dark;
+}
+
+.dark body {
+    background-color: var(--color-volcanic-teal);
+    color: white;
+}
