@@ -6,6 +6,7 @@ use App\Http\Controllers\DestinationController;
 use App\Http\Controllers\PreferenceController;
 use App\Http\Controllers\RecommendationController;
 use App\Http\Controllers\SwipeDiscoveryController;
+use App\Http\Controllers\ItineraryController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -49,6 +50,12 @@ Route::middleware('auth')->group(function () {
         
     Route::post('/discover/reset', [SwipeDiscoveryController::class, 'reset'])
         ->name('discover.reset');
+
+    Route::resource('itineraries', ItineraryController::class)
+    ->only(['index', 'create', 'store', 'show', 'destroy']);
+
+    Route::patch('/itineraries/{itinerary}/complete', [ItineraryController::class, 'complete'])
+    ->name('itineraries.complete');
 });
 
 require __DIR__.'/auth.php';
