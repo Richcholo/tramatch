@@ -3,10 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="theme-color" content="#00A896">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
 
     <link rel="icon" href="{{ asset('images/logo.png') }}">
+    <link rel="manifest" href="/manifest.webmanifest">
 
     <title>{{ $title ?? 'TraMatch' }}</title>
 
@@ -16,14 +20,19 @@
 <body class="min-h-screen bg-palawan-sand text-benguet-charcoal">
     <header class="border-b border-boracay-light bg-island-white">
         <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
-            <a href="{{ route('dashboard') }}" class="flex items-center gap-3">
+            <a
+                href="{{ route('dashboard') }}"
+                class="flex items-center gap-3"
+            >
                 <img
                     src="{{ asset('images/logo.png') }}"
                     alt="TraMatch logo"
                     class="h-10 w-auto"
                 >
 
-                <span class="sr-only">TraMatch</span>
+                <span class="sr-only">
+                    TraMatch
+                </span>
             </a>
 
             <nav class="flex flex-wrap items-center gap-3 text-sm font-medium sm:gap-5">
@@ -88,8 +97,20 @@
                     </a>
                 @endif
 
+                @if (Route::has('admin.dashboard') && auth()->check() && auth()->user()->isAdmin())
+                    <a
+                        href="{{ route('admin.dashboard') }}"
+                        class="rounded-lg px-2 py-1 font-semibold text-boracay-dark hover:text-volcanic-teal"
+                    >
+                        Admin
+                    </a>
+                @endif
+
                 @if (Route::has('logout'))
-                    <form method="POST" action="{{ route('logout') }}">
+                    <form
+                        method="POST"
+                        action="{{ route('logout') }}"
+                    >
                         @csrf
 
                         <button

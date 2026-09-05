@@ -9,6 +9,27 @@
     --color-volcanic-teal: #0B252B;
     --color-benguet-charcoal: #2C3531;
     --color-island-white: #FFFFFF;
+
+    --animate-float: float 7s ease-in-out infinite;
+    --animate-float-delay: float 7s 1.5s ease-in-out infinite;
+    --animate-reveal: reveal 800ms ease both;
+    --animate-reveal-delay: reveal 800ms 140ms ease both;
+    --animate-marquee: marquee 28s linear infinite;
+
+    @keyframes float {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-10px); }
+    }
+
+    @keyframes reveal {
+        from { opacity: 0; transform: translateY(18px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes marquee {
+        from { transform: translateX(0); }
+        to { transform: translateX(-50%); }
+    }
 }
 
 @custom-variant dark (&:where(.dark, .dark *));
@@ -22,6 +43,23 @@
 @layer base {
     html {
         background-color: var(--color-palawan-sand);
+    }
+
+    html.lenis,
+    html.lenis body {
+        height: auto;
+    }
+
+    .lenis.lenis-smooth {
+        scroll-behavior: auto !important;
+    }
+
+    .lenis.lenis-smooth [data-lenis-prevent] {
+        overscroll-behavior: contain;
+    }
+
+    .lenis.lenis-stopped {
+        overflow: hidden;
     }
 
     body {
@@ -83,6 +121,61 @@
         font-size: 0.875rem;
         font-weight: 600;
         color: var(--color-benguet-charcoal);
+    }
+
+    .tm-hero-art {
+        background:
+            radial-gradient(circle at 68% 28%, rgb(244 180 26 / 78%) 0 7%, transparent 24%),
+            radial-gradient(circle at 80% 62%, rgb(0 168 150 / 65%) 0 13%, transparent 36%),
+            linear-gradient(145deg, #0B252B 0%, #0C4C50 43%, #00A896 100%);
+    }
+
+    .tm-hero-art::before {
+        content: '';
+        position: absolute;
+        inset: 10% 8% 8% 16%;
+        border-radius: 48% 52% 42% 58%;
+        background:
+            linear-gradient(135deg, rgb(253 251 247 / 18%), transparent 42%),
+            linear-gradient(160deg, transparent 46%, rgb(244 180 26 / 35%) 46% 48%, transparent 48% 54%, rgb(253 251 247 / 20%) 54% 55%, transparent 55%);
+        transform: rotate(-8deg);
+        filter: blur(0.2px);
+    }
+
+    .tm-hero-art::after {
+        content: '';
+        position: absolute;
+        right: -10%;
+        bottom: -11%;
+        width: 70%;
+        height: 42%;
+        border-radius: 50% 50% 0 0;
+        background: rgb(11 37 43 / 35%);
+        transform: rotate(-8deg);
+    }
+
+    .tm-drag-rail {
+        cursor: grab;
+        scrollbar-width: none;
+    }
+
+    .tm-drag-rail::-webkit-scrollbar {
+        display: none;
+    }
+
+    .tm-drag-rail.is-dragging {
+        cursor: grabbing;
+    }
+
+    .tm-drag-rail.is-dragging * {
+        pointer-events: none;
+    }
+
+    @media (min-width: 768px) {
+        .tm-step {
+            position: sticky;
+            top: calc(5rem + var(--i, 0) * 1.5rem);
+        }
     }
 }
 
