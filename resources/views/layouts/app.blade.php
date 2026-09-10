@@ -14,7 +14,11 @@
 
     <title>{{ $title ?? 'TraMatch' }}</title>
 
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @vite([
+    'resources/css/app.css',
+    'resources/js/app.js',
+    'resources/js/page-transitions.js'
+    ])
 </head>
 
 <body class="min-h-screen bg-palawan-sand text-benguet-charcoal">

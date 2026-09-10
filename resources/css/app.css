@@ -87,6 +87,23 @@
 }
 
 @layer components {
+    .intro-portal {
+        clip-path: ellipse(0% 0% at 50% 100%);
+        will-change: clip-path;
+    }
+
+    .intro-scrim {
+        pointer-events: none;
+    }
+
+    .hero-title-shadow {
+        text-shadow: 0 2px 18px rgb(11 37 43 / 55%), 0 1px 3px rgb(11 37 43 / 70%);
+    }
+
+    .script-shadow {
+        text-shadow: 0 3px 24px rgb(11 37 43 / 65%), 0 1px 3px rgb(11 37 43 / 85%);
+    }
+
     .tm-card {
         border: 1px solid color-mix(in srgb, var(--color-boracay) 12%, transparent);
         border-radius: 1rem;
@@ -186,4 +203,63 @@
 .dark body {
     background-color: var(--color-volcanic-teal);
     color: white;
+}
+
+.font-display {
+    font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
+}
+
+.font-script {
+    font-family: 'Pinyon Script', 'Segoe Script', 'Brush Script MT', cursive;
+}
+
+:root {
+    --page-transition-color: #0B252B;
+    --page-cover-duration: 650ms;
+    --page-reveal-duration: 950ms;
+    --page-transition-easing: cubic-bezier(0.45, 0, 0.55, 1);
+}
+
+[data-page-curtain] {
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    pointer-events: none;
+    background: var(--page-transition-color);
+    opacity: 0;
+}
+
+[data-page-curtain].page-curtain-entering {
+    pointer-events: auto;
+    animation: page-curtain-enter
+        var(--page-cover-duration)
+        var(--page-transition-easing)
+        both;
+}
+
+[data-page-curtain].page-curtain-leaving {
+    animation: page-curtain-leave
+        var(--page-reveal-duration)
+        var(--page-transition-easing)
+        both;
+}
+
+@keyframes page-curtain-enter {
+    from {
+        opacity: var(--curtain-start-opacity, 0);
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes page-curtain-leave {
+    from {
+        opacity: 1;
+    }
+
+    to {
+        opacity: 0;
+    }
 }

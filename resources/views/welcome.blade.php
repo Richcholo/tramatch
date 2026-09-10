@@ -30,10 +30,160 @@
 
     <title>TraMatch — Find the places that feel like you</title>
 
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600&family=Pinyon+Script&display=swap" rel="stylesheet">
+
+    @vite([
+    'resources/css/app.css',
+    'resources/js/home.js',
+    'resources/js/page-transitions.js'
+    ])
+
 </head>
 
-<body class="min-h-screen bg-palawan-sand text-benguet-charcoal antialiased">
+<body id="top" class="min-h-screen bg-palawan-sand text-benguet-charcoal antialiased">
+    <div id="intro-overlay" class="fixed inset-0 z-[9999] pointer-events-none" style="opacity: 0;">
+        <div class="intro-card relative h-full w-full overflow-hidden">
+            <div
+                class="absolute inset-0"
+                style="background: linear-gradient(165deg, #0B252B 0%, #0F3A40 60%, #134B52 100%);"
+            ></div>
+
+            <div class="intro-portal absolute inset-0">
+                <div
+                    class="absolute inset-0"
+                    style="background: linear-gradient(180deg, #8FDCD4 0%, #C9EDE4 34%, #F8CE7A 60%, #F4A259 76%, #0E5E58 100%);"
+                ></div>
+
+                <div
+                    class="intro-sun absolute left-1/2 top-[56%] h-44 w-44 -translate-x-1/2 -translate-y-1/2 rounded-full"
+                    style="background: radial-gradient(circle, #FFF3D6 0%, #F6C66B 42%, rgba(246,198,107,0) 70%);"
+                ></div>
+
+                <div
+                    class="absolute inset-x-0 bottom-0 h-[24%]"
+                    style="background: linear-gradient(180deg, rgba(11,37,43,0) 0%, rgba(11,37,43,0.85) 100%);"
+                ></div>
+
+                <div class="intro-night absolute inset-0 opacity-0">
+                    <div
+                        class="absolute inset-0"
+                        style="background: linear-gradient(180deg, #171233 0%, #2D1A41 48%, #54315C 72%, #0B252B 100%);"
+                    ></div>
+
+                    <div
+                        class="absolute left-1/2 top-[26%] h-14 w-14 -translate-x-1/2 rounded-full"
+                        style="background: radial-gradient(circle, #F8F8FB 0%, rgba(248,248,251,0) 68%);"
+                    ></div>
+                </div>
+            </div>
+
+            <div
+                class="absolute inset-0"
+                style="background: radial-gradient(120% 90% at 50% 10%, rgba(11,37,43,0) 40%, rgba(11,37,43,0.35) 100%);"
+            ></div>
+
+            <div class="intro-scrim absolute inset-0"></div>
+
+            <div class="intro-badge absolute left-6 top-6 z-10 hidden h-24 w-24 sm:block lg:left-10 lg:top-10">
+                <svg viewBox="0 0 100 100" class="intro-badge-ring h-full w-full">
+                    <defs>
+                        <path
+                            id="badge-circle"
+                            d="M 50,50 m -38,0 a 38,38 0 1,1 76,0 a 38,38 0 1,1 -76,0"
+                        />
+                    </defs>
+
+                    <text
+                        class="fill-white/80"
+                        style="font-size: 8.5px; letter-spacing: 2.5px; text-transform: uppercase;"
+                    >
+                        <textPath href="#badge-circle">
+                            TraMatch · Discover locally ·
+                        </textPath>
+                    </text>
+                </svg>
+
+                <img
+                    src="{{ asset('images/logo.png') }}"
+                    alt=""
+                    class="absolute left-1/2 top-1/2 h-8 w-8 -translate-x-1/2 -translate-y-1/2 object-contain"
+                >
+            </div>
+
+            <div
+                class="intro-side absolute left-4 top-1/2 z-10 hidden -translate-y-1/2 lg:block"
+                style="writing-mode: vertical-rl;"
+            >
+                <span class="text-[0.65rem] font-semibold uppercase tracking-[0.4em] text-white/65">
+                    Scroll
+                </span>
+            </div>
+
+            <div class="intro-ui absolute inset-0 z-10">
+                <div class="intro-fade absolute inset-x-0 top-8 flex justify-center sm:top-12">
+                    <img
+                        src="{{ asset('images/logo.png') }}"
+                        alt="TraMatch"
+                        class="h-10 w-auto sm:h-12"
+                    >
+                </div>
+
+                <div class="intro-fade absolute inset-0 grid grid-cols-[1fr_auto_1fr] items-center">
+                    <span class="hidden text-xs font-semibold uppercase tracking-[0.45em] text-white/75 sm:block">
+                        <span class="block pl-6 sm:pl-10">Luzon</span>
+                    </span>
+
+                    <div class="relative text-center">
+                        <h1 class="font-display text-6xl font-semibold uppercase leading-[0.95] tracking-[0.04em] text-island-white hero-title-shadow sm:text-8xl lg:text-9xl">
+                            TraMatch
+                        </h1>
+
+                        <span class="intro-script font-script absolute -bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap text-5xl text-philippine-gold script-shadow sm:-bottom-8 sm:text-6xl lg:text-7xl">
+                            Pilipinas
+                        </span>
+                    </div>
+
+                    <span class="hidden text-right text-xs font-semibold uppercase tracking-[0.45em] text-white/75 sm:block">
+                        <span class="block pr-6 sm:pr-10">& beyond</span>
+                    </span>
+                </div>
+
+                <div class="intro-fade absolute inset-x-0 bottom-8 text-center sm:bottom-12">
+                    <p class="text-[0.7rem] font-bold uppercase tracking-[0.35em] text-white/85">
+                        TraMatch
+                    </p>
+
+                    <p class="mt-1 text-[0.65rem] uppercase tracking-[0.25em] text-white/60">
+                        Discover locally · Travel personally
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        (() => {
+            const overlay = document.getElementById('intro-overlay');
+
+            if (!overlay) {
+                return;
+            }
+
+            try {
+                if (sessionStorage.getItem('introPlayed') === '1') {
+                    overlay.remove();
+                    return;
+                }
+
+                overlay.style.opacity = '1';
+            } catch {
+                overlay.style.opacity = '1';
+            }
+        })();
+    </script>
+
+
     <header class="absolute inset-x-0 top-0 z-30">
         <div class="mx-auto flex max-w-[1600px] items-center justify-between px-5 py-5 sm:px-8 lg:px-12">
             <a href="{{ url('/') }}" class="flex items-center gap-3">
@@ -44,11 +194,11 @@
                 >
             </a>
 
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-4">
                 @if ($isAuthenticated)
                     <a
                         href="{{ route('dashboard') }}"
-                        class="hidden rounded-full border border-white/40 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white hover:text-volcanic-teal sm:inline-flex"
+                        class="hidden rounded-full border border-white/40 px-5 py-2.5 text-base font-semibold text-white transition hover:bg-white hover:text-volcanic-teal sm:inline-flex"
                     >
                         Dashboard
                     </a>
@@ -56,7 +206,7 @@
                     @if (Route::has('login'))
                         <a
                             href="{{ route('login') }}"
-                            class="hidden text-sm font-semibold text-white/90 transition hover:text-white sm:inline-flex"
+                            class="hidden text-base font-semibold text-white/90 transition hover:text-white sm:inline-flex"
                         >
                             Log in
                         </a>
@@ -65,7 +215,7 @@
 
                 <a
                     href="{{ $primaryHref }}"
-                    class="rounded-full bg-philippine-gold px-4 py-2 text-sm font-bold text-benguet-charcoal shadow-lg shadow-black/10 transition hover:-translate-y-0.5 hover:bg-white"
+                    class="rounded-full bg-philippine-gold px-5 py-2.5 text-base font-bold text-benguet-charcoal shadow-lg shadow-black/10 transition hover:-translate-y-0.5 hover:bg-white"
                 >
                     {{ $primaryLabel }}
                 </a>
@@ -98,7 +248,7 @@
                         Local travel, made personal
                     </div>
 
-                    <h1 class="animate-reveal max-w-4xl text-6xl font-semibold leading-[0.9] tracking-[-0.06em] text-white sm:text-8xl lg:text-[9rem]">
+                    <h1 class="animate-reveal max-w-4xl text-6xl font-semibold leading-[0.9] tracking-[-0.06em] text-white hero-title-shadow sm:text-8xl lg:text-[9rem]">
                         Find the
                         <span class="inline-block -mb-2 overflow-hidden pb-2 align-bottom">
                             <span
