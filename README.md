@@ -2,7 +2,7 @@
 
 TraMatch is a web- and mobile-friendly travel itinerary recommender for Filipino local travelers. It uses a user’s travel profile and swipe decisions to identify destinations that fit their interests, budget, group size, and trip duration.
 
-This repository currently covers the work completed through **Chunk 6: Swipe Discovery**.
+This repository currently covers the work completed through various chunks.
 
 ## Current product flow
 
