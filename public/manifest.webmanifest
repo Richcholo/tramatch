@@ -1,0 +1,17 @@
+{
+    "name": "TraMatch Travel Planner",
+    "short_name": "TraMatch",
+    "description": "Personalized travel itinerary planning for local travelers.",
+    "start_url": "/dashboard",
+    "display": "standalone",
+    "background_color": "#FDFBF7",
+    "theme_color": "#00A896",
+    "orientation": "portrait-primary",
+    "icons": [
+        {
+            "src": "/images/logo.png",
+            "sizes": "any",
+            "type": "image/png"
+        }
+    ]
+}
