@@ -10,7 +10,7 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             TagSeeder::class,
-            DestinationSeeder::class,
+            LuzonLocationsCsvSeeder::class,
         ]);
     }
 }

@@ -11,7 +11,9 @@ class SwipeDeckService
 {
     public function cards(User $user, int $limit = 20): Collection
     {
-        $profile = $user->load('travelProfile.tags')->travelProfile;
+        $profile = $user
+            ->load('travelProfile.tags')
+            ->travelProfile;
 
         if (!$profile) {
             return collect();
@@ -22,7 +24,11 @@ class SwipeDeckService
             ->map(fn ($weight) => (int) $weight);
 
         $totalWeight = $weights->sum();
-        $swipedIds = DestinationSwipe::where('user_id', $user->id)->pluck('destination_id');
+
+        $swipedIds = DestinationSwipe::where(
+            'user_id',
+            $user->id
+        )->pluck('destination_id');
 
         $destinations = Destination::query()
             ->with('tags')
@@ -31,15 +37,20 @@ class SwipeDeckService
             ->whereNotIn('id', $swipedIds)
             ->when($profile->preferred_region, function ($query) use ($profile) {
                 $region = $profile->preferred_region;
+
                 $query->where(function ($query) use ($region) {
-                    $query->where('province', 'like', "%{$region}%")
+                    $query
+                        ->where('province', 'like', "%{$region}%")
                         ->orWhere('municipality', 'like', "%{$region}%");
                 });
             })
             ->get();
 
         return $destinations
-            ->map(function (Destination $destination) use ($weights, $totalWeight) {
+            ->map(function (Destination $destination) use (
+                $weights,
+                $totalWeight
+            ) {
                 $matchedTags = $destination->tags->filter(
                     fn ($tag) => $weights->has($tag->id)
                 );
@@ -51,9 +62,14 @@ class SwipeDeckService
                 $destination->preference_score = $totalWeight > 0
                     ? round(($matchedWeight / $totalWeight) * 100, 2)
                     : 0;
+
                 $destination->matched_tags = $matchedTags->values();
 
                 return $destination;
+            })
+            ->filter(function (Destination $destination) {
+                return $destination->matched_tags->isNotEmpty()
+                    && $destination->preference_score > 0;
             })
             ->sortByDesc('preference_score')
             ->values()

@@ -11,6 +11,7 @@ class Itinerary extends Model
     protected $fillable = [
         'user_id',
         'title',
+        'area',
         'start_date',
         'budget_level',
         'trip_duration_days',
@@ -36,6 +37,7 @@ class Itinerary extends Model
 
     public function days(): HasMany
     {
-        return $this->hasMany(ItineraryDay::class)->orderBy('day_number');
+        return $this->hasMany(ItineraryDay::class)
+            ->orderBy('day_number');
     }
 }

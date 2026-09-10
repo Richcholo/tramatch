@@ -1,20 +1,20 @@
 <x-app-layout>
     <x-slot name="header">
-        <div class="flex flex-wrap items-center justify-between gap-4">
+        <div class="flex flex-wrap items-end justify-between gap-5">
             <div>
-                <p class="text-sm font-semibold uppercase tracking-wide text-boracay-dark">
-                    Your results
+                <p class="text-xs font-bold uppercase tracking-[0.28em] text-boracay-dark">
+                    03 / Your places
                 </p>
 
-                <h2 class="text-xl font-semibold text-benguet-charcoal">
-                    Liked destinations
-                </h2>
+                <h1 class="mt-3 font-display text-4xl font-semibold tracking-[-0.04em] text-volcanic-teal sm:text-6xl">
+                    The places you kept.
+                </h1>
             </div>
 
             @if (Route::has('discover.index'))
                 <a
                     href="{{ route('discover.index') }}"
-                    class="rounded-xl border border-boracay px-4 py-2 text-sm font-semibold text-boracay-dark hover:bg-boracay-light"
+                    class="rounded-full border border-boracay px-4 py-2 text-sm font-semibold text-boracay-dark transition hover:bg-boracay-light"
                 >
                     Continue discovering
                 </a>
@@ -22,73 +22,75 @@
         </div>
     </x-slot>
 
-    <div class="space-y-8">
-        <section class="rounded-2xl bg-volcanic-teal p-8 text-white shadow-sm">
-            <p class="text-sm font-semibold uppercase tracking-[0.2em] text-boracay-light">
-                Personalized for you
+    <div class="space-y-10">
+        <section class="rounded-[2rem] bg-volcanic-teal p-8 text-white shadow-xl sm:p-12">
+            <p class="text-xs font-bold uppercase tracking-[0.3em] text-boracay-light">
+                Swipe-informed recommendations
             </p>
 
-            <h1 class="mt-3 text-3xl font-bold">
-                Your travel matches
-            </h1>
+            <h2 class="mt-5 max-w-4xl font-display text-5xl font-semibold leading-[0.95] tracking-[-0.05em] sm:text-7xl">
+                Your instincts are becoming a route.
+            </h2>
 
-            <p class="mt-3 max-w-2xl leading-7 text-white/75">
-                These destinations were selected from the places you liked during Discover and ranked according to your travel preferences.
+            <p class="mt-6 max-w-2xl leading-7 text-white/70">
+                These destinations were liked during discovery and ranked against your travel profile.
             </p>
         </section>
 
         @if ($needsProfile)
-            <section class="rounded-2xl border border-philippine-gold bg-philippine-gold/20 p-6 text-benguet-charcoal">
-                <h2 class="text-xl font-semibold">
-                    Complete your travel profile first
+            <section class="rounded-[2rem] border border-philippine-gold bg-philippine-gold/15 p-8">
+                <p class="text-xs font-bold uppercase tracking-[0.25em] text-boracay-dark">
+                    Start here
+                </p>
+
+                <h2 class="mt-3 font-display text-4xl font-semibold text-volcanic-teal">
+                    Set your travel direction.
                 </h2>
 
-                <p class="mt-2">
-                    TraMatch needs your interests, budget, and trip details before it can create recommendations.
+                <p class="mt-3 text-benguet-charcoal/70">
+                    Add your interests and budget before discovering destinations.
                 </p>
 
                 <a
                     href="{{ route('preferences.edit') }}"
-                    class="mt-5 inline-flex rounded-xl bg-boracay-dark px-5 py-3 font-semibold text-white hover:bg-volcanic-teal"
+                    class="tm-primary-button mt-6 rounded-full"
                 >
-                    Set preferences
+                    Set preferences →
                 </a>
             </section>
         @elseif ($recommendations->isEmpty())
-            <section class="rounded-2xl bg-island-white p-8 text-center shadow-sm">
-                <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-philippine-gold/25 text-3xl text-benguet-charcoal">
-                    ★
-                </div>
+            <section class="rounded-[2rem] bg-island-white p-10 text-center shadow-sm ring-1 ring-boracay-light">
+                <span class="tm-gold-badge">Your deck is waiting</span>
 
-                <h2 class="mt-5 text-2xl font-bold text-volcanic-teal">
-                    Your liked destinations will appear here
+                <h2 class="mt-6 font-display text-4xl font-semibold text-volcanic-teal">
+                    Your liked places will appear here.
                 </h2>
 
-                <p class="mx-auto mt-3 max-w-lg text-benguet-charcoal/75">
-                    Swipe right on destinations in Discover to create your personalized recommendations.
+                <p class="mx-auto mt-4 max-w-lg leading-7 text-benguet-charcoal/65">
+                    Swipe right on destinations that feel like your kind of trip.
                 </p>
 
                 @if (Route::has('discover.index'))
                     <a
                         href="{{ route('discover.index') }}"
-                        class="tm-primary-button mt-6"
+                        class="tm-primary-button mt-7 rounded-full"
                     >
-                        Go to Discover
+                        Go to Discover →
                     </a>
                 @endif
             </section>
         @else
             <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 @foreach ($recommendations as $destination)
-                    <article class="overflow-hidden rounded-2xl bg-island-white shadow-sm ring-1 ring-boracay-light">
+                    <article class="group overflow-hidden rounded-[2rem] bg-island-white shadow-sm ring-1 ring-boracay-light">
                         @if ($destination->image_url)
                             <img
                                 src="{{ $destination->image_url }}"
                                 alt="{{ $destination->name }}"
-                                class="h-48 w-full object-cover"
+                                class="h-56 w-full object-cover transition duration-700 group-hover:scale-105"
                             >
                         @else
-                            <div class="flex h-48 items-center justify-center bg-boracay-light text-xl font-bold text-boracay-dark">
+                            <div class="flex h-56 items-center justify-center bg-gradient-to-br from-boracay to-volcanic-teal text-xl font-bold text-white">
                                 {{ $destination->province }}
                             </div>
                         @endif
@@ -96,11 +98,12 @@
                         <div class="p-6">
                             <div class="flex items-start justify-between gap-4">
                                 <div>
-                                    <p class="text-sm text-slate-500">
-                                        {{ $destination->municipality }}, {{ $destination->province }}
+                                    <p class="text-sm text-benguet-charcoal/60">
+                                        {{ $destination->municipality }},
+                                        {{ $destination->province }}
                                     </p>
 
-                                    <h2 class="mt-1 text-xl font-bold text-volcanic-teal">
+                                    <h2 class="mt-2 text-2xl font-bold text-volcanic-teal">
                                         {{ $destination->name }}
                                     </h2>
                                 </div>
@@ -110,30 +113,30 @@
                                 </span>
                             </div>
 
-                            <p class="mt-4 line-clamp-4 text-sm leading-6 text-benguet-charcoal/75">
+                            <p class="mt-4 line-clamp-4 text-sm leading-6 text-benguet-charcoal/70">
                                 {{ $destination->description }}
                             </p>
 
-                            <div class="mt-4 flex flex-wrap gap-2">
+                            <div class="mt-5 flex flex-wrap gap-2">
                                 @foreach ($destination->matched_tags as $tag)
-                                    <span class="rounded-full bg-boracay-light px-2.5 py-1 text-xs font-medium text-boracay-dark">
+                                    <span class="rounded-full bg-boracay-light px-3 py-1 text-xs font-semibold text-boracay-dark">
                                         {{ $tag->name }}
                                     </span>
                                 @endforeach
                             </div>
 
-                            <div class="mt-5 rounded-xl bg-boracay-light p-4 text-sm text-volcanic-teal">
+                            <div class="mt-5 rounded-2xl bg-palawan-sand p-4 text-sm text-volcanic-teal">
                                 <p class="font-semibold">
                                     Why it matches
                                 </p>
 
-                                <p class="mt-1">
-                                    {{ $destination->recommendation_reason ?? 'This destination matches your travel profile and budget.' }}
+                                <p class="mt-1 leading-6 text-benguet-charcoal/70">
+                                    {{ $destination->recommendation_reason ?? 'This destination matches your profile and budget.' }}
                                 </p>
                             </div>
 
-                            <div class="mt-5 flex items-center justify-between gap-4 text-sm">
-                                <span class="font-medium text-benguet-charcoal">
+                            <div class="mt-6 flex items-center justify-between gap-4">
+                                <span class="text-sm font-semibold text-benguet-charcoal/70">
                                     ₱{{ number_format($destination->estimated_cost, 2) }}
                                 </span>
 
@@ -141,7 +144,7 @@
                                     href="{{ route('destinations.show', $destination) }}"
                                     class="font-semibold text-boracay-dark hover:text-volcanic-teal"
                                 >
-                                    View details →
+                                    View place →
                                 </a>
                             </div>
                         </div>
@@ -149,26 +152,22 @@
                 @endforeach
             </div>
 
-            <div class="flex flex-wrap gap-3">
+            <div class="flex flex-wrap gap-4">
                 @if (Route::has('itineraries.create'))
                     <a
                         href="{{ route('itineraries.create') }}"
-                        class="tm-primary-button"
+                        class="tm-primary-button rounded-full"
                     >
-                        Generate an itinerary
+                        Build itinerary →
                     </a>
-                @else
-                    <span class="inline-flex rounded-xl bg-slate-200 px-5 py-3 font-semibold text-slate-500">
-                        Itinerary generation comes next
-                    </span>
                 @endif
 
                 @if (Route::has('discover.index'))
                     <a
                         href="{{ route('discover.index') }}"
-                        class="inline-flex rounded-xl border border-boracay px-5 py-3 font-semibold text-boracay-dark hover:bg-boracay-light"
+                        class="inline-flex items-center rounded-full border border-boracay px-6 py-3 font-semibold text-boracay-dark transition hover:bg-boracay-light"
                     >
-                        Discover more places
+                        Discover more
                     </a>
                 @endif
             </div>
