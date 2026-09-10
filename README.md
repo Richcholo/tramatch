@@ -350,7 +350,9 @@ This deletes all local users, preferences, destinations, swipes, and other datab
 Create a feature branch before changing code:
 
 ```powershell
-git checkout -b feature/your-feature-name
+git switch main
+git pull origin main
+git switch -c feature/your-feature-name
 ```
 
 Check your changes:
@@ -363,8 +365,8 @@ git diff
 Commit related changes together:
 
 ```powershell
-git add app database resources routes vite.config.js package.json package-lock.json
-git commit -m "Add destination swipe discovery"
+git add .
+git commit -m "Describe the completed change"
 ```
 
 Push the branch:
@@ -378,8 +380,89 @@ Open a pull request on GitHub. Ask another team member to review the changes bef
 Pull the latest changes before starting new work:
 
 ```powershell
-git checkout main
+git switch main
 git pull origin main
+```
+
+### Merge the `bon` branch into `main`
+
+Save or commit any current local changes first:
+
+```powershell
+git status
+git add .
+git commit -m "Save current work"
+```
+
+Fetch the latest remote branches:
+
+```powershell
+git fetch origin
+```
+
+Inspect the changes in `bon`:
+
+```powershell
+git diff origin/main...origin/bon --stat
+git log --oneline --decorate --graph origin/main..origin/bon
+```
+
+Update your local `main` branch:
+
+```powershell
+git switch main
+git pull origin main
+```
+
+Merge the branch:
+
+```powershell
+git merge --no-ff origin/bon
+```
+
+If there are no conflicts, run the application tests:
+
+```powershell
+php artisan test
+npm run build
+```
+
+Push the merged `main` branch:
+
+```powershell
+git push origin main
+```
+
+If Git reports conflicts, check the affected files:
+
+```powershell
+git status
+```
+
+Resolve the conflict markers, then run:
+
+```powershell
+git add .
+git commit -m "Resolve bon merge conflicts"
+git push origin main
+```
+
+To cancel the merge before committing:
+
+```powershell
+git merge --abort
+```
+
+Do not force-push to `main`. After confirming the merge is successful, the local branch can be removed with:
+
+```powershell
+git branch -d bon
+```
+
+The remote branch can be removed only after confirming that nobody still needs it:
+
+```powershell
+git push origin --delete bon
 ```
 
 ## Files that should not be committed
@@ -402,7 +485,7 @@ git status --ignored
 
 ## Current project status
 
-Completed through Chunk 6:
+Completed or actively implemented:
 
 - Project setup
 - Tropical Festival design system
@@ -410,13 +493,30 @@ Completed through Chunk 6:
 - Destination catalog and seed data
 - User preferences and weighted matching
 - Swipe discovery
+- Itinerary generation
+- Leaflet destination and itinerary maps
+- Reviews and ratings
+- Administrator destination management
+- Destination archive and permanent removal options
+- PWA foundation
+- Editorial front page
+- Smooth scrolling and homepage motion
+- Login and registration visual redesign
+- Page transitions for supported internal navigation
 
-Not yet completed:
+Current polish work:
 
-- Itinerary generation interface
-- Map and route integration
-- Review submission and moderation
-- Administrator dashboard
-- PWA finishing
-- Full automated test suite
-- Production deployment
+- Front-page intro overlay
+- Mobile responsiveness
+- Cross-browser transitions
+- Accessibility review
+- Test coverage updates
+- Database and migration cleanup
+
+Not yet ready for production:
+
+- Full production deployment
+- Final security audit
+- Final accessibility audit
+- Final performance audit
+- Complete automated test coverage
