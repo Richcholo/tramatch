@@ -2,7 +2,7 @@
 
 TraMatch is a web- and mobile-friendly travel itinerary recommender for Filipino local travelers. It uses a user’s travel profile and swipe decisions to identify destinations that fit their interests, budget, group size, and trip duration.
 
-This repository currently covers the work completed through various chunks.
+This repository contains the current TraMatch application through the core product, admin, PWA, and frontend polish phases. Deployment is intentionally being held until final QA and visual refinement are complete.
 
 ## Current product flow
 
@@ -36,10 +36,23 @@ View liked destination recommendations
 - Liked destinations prioritized in recommendations
 - Resettable discovery deck
 - Responsive Tropical Festival visual design
+- Itinerary generation
+- Itinerary day and destination management
+- Leaflet destination and itinerary maps
+- OpenStreetMap map tiles
+- Reviews and ratings
+- Administrator dashboard
+- Destination create, edit, archive, restore, and permanent removal
+- Progressive Web App foundation
+- Editorial landing page
+- Smooth Lenis scrolling
+- GSAP and ScrollTrigger homepage motion
+- Login and registration redesign
+- Internal page transitions
 - MySQL or MariaDB database support
 - Vite and Tailwind CSS development workflow
 
-Itinerary generation, maps, reviews, administration, PWA support, automated testing, and deployment improvements are planned for later chunks.
+The application is currently in the polish and QA phase. Production deployment is being held until testing, accessibility, performance, and migration cleanup are complete.
 
 ## Technology stack
 
@@ -51,7 +64,10 @@ Itinerary generation, maps, reviews, administration, PWA support, automated test
 - Vite
 - JavaScript
 - MySQL or MariaDB
-- Leaflet and OpenStreetMap planned for the map module
+- Leaflet and OpenStreetMap
+- Lenis
+- GSAP
+- GSAP ScrollTrigger
 - Git and GitHub
 
 ## Requirements
@@ -182,10 +198,10 @@ The repository includes migrations for the following tables:
 | `destinations` | Destination information, coordinates, costs, and tags |
 | `destination_tag` | Destination-to-tag relationships |
 | `destination_swipes` | User Like and Pass decisions |
-| `itineraries` | Saved itinerary records prepared for the next module |
+| `itineraries` | Saved itinerary records |
 | `itinerary_days` | Day records for saved itineraries |
 | `itinerary_items` | Destination items assigned to itinerary days |
-| `reviews` | Review records prepared for the next module |
+| `reviews` | Destination ratings and written reviews |
 
 The seeders add starter tags and sample Luzon destinations:
 
@@ -234,9 +250,15 @@ Use the Laravel URL as the main application URL. Vite usually runs on port `5173
 | `/discover` | Swipe discovery deck |
 | `/discover/swipes` | Saves Like or Pass actions |
 | `/discover/reset` | Resets a user’s swipe deck |
+| `/itineraries` | Saved itinerary list |
+| `/itineraries/create` | Itinerary generation form |
+| `/itineraries/{id}` | Itinerary details and map |
+| `/destinations/{slug}/reviews` | Saves a destination review |
+| `/admin` | Administrator dashboard |
+| `/admin/destinations` | Administrator destination management |
 | `/profile` | Breeze user profile page |
 
-The preference, recommendation, and discovery routes require authentication.
+The preference, recommendation, discovery, itinerary, review, and admin routes require authentication.
 
 ## First-time user flow
 
@@ -283,7 +305,7 @@ $user->save();
 exit
 ```
 
-Replace the email address with the account you want to make an administrator. The administrative interface is planned for a later chunk.
+Replace the email address with the account you want to make an administrator. After assigning the role, the account can access `/admin` and manage destinations.
 
 ## Frontend commands
 
@@ -377,6 +399,94 @@ git push -u origin feature/your-feature-name
 
 Open a pull request on GitHub. Ask another team member to review the changes before merging into `main`.
 
+Pull the latest changes before starting new work:
+
+```powershell
+git switch main
+git pull origin main
+```
+
+### Merge the `bon` branch into `main`
+
+Save or commit any current local changes first:
+
+```powershell
+git status
+git add .
+git commit -m "Save current work"
+```
+
+Fetch the latest remote branches:
+
+```powershell
+git fetch origin
+```
+
+Inspect the changes in `bon`:
+
+```powershell
+git diff origin/main...origin/bon --stat
+git log --oneline --decorate --graph origin/main..origin/bon
+```
+
+Update your local `main` branch:
+
+```powershell
+git switch main
+git pull origin main
+```
+
+Merge the branch:
+
+```powershell
+git merge --no-ff origin/bon
+```
+
+If there are no conflicts, run the application tests:
+
+```powershell
+php artisan test
+npm run build
+```
+
+Push the merged `main` branch:
+
+```powershell
+git push origin main
+```
+
+If Git reports conflicts, check the affected files:
+
+```powershell
+git status
+```
+
+Resolve the conflict markers, then run:
+
+```powershell
+git add .
+git commit -m "Resolve bon merge conflicts"
+git push origin main
+```
+
+To cancel the merge before committing:
+
+```powershell
+git merge --abort
+```
+
+Do not force-push to `main`. After confirming the merge is successful, the local branch can be removed with:
+
+```powershell
+git branch -d bon
+```
+
+The remote branch can be removed only after confirming that nobody still needs it:
+
+```powershell
+git push origin --delete bon
+```
+
 ## Files that should not be committed
 
 Do not commit:
@@ -421,6 +531,8 @@ Current polish work:
 - Front-page intro overlay
 - Mobile responsiveness
 - Cross-browser transitions
+- Better itinerary-generation algorithm
+- Improved route and travel-time optimization
 - Accessibility review
 - Test coverage updates
 - Database and migration cleanup
