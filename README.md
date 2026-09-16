@@ -86,7 +86,7 @@ On Windows, XAMPP can provide MySQL. Start MySQL in the XAMPP Control Panel befo
 ## Clone the project
 
 ```powershell
-git clone https://github.com/YOUR-USERNAME/tramatch.git
+git clone https://github.com/Richcholo/tramatch.git
 cd tramatch
 ```
 
