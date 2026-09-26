@@ -42,6 +42,22 @@ class AuthenticationTest extends TestCase
         $this->assertGuest();
     }
 
+    public function test_deleted_users_receive_a_specific_login_error(): void
+    {
+        $user = User::factory()->create();
+        $user->delete();
+
+        $response = $this->post('/login', [
+            'email' => $user->email,
+            'password' => 'password',
+        ]);
+
+        $response->assertSessionHasErrors([
+            'email' => 'This account has been deleted.',
+        ]);
+        $this->assertGuest();
+    }
+
     public function test_users_can_logout(): void
     {
         $user = User::factory()->create();

@@ -104,16 +104,13 @@
                 @endif
 
                 @if (Route::has('logout'))
-                    <form method="POST" action="{{ route('logout') }}">
-                        @csrf
-
-                        <button
-                            type="submit"
-                            class="rounded-full px-3 py-2 text-benguet-charcoal/70 transition hover:bg-boracay-light hover:text-boracay-dark"
-                        >
-                            Log out
-                        </button>
-                    </form>
+                    <button
+                        type="button"
+                        onclick="document.getElementById('logout-confirmation').showModal()"
+                        class="rounded-full px-3 py-2 text-benguet-charcoal/70 transition hover:bg-boracay-light hover:text-boracay-dark"
+                    >
+                        Log out
+                    </button>
                 @endif
             </nav>
         </div>
@@ -146,5 +143,7 @@
 
         {{ $slot }}
     </main>
+
+    <x-logout-confirmation />
 </body>
 </html>
