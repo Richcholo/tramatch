@@ -94,7 +94,7 @@
                     </a>
                 @endif
 
-                @if (Route::has('admin.dashboard') && auth()->user()->isAdmin())
+                @if (Route::has('admin.dashboard') && auth()->check() && auth()->user()->isAdmin())
                     <a
                         href="{{ route('admin.dashboard') }}"
                         class="rounded-full bg-philippine-gold px-3 py-2 text-benguet-charcoal transition hover:bg-boracay"

@@ -93,6 +93,116 @@
                 </div>
 
                 <div class="rounded-[2rem] bg-island-white p-6 shadow-sm ring-1 ring-boracay-light sm:p-8">
+                    <div class="flex flex-wrap items-start justify-between gap-4">
+                        <div>
+                            <p class="text-xs font-bold uppercase tracking-[0.28em] text-boracay-dark">
+                                Opening hours
+                            </p>
+
+                            <p class="mt-4 text-3xl font-bold text-volcanic-teal">
+                                {{ $hoursLabel ?? 'Hours not listed' }}
+                            </p>
+                        </div>
+
+                        <span @class([
+                            'rounded-full px-4 py-2 text-sm font-semibold',
+                            'bg-emerald-100 text-emerald-800' => $openState === 'open',
+                            'bg-red-100 text-red-800' => in_array($openState, ['closed', 'closed_today'], true),
+                            'bg-slate-100 text-slate-700' => $openState === 'unknown',
+                        ])>
+                            @if ($openState === 'open')
+                                Open now
+                            @elseif ($openState === 'closed_today')
+                                Closed today ({{ $todayName }})
+                            @elseif ($openState === 'closed')
+                                Closed now
+                            @else
+                                Open/closed unknown
+                            @endif
+                        </span>
+                    </div>
+
+                    @if ($perDayHours)
+                        <div class="mt-5 overflow-hidden rounded-2xl ring-1 ring-boracay-light">
+                            @foreach ($daySlugs as $day)
+                                @php
+                                    $window = $perDayHours[$day] ?? null;
+                                    $isToday = strtolower($todayName) === $day;
+                                @endphp
+                                <div @class([
+                                    'flex items-center justify-between gap-4 px-4 py-2 text-sm',
+                                    'bg-boracay-light/60 font-semibold text-volcanic-teal' => $isToday,
+                                    'border-t border-boracay-light/70' => ! $loop->first,
+                                ])>
+                                    <span>{{ ucfirst($day) }}@if ($isToday)<span class="ml-1 text-xs font-normal text-boracay-dark">(today)</span>@endif</span>
+                                    <span @class([
+                                        'text-benguet-charcoal/50' => $window === null,
+                                    ])>
+                                        {{ $window === null ? 'Closed' : $window['open'].'–'.$window['close'] }}
+                                    </span>
+                                </div>
+                            @endforeach
+                        </div>
+                    @endif
+
+                    @if ($closedDaysLabel && ! $perDayHours)
+                        <p class="mt-4 text-sm text-benguet-charcoal/70">
+                            <strong>{{ $closedDaysLabel }}.</strong>
+                            Hours above are for the days it is open.
+                        </p>
+                    @endif
+
+                    @if ($destination->operating_status && $destination->operating_status !== 'open' && $openState === 'unknown')
+                        <p class="mt-4 text-sm text-benguet-charcoal/70">
+                            Note: the source lists this place as
+                            <strong>{{ str_replace('_', ' ', $destination->operating_status) }}</strong>.
+                        </p>
+                    @endif
+
+                    @if ($destination->hoursKindLabel())
+                        <p @class([
+                            'mt-4 rounded-xl px-3 py-2 text-sm',
+                            'bg-amber-50 text-amber-900 ring-1 ring-amber-200' => $destination->hoursKindIsAdvisory(),
+                            'bg-boracay-light/60 text-benguet-charcoal/80 ring-1 ring-boracay-light' => ! $destination->hoursKindIsAdvisory(),
+                        ])>
+                            <strong>{{ $destination->hoursKindLabel() }}</strong>
+                        </p>
+                    @endif
+
+                    @if ($destination->hours_note)
+                        <p class="mt-4 text-sm text-benguet-charcoal/70">
+                            {{ $destination->hours_note }}
+                        </p>
+                    @endif
+
+                    <p class="mt-5 text-xs text-benguet-charcoal/50">
+                        Times are Philippine time (UTC+8).
+                        @if ($updatedOn)
+                            <span class="mt-1 block">
+                                Last checked {{ $updatedOn }}.
+                            </span>
+                        @endif
+                    </p>
+
+                    @if ($destination->hours_source_url)
+                        <p class="mt-3 border-t border-boracay-light pt-3 text-xs text-benguet-charcoal/60">
+                            Hours from
+                            <a
+                                href="{{ $destination->hours_source_url }}"
+                                target="_blank"
+                                rel="noopener noreferrer nofollow"
+                                class="font-semibold text-volcanic-teal underline underline-offset-2 hover:text-boracay-dark"
+                            >{{ $destination->hours_source_label ?: $destination->hours_source_url }}</a>
+                            @if ($updatedOn)
+                                <span class="block text-benguet-charcoal/45">
+                                    Checked {{ $updatedOn }}. Hours change, so confirm before you travel.
+                                </span>
+                            @endif
+                        </p>
+                    @endif
+                </div>
+
+                <div class="rounded-[2rem] bg-island-white p-6 shadow-sm ring-1 ring-boracay-light sm:p-8">
                     <p class="text-xs font-bold uppercase tracking-[0.28em] text-boracay-dark">
                         02 / Location
                     </p>

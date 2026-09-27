@@ -43,6 +43,72 @@ class DestinationController extends Controller
                 ->latest(),
         ]);
 
-        return view('destinations.show', compact('destination'));
+        return view('destinations.show', [
+            'destination' => $destination,
+            'openState' => $this->openState($destination),
+            'hoursLabel' => $this->hoursLabel($destination),
+            'closedDaysLabel' => $destination->closedDaysLabel(),
+            'todayName' => now()->format('l'),
+            'todayWindow' => $destination->hoursForDay(now()),
+            'perDayHours' => $destination->normalisedDailyHours(),
+            'daySlugs' => Destination::daySlugs(),
+            'updatedOn' => $this->updatedOn($destination),
+        ]);
+    }
+
+    private function hoursLabel(Destination $destination): ?string
+    {
+        if ($destination->hasPerDayHours()) {
+            return $destination->perDayHoursLabel();
+        }
+
+        return $destination->formatHours();
+    }
+
+    private function openState(Destination $destination): string
+    {
+        $now = now();
+        $today = $destination->hoursForDay($now);
+
+        if ($today === null) {
+            return $destination->hasAnyHours() ? 'closed_today' : 'unknown';
+        }
+
+        $opens = $this->toMinutes($today['open']);
+        $closes = $this->toMinutes($today['close']);
+
+        if ($opens === null || $closes === null || $opens >= $closes) {
+            return 'unknown';
+        }
+
+        $minutes = $now->hour * 60 + $now->minute;
+
+        if ($opens < $closes) {
+            return $minutes >= $opens && $minutes < $closes ? 'open' : 'closed';
+        }
+
+        $evening = $closes <= $opens
+            && ($minutes >= $opens || $minutes < $closes);
+
+        return $evening ? 'open' : 'closed';
+    }
+
+    private function toMinutes(?string $time): ?int
+    {
+        if ($time === null) {
+            return null;
+        }
+
+        [$hour, $minute] = array_map('intval', explode(':', $time));
+
+        return $hour * 60 + $minute;
+    }
+
+    private function updatedOn(Destination $destination): ?string
+    {
+        $latest = $destination->last_verified_at
+            ?? $destination->price_verified_at;
+
+        return $latest?->copy()->format('j M Y');
     }
 }

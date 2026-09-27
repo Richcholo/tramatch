@@ -47,7 +47,9 @@ class ItineraryGenerationTest extends TestCase
         ]);
         $response = $this->actingAs($user)->post(route('itineraries.store'), [
             'title' => 'Weekend nature trip',
+            'area' => 'Laguna',
             'start_date' => now()->addDay()->toDateString(),
+            'destination_ids' => [$destination->id],
         ]);
 
         $response->assertRedirect();

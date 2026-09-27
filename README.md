@@ -43,6 +43,10 @@ View liked destination recommendations
 - Reviews and ratings
 - Administrator dashboard
 - Destination create, edit, archive, restore, and permanent removal
+- Curated opening hours with a cited source
+- Per-day opening hours and closed-day rules
+- Administrator destination-source crawling with an approval queue
+- Source reachability reporting
 - Progressive Web App foundation
 - Editorial landing page
 - Smooth Lenis scrolling
@@ -68,6 +72,7 @@ The application is currently in the polish and QA phase. Production deployment i
 - Lenis
 - GSAP
 - GSAP ScrollTrigger
+- PHP Artisan `dev` (single-process dev runner for Windows)
 - Git and GitHub
 
 ## Requirements
@@ -82,6 +87,41 @@ Install the following before setting up the project:
 - Git
 
 On Windows, XAMPP can provide MySQL. Start MySQL in the XAMPP Control Panel before running migrations.
+
+Two PHP extensions are needed. `pdo_mysql` is required for the application, and
+`pdo_sqlite` is required for the test suite, which runs against an in-memory
+SQLite database so it never touches your development data.
+
+```powershell
+php -m | Select-String "pdo_mysql|pdo_sqlite"
+```
+
+If a line is missing, enable it in `php.ini` and remove the leading semicolon:
+
+```ini
+extension=pdo_mysql
+extension=pdo_sqlite
+```
+
+### HTTPS crawling on Windows
+
+The source crawler only fetches over HTTPS. Windows PHP does not always ship a
+CA bundle, and without one every crawl fails with
+`cURL error 60: unable to get local issuer certificate`. Point `php.ini` at a
+real bundle:
+
+```ini
+curl.cainfo = C:\php84\extras\ssl\cacert.pem
+openssl.cafile = C:\php84\extras\ssl\cacert.pem
+```
+
+A bundle ships with Composer at `vendor/composer/ca-bundle/cacert.pem` and is a
+valid fallback. Restart your web server after editing `php.ini` — a running
+PHP process keeps the configuration it started with, so an old server keeps an
+empty trust store and every crawl from the web fails while the same crawl from
+the command line succeeds.
+
+Never work around this by disabling certificate verification.
 
 ## Clone the project
 
@@ -152,7 +192,7 @@ tramatch
 
 ## Configure `.env`
 
-Update the database values in `.env`:
+Update the database and timezone values in `.env`:
 
 ```dotenv
 APP_NAME=TraMatch
@@ -160,6 +200,7 @@ APP_ENV=local
 APP_KEY=
 APP_DEBUG=true
 APP_URL=http://localhost:8000
+APP_TIMEZONE=Asia/Manila
 
 DB_CONNECTION=mysql
 DB_HOST=127.0.0.1
@@ -167,9 +208,24 @@ DB_PORT=3306
 DB_DATABASE=tramatch
 DB_USERNAME=root
 DB_PASSWORD=
+
+CRAWLER_CONTACT=you@example.com
 ```
 
 For a default XAMPP installation, the MySQL username is usually `root` and the password is usually blank. Change the values if your local MySQL installation uses a different username, password, or port.
+
+`APP_TIMEZONE` must be `Asia/Manila`. Setting it in `.env` is not enough on
+its own — `config/app.php` has to keep reading `env('APP_TIMEZONE')`, because
+Laravel 11 and newer ship a hardcoded `'UTC'` there.
+
+`CRAWLER_CONTACT` is the address the source crawler advertises in its
+`User-Agent` and `robots.txt` group. Set it to a real mailbox that someone
+reads. It is polite-crawler policy, not a cosmetic setting.
+
+`.env.example` ships SQLite defaults, so `DB_CONNECTION=sqlite` in a fresh copy
+is expected. Change it to `mysql` for the application. Never point the test
+suite at MySQL — `php artisan test` forces SQLite in memory regardless of your
+`.env`.
 
 Never commit `.env` to GitHub.
 
@@ -195,36 +251,80 @@ The repository includes migrations for the following tables:
 | `travel_profiles` | Budget, group size, trip duration, and region |
 | `tags` | Travel interests such as beach, nature, and history |
 | `user_preferences` | Weighted user interests |
-| `destinations` | Destination information, coordinates, costs, and tags |
+| `destinations` | Destination information, coordinates, costs, hours, and tags |
 | `destination_tag` | Destination-to-tag relationships |
 | `destination_swipes` | User Like and Pass decisions |
 | `itineraries` | Saved itinerary records |
 | `itinerary_days` | Day records for saved itineraries |
 | `itinerary_items` | Destination items assigned to itinerary days |
 | `reviews` | Destination ratings and written reviews |
+| `destination_sources` | Official pages a destination's fees and hours are read from |
+| `destination_source_snapshots` | Raw HTML captured by a crawl |
+| `destination_source_crawls` | One row per crawl attempt, including failures |
+| `destination_update_proposals` | Crawl findings awaiting administrator approval |
 
-The seeders add starter tags and sample Luzon destinations:
+### The destination catalogue lives in a CSV
+
+`database/data/luzon-locations-clean.csv` is the source of truth for the
+destination catalog. It has 65 rows and 32 columns, including the curated
+opening-hours columns (`opening_time`, `closing_time`, `closed_days`,
+`daily_hours`, `hours_kind`, `operating_status`, `hours_source_url`,
+`hours_source_label`, `hours_note`).
+
+`DatabaseSeeder` runs `TagSeeder` → `LuzonLocationsCsvSeeder` →
+`DestinationSourceSeeder`, in that order. `DestinationSourceSeeder` resolves
+each source by `destination_slug` and only warns when a destination is
+missing, so running it before the CSV seeder registers almost nothing.
+
+The CSV seeder matches rows on `slug` with `firstOrNew`, so re-seeding is
+idempotent. It rewrites every CSV-managed column on each run and preserves
+`image_url` on existing rows — which also means it will overwrite admin edits
+to the other columns. Re-run the seeders only when you mean to:
 
 ```powershell
 php artisan db:seed
 ```
 
-The seeders use `updateOrCreate`, so they can be run again during local development.
+To seed only the catalogue:
+
+```powershell
+php artisan db:seed --class=LuzonLocationsCsvSeeder
+```
+
+A blank cell in the CSV clears that field on re-seed. That is deliberate for
+hours: a withdrawn number must not survive as a stale "Open now". Never fill a
+cell you have not verified against a source.
 
 ## Start the application
 
-Use two PowerShell terminals.
+Use one PowerShell terminal:
 
-Terminal 1 starts Vite:
+```powershell
+php artisan dev
+```
+
+That starts three processes in the current window:
+
+| Process | Port | Notes |
+|---|---|---|
+| Laravel app | `8000` | The application URL |
+| Vite | `5173` | Frontend assets only, not the app |
+| Queue worker | — | Required for crawling, never omit it |
+
+`php artisan dev` (or `composer run dev`) is the supported way to work on this
+project. Three separate terminals work too, but you then have to remember to
+start the queue worker:
 
 ```powershell
 npm run dev
+php artisan serve
+php artisan queue:work
 ```
 
-Terminal 2 starts Laravel:
+Check what is running:
 
 ```powershell
-php artisan serve
+php artisan dev:list
 ```
 
 Open the application at:
@@ -234,6 +334,11 @@ http://localhost:8000
 ```
 
 Use the Laravel URL as the main application URL. Vite usually runs on port `5173` and only serves frontend assets.
+
+`php artisan dev` is a development tool. Production needs a real process
+manager, not this command. The queue worker is registered as
+`queue:listen --timeout=300`; keep that timeout, because a hung crawl would
+otherwise block the worker indefinitely.
 
 ## Available routes
 
@@ -256,9 +361,121 @@ Use the Laravel URL as the main application URL. Vite usually runs on port `5173
 | `/destinations/{slug}/reviews` | Saves a destination review |
 | `/admin` | Administrator dashboard |
 | `/admin/destinations` | Administrator destination management |
+| `/admin/sources` | Destination source list, reachability, and crawl queue |
+| `/admin/sources/{id}` | Source detail and crawl log |
+| `/admin/proposals` | Crawl findings awaiting approval |
 | `/profile` | Breeze user profile page |
 
-The preference, recommendation, discovery, itinerary, review, and admin routes require authentication.
+The preference, recommendation, discovery, itinerary, review, and admin routes require authentication. Every `/admin` route additionally requires `role = 'admin'`.
+
+## Opening hours
+
+Opening hours are **curated in the CSV, not scraped**. Every destination in the
+catalogue has a general window, a source URL, and a verified-on date, and the
+source link is rendered under the hours on `/destinations/{slug}` so a traveler
+can check it.
+
+`hours_kind` records what the stored window actually means, because a bare time
+pair is ambiguous:
+
+| `hours_kind` | Meaning |
+|---|---|
+| *(empty)* | Normal opening hours |
+| `always_open` | Ungated — 00:00–23:59 means reachable at any hour, not a 24-hour business |
+| `per_day` | The week differs; a per-day table is rendered |
+| `registration_window` | A sign-up cut-off, not opening hours (Mt. Pinatubo, Mt. Daraitan, Mt. Ulap, Palaui Island, Cape Engaño Lighthouse) |
+| `reservation_required` | Walk-ins are refused |
+| `alert_dependent` | Access depends on the current hazard alert level (Taal Volcano View, Mayon Volcano Natural Park) |
+
+Resolution order for a given day is per-day window, then `closed_days`, then
+the general pair. `openState` reports one of `open`, `closed`, `closed_today`
+(a day the model knows is shut) or `unknown` (no hours data at all) — it never
+guesses `closed_today` for a destination with no hours.
+
+Admins edit all of this from `/admin/destinations/{id}/edit`. Any change to the
+window, closed days, status, source URL or note restamps `last_verified_at`;
+renaming or retagging does not.
+
+## Crawling destination sources
+
+Administrators can point TraMatch at official destination pages and let it
+propose fee and hours changes. Nothing reaches the `destinations` table without
+approval.
+
+```text
+destination_sources
+        ↓ crawl
+destination_source_snapshots   (raw HTML on the local disk)
+        ↓ parser
+destination_update_proposals   (pending administrator approval)
+        ↓ approve
+destinations
+```
+
+Every crawl is dispatched as a queued job, because a crawl sleeps at least five
+seconds for politeness and makes two HTTP requests. The admin button queues it;
+nothing crawls inside a web request. From the command line it runs
+synchronously:
+
+```powershell
+php artisan sources:crawl {id}
+```
+
+Measure whether each source page can be read at all:
+
+```powershell
+php artisan sources:check
+```
+
+`fetchability` is a *filter*, not a skip: a temporarily-down host must never
+become permanently uncrawlable, so `dispatch()` refuses nothing.
+
+Deliberate limits, all of them deliberate:
+
+- The crawler may propose **hours and fees only**. `name`, `description`,
+  `latitude` and `longitude` are owned by the CSV seeder and cannot be
+  extracted.
+- **Fees are never auto-parsed.** They are tiered and multi-product, so the raw
+  fee block is shown for an admin to compare against the stored value.
+- The crawler will not propose hours that contradict curated data: a place
+  recorded as ungated (`00:00–23:59`) is never narrowed by a text snippet, a
+  per-day schedule is never flattened to a single pair, and a window shorter than
+  two hours is read as a departure slot rather than opening hours. A value that
+  already matches creates no proposal.
+- **The crawl target is the URL the hours were verified against**, not a
+  marketing homepage. Each source is pointed at the cited hours page, which
+  roughly doubles what the crawler can read: 55 of 65 sources now crawl
+  successfully and 18 yield a value, up from 38 and 8. Thirteen of those 18
+  match the curated hours exactly, which independently validates the
+  hand-curated data. Wikipedia is never crawled — it is licensed content and
+  yields nothing.
+- **A refused request is reported accurately.** A 403 is not automatically "the
+  site blocks crawlers": the crawler inspects the response and distinguishes a
+  Cloudflare JavaScript challenge, an Azure WAF block, and a bare
+  access-denied. The first two are not about our User-Agent and no header
+  change fixes them, so the note says so instead of implying a fixable request
+  problem.
+- The admin page distinguishes a *homepage that publishes nothing* (set a details
+  URL) from a *readable page with no data*, instead of showing one dead-end
+  message for both.
+- `robots.txt` is honoured (cached 24 hours, `Crawl-delay` respected, five
+  second floor). A `robots.txt` that cannot be read is treated as *unknown*, not
+  as a disallow, and the page is tried once so the real reason gets recorded.
+  Redirects are followed (max 5) and re-checked against the target host's
+  robots.txt, but a redirect into a disallowed path is refused.
+- Loopback and private hosts, non-HTTP(S) schemes, non-HTML responses and
+  bodies over 2 MB are refused. A host that does not resolve is recorded as dead
+  and not retried, because it is not a transient failure.
+- The `User-Agent` is honest. It does not impersonate a browser, even though a
+  spoofed one would get a 200 from two of the bot-walled hosts.
+- Most seeded LGU domains do not resolve, and JSON-LD is absent from every
+  reachable source. Check a page before assuming a source will yield data.
+
+Every crawl attempt is logged, including failures, so "refused" can be told
+apart from "never ran". Measured across all 65 sources: 55 crawl successfully
+and 10 fail, all of them refused by an edge security layer (7 Cloudflare
+challenges, 1 Azure WAF, 2 bare access-denied). There are no dead source
+domains left.
 
 ## First-time user flow
 
@@ -306,6 +523,25 @@ exit
 ```
 
 Replace the email address with the account you want to make an administrator. After assigning the role, the account can access `/admin` and manage destinations.
+
+## Running the tests
+
+The suite is PHPUnit (not Pest) and runs against an in-memory SQLite database
+with array cache/session and a synchronous queue:
+
+```powershell
+php artisan test
+php artisan test --filter=RecommendationServiceTest
+php artisan test tests/Feature/Admin/SourceCrawlingTest.php
+```
+
+It never touches your development database — `phpunit.xml` overrides
+`DB_CONNECTION=sqlite` regardless of what `.env` says. This is the only check
+that can detect a broken migration chain, because a dev database has already run
+every migration. Run it after touching any migration.
+
+There is no CI workflow, no pre-commit hook, and no lint or typecheck gate.
+`vendor/bin/pint` is installed but the tree is **not** Pint-clean. Do not mass-format it and do not make `pint --test` a pass/fail gate.
 
 ## Frontend commands
 
@@ -497,6 +733,7 @@ Do not commit:
 /node_modules
 /public/build
 /storage/*.key
+/storage/app/private/crawl-snapshots
 ```
 
 Laravel’s default `.gitignore` already excludes most generated and sensitive files. Confirm that `.env` is ignored before pushing:
@@ -504,6 +741,9 @@ Laravel’s default `.gitignore` already excludes most generated and sensitive f
 ```powershell
 git status --ignored
 ```
+
+Crawled page snapshots are captured to the `local` disk under
+`crawl-snapshots/`. They are raw third-party HTML and do not belong in Git.
 
 ## Current project status
 
@@ -520,6 +760,11 @@ Completed or actively implemented:
 - Reviews and ratings
 - Administrator destination management
 - Destination archive and permanent removal options
+- Curated opening hours with a cited source on every destination
+- Per-day hours, closed-day rules, and an hours-kind explanation
+- Administrator source crawling with an approval queue
+- Source reachability reporting and a per-crawl audit log
+- Single-command dev runner (`php artisan dev`)
 - PWA foundation
 - Editorial front page
 - Smooth scrolling and homepage motion
@@ -534,8 +779,8 @@ Current polish work:
 - Better itinerary-generation algorithm
 - Improved route and travel-time optimization
 - Accessibility review
-- Test coverage updates
 - Database and migration cleanup
+- Replacing the ~29 unresolvable seeded source domains
 
 Not yet ready for production:
 
@@ -544,3 +789,16 @@ Not yet ready for production:
 - Final accessibility audit
 - Final performance audit
 - Complete automated test coverage
+- A real process manager to replace `php artisan dev`
+
+## Troubleshooting a fresh clone
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `could not find driver` on migrate | `pdo_mysql` is not enabled | Enable `extension=pdo_mysql` in `php.ini` and restart |
+| Test suite errors on connect | `pdo_sqlite` is not enabled | Enable `extension=pdo_sqlite` in `php.ini` and restart |
+| Timestamps 8 hours early | `APP_TIMEZONE` set in `.env` but `config/app.php` hardcodes `'UTC'` | Keep `env('APP_TIMEZONE')` in `config/app.php` |
+| Crawls fail with `cURL error 60` | No CA bundle, or the server started before `php.ini` was fixed | Set `curl.cainfo` / `openssl.cafile`, then **restart the server** |
+| Crawl queued but nothing happens | Queue worker is not running | Use `php artisan dev`, or start `php artisan queue:work` |
+| `npm ci` fails on install scripts | Lifecycle scripts are disabled in `.npmrc` | That is intended; do not re-enable them |
+| One source cannot be crawled | Its host is unreachable, bot-walled, or JS-rendered | Use `fetchability` to filter; it is not a permanent skip |

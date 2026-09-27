@@ -21,12 +21,6 @@
     </x-slot>
 
     <div class="space-y-8">
-        @if (session('status'))
-            <div class="rounded-2xl border border-boracay bg-boracay-light p-4 text-benguet-charcoal">
-                {{ session('status') }}
-            </div>
-        @endif
-
         <div class="overflow-x-auto rounded-[2rem] bg-island-white shadow-sm ring-1 ring-boracay-light">
             <table class="min-w-full text-left text-sm">
                 <thead class="border-b border-boracay-light bg-palawan-sand">
