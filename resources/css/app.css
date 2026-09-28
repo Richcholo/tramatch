@@ -6,6 +6,7 @@
     --color-boracay-light: #E1F7F3;
     --color-philippine-gold: #F4B41A;
     --color-palawan-sand: #FDFBF7;
+    --color-sea-glass: #D7E4DB;
     --color-volcanic-teal: #0B252B;
     --color-benguet-charcoal: #2C3531;
     --color-island-white: #FFFFFF;
@@ -87,6 +88,13 @@
 }
 
 @layer components {
+    .tm-topographic-background {
+        background-image:
+            repeating-radial-gradient(ellipse at 14% 18%, transparent 0 50px, rgb(11 37 43 / 3%) 51px 52px, transparent 53px 76px),
+            repeating-radial-gradient(ellipse at 84% 76%, transparent 0 64px, rgb(0 127 115 / 3%) 65px 66px, transparent 67px 96px);
+        background-attachment: fixed;
+    }
+
     .intro-portal {
         clip-path: ellipse(0% 0% at 50% 100%);
         will-change: clip-path;

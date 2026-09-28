@@ -85,7 +85,7 @@
         <section class="grid gap-5 md:grid-cols-3">
             <article class="rounded-[2rem] border border-boracay-light bg-island-white p-6 shadow-sm">
                 <p class="text-xs font-bold uppercase tracking-[0.25em] text-boracay-dark">
-                    01 / Liked
+                    Liked
                 </p>
 
                 <p class="mt-8 text-5xl font-semibold tracking-[-0.05em] text-volcanic-teal">
@@ -99,7 +99,7 @@
 
             <article class="rounded-[2rem] border border-boracay-light bg-island-white p-6 shadow-sm">
                 <p class="text-xs font-bold uppercase tracking-[0.25em] text-boracay-dark">
-                    02 / Passed
+                    Passed
                 </p>
 
                 <p class="mt-8 text-5xl font-semibold tracking-[-0.05em] text-volcanic-teal">
@@ -113,7 +113,7 @@
 
             <article class="rounded-[2rem] border border-boracay-light bg-island-white p-6 shadow-sm">
                 <p class="text-xs font-bold uppercase tracking-[0.25em] text-boracay-dark">
-                    03 / Trips
+                    Trips
                 </p>
 
                 <p class="mt-8 text-5xl font-semibold tracking-[-0.05em] text-volcanic-teal">
@@ -126,44 +126,57 @@
             </article>
         </section>
 
-        <section class="grid gap-8 lg:grid-cols-[0.7fr_1.3fr]">
-            <div>
-                <p class="text-xs font-bold uppercase tracking-[0.28em] text-boracay-dark">
-                    04 / The ritual
-                </p>
-
-                <h2 class="mt-4 font-display text-4xl font-semibold leading-tight tracking-[-0.04em] text-volcanic-teal sm:text-5xl">
-                    Your taste is the starting point.
-                </h2>
-
-                <div class="mt-8 h-px w-24 bg-philippine-gold"></div>
+        <section class="space-y-5">
+            <div class="flex flex-wrap items-end justify-between gap-4">
+                <div>
+                    <p class="text-xs font-bold uppercase tracking-[0.25em] text-boracay-dark">
+                        Your travel desk
+                    </p>
+                    <h2 class="mt-2 font-display text-3xl font-semibold text-volcanic-teal">
+                        Recent activity
+                    </h2>
+                </div>
+                @if (Route::has('itineraries.index'))
+                    <a href="{{ route('itineraries.index') }}" class="text-sm font-semibold text-volcanic-teal underline decoration-boracay underline-offset-4 transition hover:text-boracay-dark">
+                        View all trips
+                    </a>
+                @endif
             </div>
 
-            <div class="grid gap-4 sm:grid-cols-3">
-                <div class="rounded-[1.5rem] bg-island-white p-6 ring-1 ring-boracay-light">
-                    <span class="text-3xl font-semibold text-philippine-gold">01</span>
-                    <h3 class="mt-8 font-bold text-volcanic-teal">Choose a direction.</h3>
-                    <p class="mt-3 text-sm leading-6 text-benguet-charcoal/65">
-                        Budget, group, duration, and interests.
-                    </p>
+            @if ($recentActivity->isNotEmpty())
+                <div class="divide-y divide-boracay-light rounded-xl border border-boracay-light bg-island-white px-5 sm:px-7">
+                    @foreach ($recentActivity as $activity)
+                        <a href="{{ $activity['url'] }}" class="flex items-center justify-between gap-4 py-4 transition hover:text-boracay-dark">
+                            <div class="flex min-w-0 items-start gap-4">
+                                <span class="mt-1 inline-flex shrink-0 rounded-full px-2.5 py-1 text-[0.65rem] font-bold uppercase tracking-[0.12em] {{ $activity['type'] === 'Saved trip' ? 'bg-philippine-gold/20 text-benguet-charcoal' : 'bg-boracay-light text-boracay-dark' }}">
+                                    {{ $activity['type'] === 'Saved trip' ? 'Trip' : 'Liked' }}
+                                </span>
+                                <div class="min-w-0">
+                                    <p class="text-sm font-semibold text-volcanic-teal">
+                                        {{ $activity['title'] }}
+                                    </p>
+                                    <p class="mt-1 truncate text-xs text-benguet-charcoal/60">
+                                        {{ $activity['type'] }} · {{ $activity['detail'] }}
+                                    </p>
+                                </div>
+                            </div>
+                            <time datetime="{{ $activity['date']->toIso8601String() }}" class="shrink-0 text-xs text-benguet-charcoal/50">
+                                {{ $activity['date']->diffForHumans() }}
+                            </time>
+                        </a>
+                    @endforeach
                 </div>
-
-                <div class="rounded-[1.5rem] bg-island-white p-6 ring-1 ring-boracay-light">
-                    <span class="text-3xl font-semibold text-philippine-gold">02</span>
-                    <h3 class="mt-8 font-bold text-volcanic-teal">Trust your instinct.</h3>
-                    <p class="mt-3 text-sm leading-6 text-benguet-charcoal/65">
-                        Like the places you want to remember.
+            @else
+                <div class="rounded-xl border border-dashed border-boracay-light bg-island-white px-6 py-8">
+                    <p class="font-semibold text-volcanic-teal">No recent activity yet.</p>
+                    <p class="mt-1 text-sm text-benguet-charcoal/65">
+                        Liked destinations and saved trips will appear here.
                     </p>
+                    <a href="{{ $discoverHref }}" class="mt-4 inline-flex text-sm font-semibold text-volcanic-teal underline decoration-boracay underline-offset-4 hover:text-boracay-dark">
+                        Start discovering
+                    </a>
                 </div>
-
-                <div class="rounded-[1.5rem] bg-island-white p-6 ring-1 ring-boracay-light">
-                    <span class="text-3xl font-semibold text-philippine-gold">03</span>
-                    <h3 class="mt-8 font-bold text-volcanic-teal">Make it real.</h3>
-                    <p class="mt-3 text-sm leading-6 text-benguet-charcoal/65">
-                        Turn your places into a plan.
-                    </p>
-                </div>
-            </div>
+            @endif
         </section>
     </div>
 </x-app-layout>

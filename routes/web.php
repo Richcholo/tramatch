@@ -41,15 +41,30 @@ Route::get('/destinations/{destination:slug}', [
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [
         ProfileController::class,
+        'show',
+    ])->name('profile.show');
+
+    Route::post('/editprofile/photo', [
+        ProfileController::class,
+        'updatePhoto',
+    ])->name('profile.photo.update');
+
+    Route::delete('/editprofile/photo', [
+        ProfileController::class,
+        'removePhoto',
+    ])->name('profile.photo.destroy');
+
+    Route::get('/editprofile', [
+        ProfileController::class,
         'edit',
     ])->name('profile.edit');
 
-    Route::patch('/profile', [
+    Route::patch('/editprofile', [
         ProfileController::class,
         'update',
     ])->name('profile.update');
 
-    Route::delete('/profile', [
+    Route::delete('/editprofile', [
         ProfileController::class,
         'destroy',
     ])->name('profile.destroy');

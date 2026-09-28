@@ -68,24 +68,65 @@
                         </button>
                     </form>
 
-                    <form
-                        method="POST"
-                        action="{{ route('itineraries.destroy', $itinerary) }}"
-                        onsubmit="return confirm('Delete this itinerary?')"
+                    <button
+                        type="button"
+                        onclick="document.getElementById('delete-itinerary-confirmation').showModal()"
+                        class="rounded-full bg-red-500/15 px-5 py-3 text-sm font-semibold text-red-200 transition hover:bg-red-500 hover:text-white"
                     >
-                        @csrf
-                        @method('DELETE')
-
-                        <button
-                            type="submit"
-                            class="rounded-full bg-red-500/15 px-5 py-3 text-sm font-semibold text-red-200 transition hover:bg-red-500 hover:text-white"
-                        >
-                            Delete
-                        </button>
-                    </form>
+                        Delete
+                    </button>
                 </div>
             </div>
         </section>
+
+        <dialog
+            id="delete-itinerary-confirmation"
+            aria-labelledby="delete-itinerary-confirmation-title"
+            aria-describedby="delete-itinerary-confirmation-description"
+            onclick="if (event.target === this) this.close()"
+            class="m-auto w-[calc(100%-2rem)] max-w-md rounded-lg border border-red-200 bg-palawan-sand p-0 text-benguet-charcoal shadow-2xl backdrop:bg-volcanic-teal/60 backdrop:backdrop-blur-sm"
+        >
+            <div class="p-6 sm:p-7">
+                <div class="flex items-start gap-4">
+                    <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-700">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 7h12m-10 0 .7 13h6.6L16 7M9 7V4h6v3m-4 4v5m2-5v5" />
+                        </svg>
+                    </span>
+
+                    <div>
+                        <h2 id="delete-itinerary-confirmation-title" class="font-display text-xl font-semibold text-volcanic-teal">
+                            Delete this itinerary?
+                        </h2>
+
+                        <p id="delete-itinerary-confirmation-description" class="mt-2 text-sm leading-6 text-benguet-charcoal/70">
+                            “{{ $itinerary->title }}” and its saved schedule will be permanently deleted.
+                        </p>
+                    </div>
+                </div>
+
+                <form method="POST" action="{{ route('itineraries.destroy', $itinerary) }}" class="mt-7 flex justify-end gap-3">
+                    @csrf
+                    @method('DELETE')
+
+                    <button
+                        type="button"
+                        autofocus
+                        onclick="this.closest('dialog').close()"
+                        class="rounded-full border border-boracay-light px-4 py-2 text-sm font-semibold text-benguet-charcoal transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-boracay focus:ring-offset-2"
+                    >
+                        Cancel
+                    </button>
+
+                    <button
+                        type="submit"
+                        class="rounded-full bg-red-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-700 focus:ring-offset-2"
+                    >
+                        Delete itinerary
+                    </button>
+                </form>
+            </div>
+        </dialog>
 
         @if (session('itinerary_warnings'))
             <section class="rounded-[2rem] border border-philippine-gold/50 bg-philippine-gold/15 p-6 text-benguet-charcoal sm:p-8">

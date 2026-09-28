@@ -121,18 +121,50 @@
                                         </form>
                                     @endif
 
-                                    <form
-                                        method="POST"
-                                        action="{{ route('admin.destinations.destroy', $destination) }}"
-                                        onsubmit="return confirm('Permanently delete this destination?')"
+                                    <button
+                                        type="button"
+                                        onclick="document.getElementById('delete-destination-confirmation-{{ $destination->id }}').showModal()"
+                                        class="font-semibold text-red-600"
                                     >
-                                        @csrf
-                                        @method('DELETE')
+                                        Delete
+                                    </button>
 
-                                        <button class="font-semibold text-red-600">
-                                            Delete
-                                        </button>
-                                    </form>
+                                    <dialog
+                                        id="delete-destination-confirmation-{{ $destination->id }}"
+                                        aria-labelledby="delete-destination-confirmation-title-{{ $destination->id }}"
+                                        aria-describedby="delete-destination-confirmation-description-{{ $destination->id }}"
+                                        onclick="if (event.target === this) this.close()"
+                                        class="m-auto w-[calc(100%-2rem)] max-w-md rounded-lg border border-red-200 bg-palawan-sand p-0 text-benguet-charcoal shadow-2xl backdrop:bg-volcanic-teal/60 backdrop:backdrop-blur-sm"
+                                    >
+                                        <div class="p-6 sm:p-7">
+                                            <div class="flex items-start gap-4">
+                                                <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-700" aria-hidden="true">
+                                                    <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 7h12m-10 0 .7 13h6.6L16 7M9 7V4h6v3m-4 4v5m2-5v5" />
+                                                    </svg>
+                                                </span>
+                                                <div>
+                                                    <h2 id="delete-destination-confirmation-title-{{ $destination->id }}" class="font-display text-xl font-semibold text-volcanic-teal">
+                                                        Permanently delete destination?
+                                                    </h2>
+                                                    <p id="delete-destination-confirmation-description-{{ $destination->id }}" class="mt-2 text-sm leading-6 text-benguet-charcoal/70">
+                                                        “{{ $destination->name }}” and its reviews, swipe history, and itinerary stops will be deleted. This cannot be undone.
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            <form method="POST" action="{{ route('admin.destinations.destroy', $destination) }}" class="mt-7 flex justify-end gap-3">
+                                                @csrf
+                                                @method('DELETE')
+                                                <button type="button" autofocus onclick="this.closest('dialog').close()" class="rounded-full border border-boracay-light px-4 py-2 text-sm font-semibold text-benguet-charcoal transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-boracay focus:ring-offset-2">
+                                                    Cancel
+                                                </button>
+                                                <button type="submit" class="rounded-full bg-red-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-700 focus:ring-offset-2">
+                                                    Delete permanently
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </dialog>
                                 </div>
                             </td>
                         </tr>

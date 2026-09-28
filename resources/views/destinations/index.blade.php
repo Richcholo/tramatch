@@ -6,7 +6,7 @@
                     TraMatch / Collection
                 </p>
 
-                <h1 class="mt-3 font-display text-6xl font-medium uppercase leading-[0.85] tracking-[-0.05em] text-volcanic-teal sm:text-8xl lg:text-9xl">
+                <h1 class="mt-3 font-display text-5xl font-medium uppercase leading-[0.85] tracking-[-0.05em] text-volcanic-teal sm:text-7xl lg:text-8xl">
                     Destinations
                 </h1>
             </div>
@@ -25,15 +25,22 @@
             >
                 <label class="block">
                     <span class="text-[0.65rem] font-bold uppercase tracking-[0.25em] text-benguet-charcoal/60">
-                        Search
+                        Location or destination
                     </span>
 
                     <input
+                        id="destination-search"
                         name="search"
+                        list="destination-location-options"
                         value="{{ request('search') }}"
-                        placeholder="Location or province"
+                        placeholder="Search or enter a location"
                         class="mt-3 w-full border-0 border-b border-boracay-light bg-transparent px-0 pb-3 text-sm text-volcanic-teal placeholder:text-benguet-charcoal/40 focus:border-boracay focus:ring-0"
                     >
+                    <datalist id="destination-location-options">
+                        @foreach ($locations as $location)
+                            <option value="{{ $location }}"></option>
+                        @endforeach
+                    </datalist>
                 </label>
 
                 <label class="block">
@@ -156,6 +163,6 @@
             @endforelse
         </div>
 
-        {{ $destinations->links() }}
+        {{ $destinations->links('pagination.destinations') }}
     </div>
 </x-app-layout>

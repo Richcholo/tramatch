@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Tag;
+use App\Models\Destination;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -15,11 +16,30 @@ class PreferenceController extends Controller
         $user = Auth::user();
         $profile = $user->travelProfile;
         $tags = Tag::orderBy('name')->get();
+        $regions = Destination::query()
+            ->where('is_active', true)
+            ->whereNotNull('province')
+            ->orderBy('province')
+            ->distinct()
+            ->pluck('province')
+            ->merge(
+                Destination::query()
+                    ->where('is_active', true)
+                    ->whereNotNull('municipality')
+                    ->orderBy('municipality')
+                    ->distinct()
+                    ->pluck('municipality')
+            )
+            ->map(fn ($region) => trim($region))
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values();
         $selectedWeights = $profile
             ? $profile->tags->pluck('pivot.weight', 'id')->map(fn ($weight) => (int) $weight)->all()
             : [];
 
-        return view('preferences.edit', compact('profile', 'tags', 'selectedWeights'));
+        return view('preferences.edit', compact('profile', 'tags', 'regions', 'selectedWeights'));
     }
 
     public function update(Request $request): RedirectResponse

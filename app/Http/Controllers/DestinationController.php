@@ -10,6 +10,20 @@ class DestinationController extends Controller
 {
     public function index(Request $request): View
     {
+        $locations = Destination::query()
+            ->where('is_active', true)
+            ->get(['name', 'province', 'municipality'])
+            ->flatMap(fn (Destination $destination) => [
+                $destination->name,
+                $destination->municipality,
+                $destination->province,
+            ])
+            ->map(fn ($location) => trim($location))
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values();
+
         $destinations = Destination::query()
             ->with('tags')
             ->where('is_active', true)
@@ -18,6 +32,7 @@ class DestinationController extends Controller
                 $query->where(function ($query) use ($search) {
                     $query->where('name', 'like', "%{$search}%")
                         ->orWhere('province', 'like', "%{$search}%")
+                        ->orWhere('municipality', 'like', "%{$search}%")
                         ->orWhere('description', 'like', "%{$search}%");
                 });
             })
@@ -26,9 +41,10 @@ class DestinationController extends Controller
             })
             ->latest()
             ->paginate(9)
+            ->onEachSide(1)
             ->withQueryString();
 
-        return view('destinations.index', compact('destinations'));
+        return view('destinations.index', compact('destinations', 'locations'));
     }
 
     public function show(Destination $destination): View

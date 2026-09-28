@@ -7,8 +7,24 @@ window.__tramatchPageTransitions = true;
 
 
     let navigating = false;
+    let navigationLoadingTimer = null;
 
     const transitionKey = 'tramatch-page-enter';
+
+    const scheduleNavigationLoading = () => {
+        navigationLoadingTimer = window.setTimeout(() => {
+            document
+                .querySelector('[data-navigation-loading]')
+                ?.classList.remove('hidden');
+        }, 150);
+    };
+
+    const clearNavigationLoading = () => {
+        window.clearTimeout(navigationLoadingTimer);
+        document
+            .querySelector('[data-navigation-loading]')
+            ?.classList.add('hidden');
+    };
 
     const authPaths = [
         '/login',
@@ -215,6 +231,8 @@ window.__tramatchPageTransitions = true;
             return;
         }
 
+        scheduleNavigationLoading();
+
         const currentIsHome = isHomePath(window.location.pathname);
         const targetIsHome = isHomePath(url.pathname);
      
@@ -253,6 +271,8 @@ window.__tramatchPageTransitions = true;
     });
 
     window.addEventListener('pageshow', (event) => {
+        clearNavigationLoading();
+
         if (!event.persisted) {
             return;
         }
