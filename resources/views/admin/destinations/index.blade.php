@@ -12,10 +12,10 @@
             </div>
 
             <a
-                href="{{ route('admin.destinations.create') }}"
-                class="tm-primary-button rounded-full"
+                href="{{ route('admin.dashboard') }}"
+                class="rounded-full border border-boracay-light px-5 py-3 text-sm font-semibold text-benguet-charcoal transition hover:bg-island-white"
             >
-                Add destination →
+                ← Admin dashboard
             </a>
         </div>
     </x-slot>
@@ -26,6 +26,49 @@
                 {{ session('status') }}
             </div>
         @endif
+
+        <section class="rounded-[1.5rem] border border-boracay-light bg-palawan-sand">
+            <form method="GET" action="{{ route('admin.destinations.index') }}" class="grid gap-5 p-6 sm:grid-cols-3 sm:items-center sm:p-8">
+                <label class="block sm:col-span-2">
+                    <span class="text-[0.65rem] font-bold uppercase tracking-[0.25em] text-benguet-charcoal/60">
+                        Location or destination
+                    </span>
+
+                    <input
+                        id="destination-search"
+                        name="search"
+                        list="destination-location-options"
+                        value="{{ $search }}"
+                        placeholder="Search or enter a location"
+                        class="mt-3 w-full border-0 border-b border-boracay-light bg-transparent px-0 pb-3 text-sm text-volcanic-teal placeholder:text-benguet-charcoal/40 focus:border-boracay focus:ring-0"
+                    >
+                    <datalist id="destination-location-options">
+                        @foreach ($locations as $location)
+                            <option value="{{ $location }}"></option>
+                        @endforeach
+                    </datalist>
+                </label>
+
+                <div class="flex items-end justify-between gap-4 sm:justify-end">
+                    <span class="text-[0.65rem] font-bold uppercase tracking-[0.25em] text-benguet-charcoal/45">
+                        {{ $destinations->total() }} places
+                    </span>
+
+                    <button type="submit" class="rounded-full bg-volcanic-teal px-5 py-3 text-xs font-bold uppercase tracking-[0.15em] text-white transition hover:bg-boracay-dark">
+                        Filter
+                    </button>
+                </div>
+            </form>
+        </section>
+
+        <div class="flex justify-start">
+            <a
+                href="{{ route('admin.destinations.create') }}"
+                class="tm-primary-button rounded-full"
+            >
+                Add destination →
+            </a>
+        </div>
 
         <div class="overflow-x-auto rounded-[2rem] bg-island-white shadow-sm ring-1 ring-boracay-light">
             <table class="min-w-full text-left text-sm">

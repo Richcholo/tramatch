@@ -31,6 +31,22 @@
             >
                 Manage destinations →
             </a>
+
+            <a
+                href="{{ route('admin.reviews.index') }}"
+                class="ml-3 mt-8 inline-flex rounded-full border border-white/30 px-6 py-3 font-bold text-white transition hover:bg-white hover:text-volcanic-teal"
+            >
+                View reviews →
+            </a>
+
+            @if (auth()->user()->isSuperAdmin())
+                <a
+                    href="{{ route('admin.users.index') }}"
+                    class="ml-3 mt-8 inline-flex rounded-full border border-white/30 px-6 py-3 font-bold text-white transition hover:bg-white hover:text-volcanic-teal"
+                >
+                    Manage users →
+                </a>
+            @endif
         </section>
 
         <section class="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
@@ -72,6 +88,62 @@
                 <p class="mt-8 text-5xl font-semibold text-volcanic-teal">
                     {{ $pendingReviewCount }}
                 </p>
+            </div>
+        </section>
+
+        <section class="rounded-[2rem] bg-island-white p-6 shadow-sm ring-1 ring-boracay-light sm:p-8">
+            <div class="flex flex-wrap items-end justify-between gap-4">
+                <div>
+                    <p class="text-xs font-bold uppercase tracking-[0.2em] text-boracay-dark">
+                        Recent activity
+                    </p>
+
+                    <h2 class="mt-3 font-display text-3xl font-semibold text-volcanic-teal">
+                        Latest traveler reviews
+                    </h2>
+                </div>
+
+                <a
+                    href="{{ route('admin.reviews.index') }}"
+                    class="text-sm font-bold text-volcanic-teal transition hover:text-boracay-dark"
+                >
+                    View all reviews →
+                </a>
+            </div>
+
+            <div class="mt-6 divide-y divide-boracay-light">
+                @forelse ($recentReviews as $review)
+                    <article class="grid gap-3 py-5 first:pt-0 last:pb-0 sm:grid-cols-[1fr_auto] sm:items-start">
+                        <div>
+                            <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                                <h3 class="font-semibold text-volcanic-teal">
+                                    {{ $review->destination->name }}
+                                </h3>
+
+                                <span class="text-sm text-philippine-gold">
+                                    {{ $review->rating }}/5
+                                </span>
+                            </div>
+
+                            <p class="mt-1 text-sm text-benguet-charcoal/60">
+                                By {{ $review->user->name }}
+                            </p>
+
+                            <p class="mt-3 line-clamp-2 text-sm leading-6 text-benguet-charcoal/75">
+                                {{ $review->comment }}
+                            </p>
+                        </div>
+
+                        <div class="flex items-center gap-3 text-xs text-benguet-charcoal/55 sm:justify-end">
+                            <span class="capitalize">{{ $review->status }}</span>
+                            <span>{{ $review->created_at->format('M j, Y') }}</span>
+                        </div>
+                    </article>
+                @empty
+                    <p class="py-5 text-sm text-benguet-charcoal/60">
+                        No reviews yet.
+                    </p>
+                @endforelse
             </div>
         </section>
     </div>

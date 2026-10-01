@@ -30,6 +30,15 @@
             <p class="mt-1 text-sm text-benguet-charcoal/65">
                 {{ $user->email }}
             </p>
+            @if ($user->isSuperAdmin())
+                <p class="mt-2 text-xs font-bold uppercase tracking-[0.2em] text-philippine-gold">
+                    Super admin
+                </p>
+            @elseif ($user->isAdmin())
+                <p class="mt-2 text-xs font-bold uppercase tracking-[0.2em] text-boracay-dark">
+                    Admin
+                </p>
+            @endif
             <a
                 href="{{ route('profile.edit') }}"
                 class="mt-4 inline-flex min-h-11 items-center justify-center rounded-md bg-volcanic-teal px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-boracay-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-volcanic-teal"

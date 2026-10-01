@@ -232,42 +232,14 @@ window.__tramatchPageTransitions = true;
         }
 
         scheduleNavigationLoading();
+    });
 
-        const currentIsHome = isHomePath(window.location.pathname);
-        const targetIsHome = isHomePath(url.pathname);
-     
-        if (currentIsHome === targetIsHome) {
-            clearPendingTransition();
+    document.addEventListener('submit', (event) => {
+        if (event.defaultPrevented) {
             return;
         }
 
-
-
-        if (navigating) {
-            event.preventDefault();
-            return;
-        }
-
-        event.preventDefault();
-        navigating = true;
-
-        setPendingTransition();
-
-        const curtain = createCurtain();
-
-        const currentOpacity = getComputedStyle(curtain).opacity;
-
-        curtain.style.setProperty(
-            '--curtain-start-opacity',
-            currentOpacity
-        );
-
-        await animateCurtain(
-            curtain,
-            'page-curtain-entering'
-        );
-
-        window.location.assign(url.href);
+        scheduleNavigationLoading();
     });
 
     window.addEventListener('pageshow', (event) => {
