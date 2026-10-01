@@ -6,7 +6,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="theme-color" content="#0B252B">
 
-    <link rel="icon" href="{{ asset('images/logo.png') }}">
+    <link rel="icon" href="{{ asset('images/logo.svg') }}">
     <link rel="manifest" href="/manifest.webmanifest">
 
     <title>{{ $title ?? 'TraMatch' }}</title>
@@ -28,7 +28,7 @@
                 class="flex items-center"
             >
                 <img
-                    src="{{ asset('images/logo.png') }}"
+                    src="{{ asset('images/logo.svg') }}"
                     alt="TraMatch"
                     class="h-10 w-auto"
                 >

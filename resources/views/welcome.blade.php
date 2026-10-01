@@ -25,7 +25,7 @@
     <meta name="theme-color" content="#0B252B">
     <meta name="description" content="TraMatch helps you discover destinations and build travel plans around the places you actually want to visit.">
 
-    <link rel="icon" href="{{ asset('images/logo.png') }}">
+    <link rel="icon" href="{{ asset('images/logo.svg') }}">
     <link rel="manifest" href="/manifest.webmanifest">
 
     <title>TraMatch — Find the places that feel like you</title>
@@ -106,7 +106,7 @@
                 </svg>
 
                 <img
-                    src="{{ asset('images/logo.png') }}"
+                    src="{{ asset('images/logo.svg') }}"
                     alt=""
                     class="absolute left-1/2 top-1/2 h-8 w-8 -translate-x-1/2 -translate-y-1/2 object-contain"
                 >
@@ -124,7 +124,7 @@
             <div class="intro-ui absolute inset-0 z-10">
                 <div class="intro-fade absolute inset-x-0 top-8 flex justify-center sm:top-12">
                     <img
-                        src="{{ asset('images/logo.png') }}"
+                        src="{{ asset('images/logo.svg') }}"
                         alt="TraMatch"
                         class="h-10 w-auto sm:h-12"
                     >
@@ -188,7 +188,7 @@
         <div class="mx-auto flex max-w-[1600px] items-center justify-between px-5 py-5 sm:px-8 lg:px-12">
             <a href="{{ url('/') }}" class="flex items-center gap-3">
                 <img
-                    src="{{ asset('images/logo.png') }}"
+                    src="{{ asset('images/logo.svg') }}"
                     alt="TraMatch"
                     class="h-9 w-auto object-contain sm:h-11"
                 >
