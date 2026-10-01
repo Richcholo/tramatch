@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Destination;
+use App\Models\DestinationSource;
+use App\Models\DestinationUpdateProposal;
 use App\Models\Review;
 use App\Models\Tag;
 use Illuminate\View\View;
@@ -15,11 +17,27 @@ class AdminController extends Controller
             'destinationCount' => Destination::count(),
             'tagCount' => Tag::count(),
             'reviewCount' => Review::count(),
-            'pendingReviewCount' => Review::where('status', 'pending')->count(),
+            'pendingReviewCount' => Review::where(
+                'status',
+                'pending'
+            )->count(),
             'recentReviews' => Review::with(['user', 'destination'])
                 ->latest()
                 ->take(5)
                 ->get(),
+            'sourceCount' => DestinationSource::count(),
+            'successfulSourceCount' => DestinationSource::where(
+                'status',
+                'success'
+            )->count(),
+            'failedSourceCount' => DestinationSource::where(
+                'status',
+                'failed'
+            )->count(),
+            'pendingProposalCount' => DestinationUpdateProposal::where(
+                'status',
+                'pending'
+            )->count(),
         ]);
     }
 }

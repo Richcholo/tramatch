@@ -81,13 +81,13 @@
                         </a>
                     @endif
 
-                    @if (Route::has('preferences.edit'))
+@if (Route::has('preferences.edit'))
                         <a href="{{ route('preferences.edit') }}" class="block rounded-md px-4 py-3 transition hover:bg-boracay-light hover:text-boracay-dark">
                             Preferences
                         </a>
                     @endif
 
-                    @if (Route::has('admin.dashboard') && auth()->user()->isAdmin())
+                    @if (Route::has('admin.dashboard') && auth()->check() && auth()->user()->isAdmin())
                         <a href="{{ route('admin.dashboard') }}" class="mt-1 block rounded-md bg-philippine-gold px-4 py-3 text-benguet-charcoal transition hover:bg-boracay">
                             Admin
                         </a>

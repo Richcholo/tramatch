@@ -12,6 +12,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class DestinationController extends Controller
@@ -54,7 +55,13 @@ class DestinationController extends Controller
         $tags = Tag::orderBy('name')->get();
         [$provinces, $municipalities] = $this->locationOptions();
 
-        return view('admin.destinations.create', compact('tags', 'provinces', 'municipalities'));
+        return view('admin.destinations.create', [
+            'tags' => $tags,
+            'provinces' => $provinces,
+            'municipalities' => $municipalities,
+            'closedDays' => [],
+            'daySlugs' => Destination::daySlugs(),
+        ]);
     }
 
     public function store(Request $request): RedirectResponse
@@ -65,6 +72,13 @@ class DestinationController extends Controller
         unset($data['tags']);
 
         $data['slug'] = Str::slug($data['name']);
+
+        $data['closed_days'] = $this->joinClosedDays($data['closed_days'] ?? null);
+        $data['daily_hours'] = $this->cleanDailyHours($data['daily_hours'] ?? null);
+
+        if ($this->hasAnyHours($data)) {
+            $data['last_verified_at'] = now();
+        }
 
         $destination = Destination::create($data);
 
@@ -81,10 +95,16 @@ class DestinationController extends Controller
         $selectedTags = $destination->tags->pluck('id')->all();
         [$provinces, $municipalities] = $this->locationOptions();
 
-        return view(
-            'admin.destinations.edit',
-            compact('destination', 'tags', 'selectedTags', 'provinces', 'municipalities')
-        );
+        return view('admin.destinations.edit', [
+            'destination' => $destination,
+            'tags' => $tags,
+            'selectedTags' => $selectedTags,
+            'provinces' => $provinces,
+            'municipalities' => $municipalities,
+            'closedDays' => $destination->closedDayList(),
+            'dailyHours' => $destination->normalisedDailyHours(),
+            'daySlugs' => Destination::daySlugs(),
+        ]);
     }
 
     public function update(
@@ -98,12 +118,156 @@ class DestinationController extends Controller
 
         $data['slug'] = Str::slug($data['name']);
 
+        $hoursChanged = $this->hoursChanged($destination, $data);
+
+        $data['closed_days'] = $this->joinClosedDays($data['closed_days'] ?? null);
+        $data['daily_hours'] = $this->cleanDailyHours($data['daily_hours'] ?? null);
+
+        if ($hoursChanged) {
+            $data['last_verified_at'] = now();
+        }
+
         $destination->update($data);
         $destination->tags()->sync($tagIds);
 
         return redirect()
             ->route('admin.destinations.index')
             ->with('status', 'Destination updated.');
+    }
+
+    private function joinClosedDays(mixed $days): ?string
+    {
+        if (!is_array($days)) {
+            return $days === null ? null : (string) $days;
+        }
+
+        $kept = array_values(array_intersect(Destination::daySlugs(), $days));
+
+        return $kept === [] ? null : implode(',', $kept);
+    }
+
+    private function cleanDailyHours(mixed $hours): ?array
+    {
+        if (!is_array($hours)) {
+            return null;
+        }
+
+        $clean = [];
+
+        foreach (Destination::daySlugs() as $day) {
+            $window = $hours[$day] ?? null;
+
+            if (!is_array($window)) {
+                continue;
+            }
+
+            if (($window['closed'] ?? false) === true) {
+                $clean[$day] = ['closed' => true];
+
+                continue;
+            }
+
+            $open = $this->normaliseTimeValue($window['open'] ?? null);
+            $close = $this->normaliseTimeValue($window['close'] ?? null);
+
+            if ($open === null || $close === null || $open === $close) {
+                continue;
+            }
+
+            $clean[$day] = ['open' => $open, 'close' => $close];
+        }
+
+        return $clean === [] ? null : $clean;
+    }
+
+    private function normaliseTimeValue(mixed $value): ?string
+    {
+        $value = trim((string) $value);
+
+        if (preg_match('/\A(\d{1,2}):(\d{2})(?::\d{2})?\z/', $value, $match) !== 1) {
+            return null;
+        }
+
+        $hour = (int) $match[1];
+        $minute = (int) $match[2];
+
+        if ($hour > 23 || $minute > 59) {
+            return null;
+        }
+
+        return sprintf('%02d:%02d', $hour, $minute);
+    }
+
+    private function hasAnyHours(array $data): bool
+    {
+        if (($data['opening_time'] ?? null) || ($data['closing_time'] ?? null)) {
+            return true;
+        }
+
+        if (!empty($data['closed_days'])) {
+            return true;
+        }
+
+        foreach ((array) ($data['daily_hours'] ?? []) as $window) {
+            if (is_array($window)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function hoursChanged(Destination $destination, array $data): bool
+    {
+        return $this->hoursFingerprint($destination) !== $this->hoursFingerprint(
+            $destination,
+            $data
+        );
+    }
+
+    private function hoursFingerprint(
+        Destination $destination,
+        array $data = []
+    ): string {
+        $daily = $data['daily_hours'] ?? $destination->daily_hours;
+
+        if (is_string($daily)) {
+            $daily = json_decode($daily, true);
+        }
+
+        $dailyHours = collect(Destination::daySlugs())
+            ->mapWithKeys(function (string $day) use ($daily) {
+                $window = is_array($daily) ? ($daily[$day] ?? null) : null;
+
+                if ($window === null) {
+                    return [$day => '-'];
+                }
+
+                if (($window['closed'] ?? false) === true) {
+                    return [$day => 'closed'];
+                }
+
+                return [$day => ($window['open'] ?? '').'-'.($window['close'] ?? '')];
+            })
+            ->implode(',');
+
+        $closedDays = $data['closed_days'] ?? $destination->closedDayList();
+
+        return implode('|', [
+            (string) ($data['opening_time'] ?? $destination->opening_time),
+            (string) ($data['closing_time'] ?? $destination->closing_time),
+            is_array($closedDays)
+                ? implode(',', array_values(array_intersect(
+                    Destination::daySlugs(),
+                    $closedDays
+                )))
+                : implode(',', $destination->closedDayList()),
+            $dailyHours,
+            (string) ($data['operating_status'] ?? $destination->operating_status),
+            (string) ($data['hours_kind'] ?? $destination->hours_kind),
+            (string) ($data['hours_source_url'] ?? $destination->hours_source_url),
+            (string) ($data['hours_note'] ?? $destination->hours_note),
+        ]);
     }
 
     public function archive(Destination $destination): RedirectResponse
@@ -229,6 +393,70 @@ class DestinationController extends Controller
                 'date_format:H:i',
             ],
 
+            'closed_days' => [
+                'nullable',
+                'array',
+            ],
+
+            'closed_days.*' => [
+                'string',
+                'distinct',
+                Rule::in(Destination::daySlugs()),
+            ],
+
+            'daily_hours' => [
+                'nullable',
+                'array',
+            ],
+
+            'daily_hours.*' => [
+                'nullable',
+                'array',
+            ],
+
+            'daily_hours.*.open' => [
+                'nullable',
+                'date_format:H:i',
+            ],
+
+            'daily_hours.*.close' => [
+                'nullable',
+                'date_format:H:i',
+            ],
+
+            'daily_hours.*.closed' => [
+                'nullable',
+                'boolean',
+            ],
+
+            'hours_source_url' => [
+                'nullable',
+                'url',
+                'max:500',
+            ],
+
+            'hours_source_label' => [
+                'nullable',
+                'string',
+                'max:150',
+            ],
+
+            'hours_note' => [
+                'nullable',
+                'string',
+                'max:1000',
+            ],
+
+            'operating_status' => [
+                'nullable',
+                Rule::in(['open', 'temporarily_closed', 'permanently_closed', 'unknown']),
+            ],
+
+            'hours_kind' => [
+                'nullable',
+                Rule::in(Destination::HOURS_KINDS),
+            ],
+
             'image_url' => [
                 'nullable',
                 'url',
@@ -267,5 +495,4 @@ class DestinationController extends Controller
             $locations->pluck('municipality')->filter()->unique()->sort()->values(),
         ];
     }
-
 }

@@ -132,6 +132,15 @@
                             @endforeach
                         </div>
 
+                        @if ($destination->hasOpeningHours())
+                            <p class="mt-5 text-sm text-benguet-charcoal/70">
+                                <span class="font-bold text-volcanic-teal">{{ $destination->formatHours() }}</span>
+                                @if ($destination->closedDaysLabel())
+                                    <span class="text-benguet-charcoal/55"> · {{ $destination->closedDaysLabel() }}</span>
+                                @endif
+                            </p>
+                        @endif
+
                         <div class="mt-7 flex items-center justify-between border-t border-boracay-light pt-5">
                             <span class="text-sm text-benguet-charcoal/55">
                                 From ₱{{ number_format($destination->estimated_cost, 2) }}

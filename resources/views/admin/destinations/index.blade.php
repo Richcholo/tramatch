@@ -21,12 +21,6 @@
     </x-slot>
 
     <div class="space-y-8">
-        @if (session('status'))
-            <div class="rounded-2xl border border-boracay bg-boracay-light p-4 text-benguet-charcoal">
-                {{ session('status') }}
-            </div>
-        @endif
-
         <section class="rounded-[1.5rem] border border-boracay-light bg-palawan-sand">
             <form method="GET" action="{{ route('admin.destinations.index') }}" class="grid gap-5 p-6 sm:grid-cols-3 sm:items-center sm:p-8">
                 <label class="block sm:col-span-2">

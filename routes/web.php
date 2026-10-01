@@ -3,6 +3,8 @@
 use App\Http\Controllers\Admin\DestinationController as AdminDestinationController;
 use App\Http\Controllers\Admin\ReviewController as AdminReviewController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
+use App\Http\Controllers\Admin\ProposalController as AdminProposalController;
+use App\Http\Controllers\Admin\SourceController as AdminSourceController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DestinationController;
@@ -14,6 +16,7 @@ use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\SwipeDiscoveryController;
 use Illuminate\Support\Facades\Route;
 use App\Models\Destination;
+
 
 Route::get('/', function () {
     $featuredDestinations = Destination::query()
@@ -125,6 +128,36 @@ Route::middleware(['auth', 'admin'])
     ->group(function () {
         Route::get('/', AdminController::class)
             ->name('dashboard');
+
+        Route::get('/sources', [AdminSourceController::class, 'index'])
+            ->name('sources.index');
+
+        Route::get('/sources/status', [AdminSourceController::class, 'status'])
+            ->name('sources.status');
+
+        Route::get('/sources/{source}', [AdminSourceController::class, 'show'])
+            ->name('sources.show');
+
+        Route::patch('/sources/{source}', [AdminSourceController::class, 'update'])
+            ->name('sources.update');
+
+        Route::post('/sources/bulk-crawl', [AdminSourceController::class, 'bulkCrawl'])
+            ->name('sources.bulk-crawl');
+
+        Route::post('/sources/{source}/crawl', [AdminSourceController::class, 'crawl'])
+            ->name('sources.crawl');
+
+        Route::get('/proposals', [AdminProposalController::class, 'index'])
+            ->name('proposals.index');
+
+        Route::patch('/proposals/bulk', [AdminProposalController::class, 'bulk'])
+            ->name('proposals.bulk');
+
+        Route::patch('/proposals/{proposal}/approve', [AdminProposalController::class, 'approve'])
+            ->name('proposals.approve');
+
+        Route::patch('/proposals/{proposal}/reject', [AdminProposalController::class, 'reject'])
+            ->name('proposals.reject');
 
         Route::patch(
             '/destinations/{destination}/archive',
