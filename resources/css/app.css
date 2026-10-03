@@ -82,8 +82,9 @@
     input:focus-visible,
     select:focus-visible,
     textarea:focus-visible {
-        outline: 3px solid color-mix(in srgb, var(--color-philippine-gold) 75%, transparent);
+        outline: 3px solid var(--color-island-white);
         outline-offset: 2px;
+        box-shadow: 0 0 0 6px var(--color-volcanic-teal);
     }
 }
 

@@ -11,6 +11,12 @@
 
     <title>{{ $title ?? 'TraMatch' }}</title>
 
+    {{-- Playfair Display backs every .font-display heading on app pages.
+         Without this link those headings silently fall back to Georgia. --}}
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600&display=swap" rel="stylesheet">
+
     @vite([
         'resources/css/app.css',
         'resources/js/app.js',

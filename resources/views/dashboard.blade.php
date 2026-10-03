@@ -19,161 +19,186 @@
         ? route('discover.index')
         : route('preferences.edit');
 
-    $discoverLabel = Route::has('discover.index')
-        ? 'Continue discovering'
-        : 'Set your preferences';
+    // Three real states, so the panel never promises something the user lacks.
+    $isFresh = $likedCount === 0 && $itineraryCount === 0;
+    $hasTrips = $itineraryCount > 0;
+
+    [$panelTitle, $panelBody, $panelAction] = match (true) {
+        $hasTrips => [
+            'Your saved trips',
+            'You have ' . $itineraryCount . ' saved ' . \Illuminate\Support\Str::plural('trip', $itineraryCount)
+                . '. Open one to see the day-by-day plan and the driving route.',
+            Route::has('itineraries.index') ? route('itineraries.index') : $discoverHref,
+        ],
+        $likedCount > 0 => [
+            'Turn your likes into a trip',
+            'You have ' . $likedCount . ' saved ' . \Illuminate\Support\Str::plural('place', $likedCount)
+                . '. Build a day-by-day plan around them.',
+            $discoverHref,
+        ],
+        default => [
+            'Start with the places you like',
+            'Swipe through Luzon destinations and keep the ones that fit. TraMatch builds an itinerary from what you keep.',
+            $discoverHref,
+        ],
+    };
+
+    $panelActionLabel = $hasTrips && Route::has('itineraries.index')
+        ? 'Open your trips'
+        : ($isFresh && ! Route::has('discover.index') ? 'Set your preferences' : 'Continue your deck');
+
+    $firstName = trim($user->first_name ?? '') ?: $user->name;
 @endphp
 
 <x-app-layout>
     <x-slot name="header">
-        <div class="flex flex-wrap items-end justify-between gap-6">
-            <div>
-                <p class="text-xs font-bold uppercase tracking-[0.28em] text-boracay-dark">
-                    Your travel desk
-                </p>
+        {{-- Editorial: one big serif line, then very small metadata beneath.
+             Not a wide-tracked uppercase eyebrow, which is the generic default. --}}
+        <div class="max-w-3xl">
+            <p class="text-sm text-benguet-charcoal/75">
+                {{ now()->format('l, j F') }}
+            </p>
 
-                <h1 class="mt-3 font-display text-4xl font-semibold tracking-[-0.04em] text-volcanic-teal sm:text-6xl">
-                    Welcome back, {{ $user->name }}.
-                </h1>
-            </div>
-
-            <span class="text-sm font-semibold uppercase tracking-[0.18em] text-benguet-charcoal/50">
-                TraMatch / Dashboard
-            </span>
+            <h1 class="mt-3 font-display text-4xl font-semibold leading-tight tracking-[-0.02em] text-volcanic-teal sm:text-5xl">
+                Welcome back, {{ $firstName }}.
+            </h1>
         </div>
     </x-slot>
 
-    <div class="space-y-10">
-        <section class="relative overflow-hidden rounded-[2rem] bg-volcanic-teal p-8 text-white shadow-xl sm:p-12">
-            <div class="absolute -right-20 -top-20 h-72 w-72 rounded-full bg-boracay/30 blur-3xl"></div>
-            <div class="absolute -bottom-32 left-1/3 h-72 w-72 rounded-full bg-philippine-gold/20 blur-3xl"></div>
+    <div class="mx-auto max-w-4xl space-y-14">
+        {{-- The single focal point of the page. One accent colour, one
+             unmistakable action. Space separates regions rather than
+             elevation, which is why there is no drop shadow here. --}}
+        <section class="rounded-lg border border-boracay-light bg-palawan-sand p-7 sm:p-10">
+            <h2 class="font-display text-3xl font-semibold leading-tight tracking-[-0.02em] text-volcanic-teal sm:text-4xl">
+                {{ $panelTitle }}
+            </h2>
 
-            <div class="relative max-w-3xl">
-                <p class="text-xs font-bold uppercase tracking-[0.3em] text-boracay-light">
-                    Your next move
-                </p>
+            <p class="mt-4 max-w-xl text-base leading-7 text-benguet-charcoal/75">
+                {{ $panelBody }}
+            </p>
 
-                <h2 class="mt-5 font-display text-5xl font-semibold leading-[0.95] tracking-[-0.05em] sm:text-7xl">
-                    The next place is closer than you think.
-                </h2>
+            <div class="mt-8 flex flex-col gap-4 sm:flex-row sm:items-center">
+                <a
+                    href="{{ $panelAction }}"
+                    {{-- Label is volcanic-teal, not benguet-charcoal: charcoal on
+                         boracay measures 4.24:1 and fails WCAG AA. Hover inverts
+                         to ink, which is both higher contrast and a clearer
+                         signal than a subtle darkening. --}}
+                    class="inline-flex min-h-11 items-center justify-center rounded-lg bg-boracay px-6 py-3 text-sm font-semibold text-volcanic-teal transition-colors duration-150 hover:bg-volcanic-teal hover:text-white"
+                >
+                    {{ $panelActionLabel }}
+                </a>
 
-                <p class="mt-6 max-w-2xl text-lg leading-8 text-white/70">
-                    Keep discovering destinations that match your taste, then turn your favorites into a trip that fits your time and budget.
-                </p>
-
-                <div class="mt-8 flex flex-wrap gap-4">
+                @if (Route::has('preferences.edit') && ! $isFresh)
                     <a
-                        href="{{ $discoverHref }}"
-                        class="inline-flex items-center gap-3 rounded-full bg-philippine-gold px-6 py-3 font-bold text-benguet-charcoal transition hover:-translate-y-1 hover:bg-white"
+                        href="{{ route('preferences.edit') }}"
+                        class="inline-flex min-h-11 items-center justify-center rounded-lg px-2 py-3 text-sm font-semibold text-volcanic-teal underline decoration-boracay underline-offset-4 transition-colors duration-150 hover:text-boracay-dark"
                     >
-                        {{ $discoverLabel }}
-                        <span aria-hidden="true">↗</span>
+                        Adjust preferences
                     </a>
-
-                    @if (Route::has('preferences.edit'))
-                        <a
-                            href="{{ route('preferences.edit') }}"
-                            class="inline-flex items-center rounded-full border border-white/30 px-6 py-3 font-semibold text-white transition hover:bg-white/10"
-                        >
-                            Edit preferences
-                        </a>
-                    @endif
-                </div>
+                @endif
             </div>
         </section>
 
-        <section class="grid gap-5 md:grid-cols-3">
-            <article class="rounded-[2rem] border border-boracay-light bg-island-white p-6 shadow-sm">
-                <p class="text-xs font-bold uppercase tracking-[0.25em] text-boracay-dark">
-                    Liked
-                </p>
+        {{-- Counts are a ledger, not three identical cards. A single row
+             divided by hairlines reads as one fact, where a card grid reads as
+             three competing ones. Hidden while fresh, because three zeros tell
+             a new user nothing. --}}
+        @unless ($isFresh)
+            <section aria-labelledby="your-tally">
+                <h2 id="your-tally" class="font-display text-2xl font-semibold text-volcanic-teal">
+                    Your tally
+                </h2>
 
-                <p class="mt-8 text-5xl font-semibold tracking-[-0.05em] text-volcanic-teal">
-                    {{ $likedCount }}
-                </p>
+                <dl class="mt-5 grid grid-cols-1 divide-y divide-boracay-light border-y border-boracay-light sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+                    <div class="py-6 sm:px-6 sm:py-7 sm:first:pl-0">
+                        <dd class="font-display text-4xl font-semibold leading-none text-volcanic-teal">
+                            {{ $likedCount }}
+                        </dd>
+                        <dt class="mt-2 text-sm text-benguet-charcoal/75">Liked</dt>
+                    </div>
 
-                <p class="mt-2 text-sm text-benguet-charcoal/65">
-                    Places that feel right for you.
-                </p>
-            </article>
+                    <div class="py-6 sm:px-6 sm:py-7">
+                        <dd class="font-display text-4xl font-semibold leading-none text-volcanic-teal">
+                            {{ $passedCount }}
+                        </dd>
+                        <dt class="mt-2 text-sm text-benguet-charcoal/75">Passed</dt>
+                    </div>
 
-            <article class="rounded-[2rem] border border-boracay-light bg-island-white p-6 shadow-sm">
-                <p class="text-xs font-bold uppercase tracking-[0.25em] text-boracay-dark">
-                    Passed
-                </p>
+                    <div class="py-6 sm:px-6 sm:py-7 sm:last:pr-0">
+                        <dd class="font-display text-4xl font-semibold leading-none text-volcanic-teal">
+                            {{ $itineraryCount }}
+                        </dd>
+                        <dt class="mt-2 text-sm text-benguet-charcoal/75">Trips</dt>
+                    </div>
+                </dl>
+            </section>
+        @endunless
 
-                <p class="mt-8 text-5xl font-semibold tracking-[-0.05em] text-volcanic-teal">
-                    {{ $passedCount }}
-                </p>
-
-                <p class="mt-2 text-sm text-benguet-charcoal/65">
-                    Places filtered from your deck.
-                </p>
-            </article>
-
-            <article class="rounded-[2rem] border border-boracay-light bg-island-white p-6 shadow-sm">
-                <p class="text-xs font-bold uppercase tracking-[0.25em] text-boracay-dark">
-                    Trips
-                </p>
-
-                <p class="mt-8 text-5xl font-semibold tracking-[-0.05em] text-volcanic-teal">
-                    {{ $itineraryCount }}
-                </p>
-
-                <p class="mt-2 text-sm text-benguet-charcoal/65">
-                    Travel plans you have saved.
-                </p>
-            </article>
-        </section>
-
-        <section class="space-y-5">
+        {{-- Empty state: honest about what is missing, and gives the one
+             action that fills it. --}}
+        <section aria-labelledby="recent-activity">
             <div class="flex flex-wrap items-end justify-between gap-4">
-                <div>
-                    <p class="text-xs font-bold uppercase tracking-[0.25em] text-boracay-dark">
-                        Your travel desk
-                    </p>
-                    <h2 class="mt-2 font-display text-3xl font-semibold text-volcanic-teal">
-                        Recent activity
-                    </h2>
-                </div>
-                @if (Route::has('itineraries.index'))
-                    <a href="{{ route('itineraries.index') }}" class="text-sm font-semibold text-volcanic-teal underline decoration-boracay underline-offset-4 transition hover:text-boracay-dark">
-                        View all trips
+                <h2 id="recent-activity" class="font-display text-2xl font-semibold text-volcanic-teal">
+                    Recent activity
+                </h2>
+
+                @if ($recentActivity->isNotEmpty() && Route::has('itineraries.index'))
+                    <a
+                        href="{{ route('itineraries.index') }}"
+                        class="inline-flex min-h-11 items-center text-sm font-semibold text-volcanic-teal underline decoration-boracay underline-offset-4 transition-colors duration-150 hover:text-boracay-dark"
+                    >
+                        All trips
                     </a>
                 @endif
             </div>
 
             @if ($recentActivity->isNotEmpty())
-                <div class="divide-y divide-boracay-light rounded-xl border border-boracay-light bg-island-white px-5 sm:px-7">
+                <ul class="mt-5 divide-y divide-boracay-light border-y border-boracay-light">
                     @foreach ($recentActivity as $activity)
-                        <a href="{{ $activity['url'] }}" class="flex items-center justify-between gap-4 py-4 transition hover:text-boracay-dark">
-                            <div class="flex min-w-0 items-start gap-4">
-                                <span class="mt-1 inline-flex shrink-0 rounded-full px-2.5 py-1 text-[0.65rem] font-bold uppercase tracking-[0.12em] {{ $activity['type'] === 'Saved trip' ? 'bg-philippine-gold/20 text-benguet-charcoal' : 'bg-boracay-light text-boracay-dark' }}">
-                                    {{ $activity['type'] === 'Saved trip' ? 'Trip' : 'Liked' }}
-                                </span>
+                        <li>
+                            <a
+                                href="{{ $activity['url'] }}"
+                                class="flex min-h-11 items-center justify-between gap-6 py-4 transition-colors duration-150 hover:bg-boracay-light/40"
+                            >
                                 <div class="min-w-0">
-                                    <p class="text-sm font-semibold text-volcanic-teal">
+                                    {{-- Type is a quiet label, not a capsule badge.
+                                         A pill here was decoration with no function. --}}
+                                    <p class="text-xs text-benguet-charcoal/75">
+                                        {{ $activity['type'] }}
+                                    </p>
+
+                                    <p class="mt-1 truncate font-semibold text-volcanic-teal">
                                         {{ $activity['title'] }}
                                     </p>
-                                    <p class="mt-1 truncate text-xs text-benguet-charcoal/60">
-                                        {{ $activity['type'] }} · {{ $activity['detail'] }}
-                                    </p>
                                 </div>
-                            </div>
-                            <time datetime="{{ $activity['date']->toIso8601String() }}" class="shrink-0 text-xs text-benguet-charcoal/50">
-                                {{ $activity['date']->diffForHumans() }}
-                            </time>
-                        </a>
+
+                                <time
+                                    datetime="{{ $activity['date']->toIso8601String() }}"
+                                    class="shrink-0 text-sm text-benguet-charcoal/75"
+                                >
+                                    {{ $activity['date']->diffForHumans() }}
+                                </time>
+                            </a>
+                        </li>
                     @endforeach
-                </div>
+                </ul>
             @else
-                <div class="rounded-xl border border-dashed border-boracay-light bg-island-white px-6 py-8">
-                    <p class="font-semibold text-volcanic-teal">No recent activity yet.</p>
-                    <p class="mt-1 text-sm text-benguet-charcoal/65">
-                        Liked destinations and saved trips will appear here.
+                <div class="mt-5 rounded-lg border border-boracay-light bg-palawan-sand p-7">
+                    <p class="font-semibold text-volcanic-teal">
+                        Nothing here yet.
                     </p>
-                    <a href="{{ $discoverHref }}" class="mt-4 inline-flex text-sm font-semibold text-volcanic-teal underline decoration-boracay underline-offset-4 hover:text-boracay-dark">
-                        Start discovering
+
+                    <p class="mt-2 max-w-md text-sm leading-6 text-benguet-charcoal/75">
+                        The places you like and the trips you save will show up here, newest first.
+                    </p>
+
+                    <a
+                        href="{{ $discoverHref }}"
+                        class="mt-5 inline-flex min-h-11 items-center text-sm font-semibold text-volcanic-teal underline decoration-boracay underline-offset-4 transition-colors duration-150 hover:text-boracay-dark"
+                    >
+                        {{ $isFresh ? 'Start swiping' : 'Keep swiping' }}
                     </a>
                 </div>
             @endif
