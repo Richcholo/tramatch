@@ -814,6 +814,7 @@ class ItineraryEditingTest extends TestCase
             'data-add-dialog',
             'data-add-confirm',
             'data-add-count',
+            'data-day-option',
             'data-travel',
         ] as $hook) {
             $this->assertStringContainsString(
@@ -844,6 +845,53 @@ class ItineraryEditingTest extends TestCase
         // The row template must not leak a real day id, because it sits outside
         // the day loop and there is no day to bind to.
         $this->assertStringContainsString('data-field="day-id" value=""', $html);
+
+        $document = new DOMDocument();
+
+        @$document->loadHTML($html);
+
+        libxml_clear_errors();
+
+        $xpath = new DOMXPath($document);
+
+        // chosenDay() reads the checked [data-day-option], so the dialog has to
+        // offer exactly one per day and each has to carry that day's id. When
+        // these went missing the script silently fell back to the day whose
+        // button opened the dialog, and picking a different day did nothing.
+        $optionValues = [];
+
+        foreach ($xpath->query('//*[@data-day-option]/@value') as $attribute) {
+            $optionValues[] = $attribute->nodeValue;
+        }
+
+        $this->assertSame(
+            $itinerary->days->pluck('id')->map(fn ($id) => (string) $id)->all(),
+            $optionValues,
+            'the add dialog must offer one day option per day, valued with that day id'
+        );
+
+        // addStop() copies these onto the cloned row. A missing one leaves an
+        // "undefined" label or a link back to the destinations index.
+        $picker = $xpath->query('//*[@data-destination]');
+
+        $this->assertGreaterThan(0, $picker->length, 'the picker offered nothing to assert on');
+
+        foreach (['name', 'place', 'cost', 'fee', 'url'] as $attribute) {
+            $filled = 0;
+
+            foreach ($picker as $checkbox) {
+                if (trim((string) $checkbox->getAttribute('data-'.$attribute)) !== '') {
+                    $filled++;
+                }
+            }
+
+            $this->assertSame(
+                $picker->length,
+                $filled,
+                'every picker row must carry a non-empty data-'.$attribute
+                .', because addStop copies it onto the stop it creates'
+            );
+        }
     }
 
     public function test_the_editor_form_does_not_nest_inside_another_form(): void

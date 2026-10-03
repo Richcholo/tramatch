@@ -31,7 +31,10 @@ php artisan sources:check          # measure whether each source page is readabl
 them with `php artisan dev:list`. The worker's default is
 `queue:listen --timeout=0` — no per-job timeout — so
 `AppServiceProvider::register()` re-registers it as `--timeout=300`; keep that
-override or a hung crawl blocks the worker forever. `inline()`, `tabs()` and
+override or a hung crawl blocks the worker forever. That number must stay
+**below** `queue.connections.*.retry_after` or the same crawl runs twice — see
+the deployment section. A standalone `php artisan queue:work` is unaffected:
+`CrawlSourceJob::$timeout` outranks any worker flag. `inline()`, `tabs()` and
 `stream()` are no-ops on Windows, so all three processes share one window.
 `php artisan dev` is a dev tool only; production needs a real process manager.
 
@@ -54,7 +57,7 @@ not make `pint --test` a pass/fail gate.
   `DB_CONNECTION=sqlite`, array cache/session, sync queue) and needs
   `pdo_sqlite` enabled in `php.ini`. Never point it at MySQL to work around a
   driver problem — `RefreshDatabase` would drop the development database.
-- The suite is currently **212 passing**. It is also the only thing that
+- The suite is currently **215 passing**. It is also the only thing that
   migrates from scratch, so it is the only check that a fresh clone can
   migrate — your dev database cannot detect a broken migration chain,
   because every migration in it has already run.
@@ -179,12 +182,15 @@ flips between the two; the markup for both lives in
 - No migration was added — every column it needs already exists.
 - **What is verified and what is not.** `ItineraryEditingTest` (25 tests)
   covers the whole HTTP contract, and a manual walkthrough against MySQL
-  exercised login → reorder → reflow → add → remove and caught the two bugs
-  above. The pointer-event drag, the arrow buttons, the add dialog and the
-  reflow `fetch` have **never been clicked**: there is no browser automation
-  here. Treat that JS as unproven until someone drives it by hand. A test that
-  asserts the editor page carries every `data-*` hook the script looks for is
-  a floor, not a substitute.
+  exercised login → reorder → reflow → add → remove. A later read of
+  `itinerary-editor.js` found three more bugs the tests could not see: rows
+  cloned from the template were never wired for dragging, the dialog's
+  "Add to Day N" radios were ignored in favour of whichever day opened the
+  dialog, and reopening the dialog kept the previous batch ticked so the same
+  place could be added twice. Those are fixed and their markup contract is now
+  pinned. **Nothing here has still been clicked in a browser** — there is no
+  browser automation here, so treat the interaction itself as unproven. A test
+  asserting the page carries every `data-*` hook is a floor, not a substitute.
 
 ### Destination-source crawling
 
@@ -774,13 +780,61 @@ migration.
 - Itinerary driving lines call the public OSRM demo API from the browser
   (`resources/js/routing.js`) and fall back to a dashed polyline on failure.
 
-## Git state — do not assume a clean tree
+## Deployment (on hold — Hostinger, shared hPanel, over SSH)
 
-`main` currently carries a large **uncommitted** feature: the whole crawling
-subsystem is untracked, six migrations are new, and
-`database/data/luzon-locations.csv` is deleted in favor of `-clean.csv`.
-Local branch `agents/phase-1-implementation` points at the same commit as
-`main`. Run `git status` before assuming HEAD matches what you see on disk.
+Do not start this without the user saying so. The steps below are the ones that
+were verified as *easy to get wrong*, not a substitute for the hPanel docs.
+
+- **`retry_after` must exceed the crawl timeout.** `config/queue.php` derives it
+  from `QUEUE_WORKER_TIMEOUT` (+60s) and `AppServiceProvider` re-registers
+  `queue:listen` with the same number; `CrawlSourceJob` declares
+  `public int $timeout = 300`. It used to default to **90**, which is under the
+  job's own 300s ceiling: a crawl taking 100s was released to a second worker
+  while the first was still fetching, so one admin click produced two crawls and
+  two sets of proposals, with no error anywhere. That needs two workers, which
+  is exactly the production shape (cron `queue:work` alongside `queue:listen`).
+  `tests/Unit/QueueRetryAfterTest.php` guards the invariant.
+  `DevCommands::artisan()` only records a subprocess for `php artisan dev` — it
+  does not reconfigure the `queue:listen` command, so reading the command's own
+  `--timeout` default tells you 60 and means nothing.
+- **`MAIL_MAILER=log` silently breaks two live flows.** Forgot-password calls
+  `Password::sendResetLink()` (`routes/auth.php`) and the resend lives on
+  `verification.notice` / `verification.send` — also `routes/auth.php`, not
+  `web.php`. With the log mailer the traveller is told the link is on its way and
+  it never arrives; the only trace is the link in `storage/logs/laravel.log`.
+  Set `MAIL_MAILER=smtp` and real credentials before going live.
+  Note `User` does **not** implement `MustVerifyEmail`, so nothing enforces a
+  verified address even though the routes exist.
+- `.env.example` ships sqlite so a fresh clone runs with no credentials; a real
+  host wants `DB_CONNECTION=mysql` plus its own host/database/user/password.
+- Crawling from a host means crawling from a **datacentre IP**. The Azure WAF
+  refusal noted above commonly rejects those while serving the same page to a
+  home connection, so re-run `sources:check` on the host before trusting any
+  `fetchability` verdict measured locally. Do not "fix" it by spoofing a browser
+  User-Agent.
+- The rest of the sequence: fresh `APP_KEY`,
+  `composer install --no-dev --optimize-autoloader`, `npm ci --include=optional`,
+  `npm run build`, `php artisan migrate --seed --force`,
+  `php artisan storage:link`, `php artisan optimize`, promote your own account
+  to admin via tinker, and put `php artisan queue:work` in hPanel cron.
+- The CLI PHP on hPanel can differ from the web PHP, and the CA-bundle gotcha
+  above is per-process: a worker started before `php.ini` gained a bundle keeps
+  an empty trust store. Verify the version and extensions hPanel's CLI actually
+  uses before concluding a crawl fails everywhere.
+
+## Git state — check `git status` before assuming HEAD matches disk
+
+The crawling subsystem **is merged** into `main` (`77c97c5`) together with the
+curated hours; it is no longer the untracked sprawl this section used to
+describe. `agents/phase-1-implementation` is fully contained in `main`, so it
+is dead weight — do not branch from it.
+
+Work lands on `integrate/bon2`, which is a descendant of `main` and was
+**never pushed**. As of the itinerary-editing work it sat 8 commits ahead of
+`main` with `main` 0 ahead of it, so `git log HEAD..main` being empty is the
+quick check that nothing upstream needs rebasing. Run `git status` anyway: an
+earlier state of this repo had the entire editor uncommitted on top of a dirty
+tree, which is easy to mistake for "already committed".
 
 Workflow (from README): branch off `main`, open a PR, get a review before
 merging, and never force-push `main`.

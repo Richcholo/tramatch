@@ -106,7 +106,14 @@ function initItineraryEditor(root) {
 
         renumber(list);
         markDirty();
-        row.querySelector('[data-drag-handle]').focus();
+
+        // Stay on the arrow the traveller pressed, so holding space or Enter
+        // walks the row down the day. Only hand over to the handle when that
+        // arrow just hit the end of the list and disabled itself.
+        const pressed = row.querySelector(`[data-move="${offset < 0 ? 'up' : 'down'}"]`);
+        const focusTarget = pressed && !pressed.disabled ? pressed : row.querySelector('[data-drag-handle]');
+
+        focusTarget?.focus();
     }
 
     /* ------------------------------------------------------------- reflow */
@@ -193,21 +200,29 @@ function initItineraryEditor(root) {
             const start = toMinutes(rowFields(row, 'start-time').value);
             const end = toMinutes(rowFields(row, 'end-time').value);
             const badge = row.querySelector('[data-travel]');
+            const placed = start !== null && end !== null && end > start;
 
-            if (start === null || end === null || end <= start) {
+            if (!placed) {
+                // A stop with no usable window is still a draft, so it shows no
+                // gap and does not become the reference the next stop measures
+                // from. Letting end <= start through here used to reset the
+                // reference backwards and understate every gap after it.
                 badge.textContent = '';
                 badge.hidden = true;
-            } else if (previousEnd === null) {
+
+                return;
+            }
+
+            if (previousEnd === null) {
                 badge.textContent = 'First stop';
-                badge.hidden = false;
             } else {
                 const gap = Math.max(0, start - previousEnd);
 
                 badge.textContent = gap === 0 ? 'Back to back' : `${gap} min travel`;
-                badge.hidden = false;
             }
 
-            previousEnd = end ?? previousEnd;
+            badge.hidden = false;
+            previousEnd = end;
         });
     }
 
@@ -259,6 +274,11 @@ function initItineraryEditor(root) {
         }
 
         list.appendChild(row);
+
+        // The rows the page shipped with are wired for dragging at init, so a
+        // row cloned from the template has to be wired here or it can only be
+        // moved with the arrow buttons until the page reloads.
+        draggable(row);
 
         renumber(list);
         refreshTravel(list);
@@ -397,7 +417,21 @@ function initItineraryEditor(root) {
             option.checked = option.value === dayId;
         });
 
+        // Clear the last batch too, otherwise reopening the dialog still shows
+        // it ticked, the count still reads it, and confirming silently adds
+        // the same place a second time to whichever day is now chosen.
+        dialog.querySelectorAll('[data-destination]').forEach((box) => {
+            box.checked = false;
+        });
+        dialog.querySelector('[data-add-count]').textContent = '0';
+        dialog.querySelector('[data-add-confirm]').disabled = true;
+
         dialog.showModal();
+    }
+
+    /** The day the traveller chose inside the dialog, not the one they opened it from. */
+    function chosenDay() {
+        return dialog.querySelector('[data-day-option]:checked')?.value ?? dialog.dataset.targetDay;
     }
 
     dialog.addEventListener('change', (event) => {
@@ -410,8 +444,12 @@ function initItineraryEditor(root) {
     });
 
     dialog.querySelector('[data-add-confirm]').addEventListener('click', () => {
-        const dayId = dialog.dataset.targetDay;
+        const dayId = chosenDay();
         const picked = [...dialog.querySelectorAll('[data-destination]:checked')];
+
+        if (!dayId || picked.length === 0) {
+            return;
+        }
 
         picked.forEach((checkbox) => addStop(checkbox.dataset.destination, dayId));
 

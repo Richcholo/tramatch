@@ -640,7 +640,7 @@
                         </h2>
 
                         <p class="mt-2 text-sm leading-6 text-benguet-charcoal/70">
-                            These are the places swiping surfaced for you that this trip does not visit yet.
+                            These are the places you liked that this trip does not visit yet. Pick as many as you want and say which day each one goes on.
                         </p>
 
                         <div class="mt-5">
