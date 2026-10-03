@@ -15,6 +15,10 @@ use Illuminate\Validation\Rule;
  * browser invented are negative (see ItineraryEditor) and become new stops;
  * positive keys must be items of this itinerary, which is the only thing
  * stopping a traveller from editing someone else's trip by posting an id.
+ *
+ * There are no rules for estimated_cost because the editor cannot change a
+ * price. ItineraryEditor::costFor() ignores any posted value, so adding a rule
+ * here would validate a field whose value is discarded.
  */
 class UpdateItineraryRequest extends FormRequest
 {
@@ -60,13 +64,6 @@ class UpdateItineraryRequest extends FormRequest
                 'required',
                 'integer',
                 'exists:destinations,id',
-            ],
-
-            'items.*.estimated_cost' => [
-                'nullable',
-                'numeric',
-                'min:0',
-                'max:99999999.99',
             ],
 
             'items.*.note' => ['nullable', 'string', 'max:500'],

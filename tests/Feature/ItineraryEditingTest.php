@@ -9,6 +9,7 @@ use App\Models\ItineraryItem;
 use App\Models\Tag;
 use App\Models\TravelProfile;
 use App\Models\User;
+use App\Services\ItineraryEditor;
 use DOMDocument;
 use DOMXPath;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -93,13 +94,14 @@ class ItineraryEditingTest extends TestCase
      */
     private function row(ItineraryItem $item, array $overrides = []): array
     {
+        // Deliberately no estimated_cost: the editor has no cost field, so this
+        // mirrors what the form actually posts.
         return array_merge([
             'day_id' => $item->itinerary_day_id,
             'sort_order' => $item->sort_order,
             'destination_id' => $item->destination_id,
             'start_time' => $item->start_time ? substr($item->start_time, 0, 5) : null,
             'end_time' => $item->end_time ? substr($item->end_time, 0, 5) : null,
-            'estimated_cost' => number_format((float) $item->estimated_cost, 2, '.', ''),
         ], $overrides);
     }
 
@@ -293,7 +295,33 @@ class ItineraryEditingTest extends TestCase
         $this->assertSame('800.00', $itinerary->fresh()->total_estimated_cost);
     }
 
-    public function test_editing_a_cost_moves_the_header_total(): void
+    /**
+ * The request rules already drop estimated_cost, so the controller never sees
+ * one. But ItineraryEditor is a public service and apply() is reachable from
+ * anywhere, so the rule holds in the service too -- this drives apply() with a
+ * hand-built draft rather than going through the form request.
+ */
+public function test_the_editor_itself_ignores_a_cost_in_the_draft(): void
+    {
+        $itinerary = $this->generateItinerary('alpha');
+        $item = $itinerary->days->first()->items->first();
+
+        app(ItineraryEditor::class)->apply($itinerary, [
+            $item->id => array_merge($this->row($item), [
+                'estimated_cost' => '9999.00',
+            ]),
+        ]);
+
+        $this->assertSame(800.0, (float) $item->fresh()->estimated_cost);
+        $this->assertSame('800.00', $itinerary->fresh()->total_estimated_cost);
+    }
+
+/**
+ * Prices are curated catalogue data. The form has no cost input, and a posted
+ * value is discarded rather than honoured -- otherwise anyone could restate
+ * what a place costs just by crafting a request.
+ */
+    public function test_a_posted_cost_is_ignored_because_prices_are_not_editable(): void
     {
         $itinerary = $this->generateItinerary('alpha');
         $item = $itinerary->days->first()->items->first();
@@ -304,9 +332,34 @@ class ItineraryEditingTest extends TestCase
                     $item->id => $this->row($item, ['estimated_cost' => '1250.50']),
                 ],
             ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame(800.0, (float) $item->fresh()->estimated_cost);
+        $this->assertSame('800.00', $itinerary->fresh()->total_estimated_cost);
+    }
+
+    public function test_editing_a_time_leaves_the_cost_alone(): void
+    {
+        $itinerary = $this->generateItinerary('alpha');
+        $item = $itinerary->days->first()->items->first();
+
+        $this->actingAs($this->user)
+            ->patch(route('itineraries.update', $itinerary), [
+                'items' => [
+                    $item->id => $this->row($item, [
+                        'start_time' => '07:15',
+                        'end_time' => '09:45',
+                    ]),
+                ],
+            ])
             ->assertRedirect();
 
-        $this->assertSame('1250.50', $itinerary->fresh()->total_estimated_cost);
+        $item->refresh();
+
+        $this->assertSame('07:15', substr($item->start_time, 0, 5));
+        $this->assertSame(800.0, (float) $item->estimated_cost);
+        $this->assertSame('800.00', $itinerary->fresh()->total_estimated_cost);
     }
 
     public function test_a_liked_place_that_is_not_on_the_trip_can_be_added(): void
@@ -328,7 +381,6 @@ class ItineraryEditingTest extends TestCase
                         'destination_id' => $charlie->id,
                         'start_time' => null,
                         'end_time' => null,
-                        'estimated_cost' => '600.00',
                         'note' => '',
                     ],
                 ],
@@ -339,6 +391,9 @@ class ItineraryEditingTest extends TestCase
 
         $this->assertSame($day->id, $added->itinerary_day_id);
         $this->assertSame(2, (int) $added->sort_order);
+
+        // Charlie's own catalogue price, not anything the request asked for.
+        $this->assertSame(600.0, (float) $added->estimated_cost);
         $this->assertSame('1400.00', $itinerary->fresh()->total_estimated_cost);
     }
 
@@ -831,7 +886,6 @@ class ItineraryEditingTest extends TestCase
             'items['.$item->id.'][destination_id]',
             'items['.$item->id.'][start_time]',
             'items['.$item->id.'][end_time]',
-            'items['.$item->id.'][estimated_cost]',
             'items['.$item->id.'][note]',
             'items[__KEY__][start_time]',
         ] as $name) {
@@ -839,6 +893,22 @@ class ItineraryEditingTest extends TestCase
                 'name="'.$name.'"',
                 $html,
                 'the editor form lost the '.$name.' field'
+            );
+        }
+
+        // The cost is not editable, so the form must not carry the field at all.
+        // A leftover input would put a price box back on screen and post a value
+        // ItineraryEditor::costFor() silently throws away.
+        foreach ([
+            'items['.$item->id.'][estimated_cost]',
+            'items[__KEY__][estimated_cost]',
+        ] as $name) {
+            // assertFalse rather than assertStringNotContainsString, because the
+            // latter dumps the entire page into the failure message.
+            $this->assertFalse(
+                str_contains($html, 'name="'.$name.'"'),
+                'the editor form still exposes '.$name.', but a price is curated '
+                .'catalogue data and the traveller must not be able to change it'
             );
         }
 
@@ -876,7 +946,7 @@ class ItineraryEditingTest extends TestCase
 
         $this->assertGreaterThan(0, $picker->length, 'the picker offered nothing to assert on');
 
-        foreach (['name', 'place', 'cost', 'fee', 'url'] as $attribute) {
+        foreach (['name', 'place', 'fee', 'url'] as $attribute) {
             $filled = 0;
 
             foreach ($picker as $checkbox) {

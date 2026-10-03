@@ -21,7 +21,9 @@ use RuntimeException;
  * those negative keys, which no database id can collide with.
  *
  *   items[<item id or negative key>][day_id|sort_order|start_time|end_time
- *                                            |destination_id|estimated_cost|note]
+ *                                            |destination_id|note]
+ *
+ * There is deliberately no estimated_cost in that list. See costFor().
  */
 class ItineraryEditor
 {
@@ -195,7 +197,7 @@ class ItineraryEditor
                     $previousEnd,
                     $start
                 ),
-                'estimated_cost' => $this->costFor($fields, $destination),
+                'estimated_cost' => $this->costFor($item, $destination),
                 'note' => $this->noteFor($fields),
             ];
 
@@ -347,17 +349,21 @@ class ItineraryEditor
     }
 
     /**
-     * @param  array<string, mixed>  $fields
+     * A price is curated catalogue data, not something a traveller edits.
+     *
+     * A stored stop therefore keeps the figure it was generated with, and a
+     * stop the traveller just added takes the destination's own estimate. The
+     * posted value is ignored outright: there is no cost field in the form, and
+     * honouring one anyway would let anyone rewrite a price by crafting a
+     * request. Editing a time must not quietly restate what a place costs.
      */
-    private function costFor(array $fields, ?Destination $destination): float
+    private function costFor(?ItineraryItem $item, ?Destination $destination): float
     {
-        $cost = $fields['estimated_cost'] ?? null;
-
-        if ($cost === null || $cost === '') {
-            return round((float) ($destination?->estimated_cost ?? 0), 2);
+        if ($item) {
+            return round((float) $item->estimated_cost, 2);
         }
 
-        return round((float) $cost, 2);
+        return round((float) ($destination?->estimated_cost ?? 0), 2);
     }
 
     /**

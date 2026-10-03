@@ -254,7 +254,6 @@ function initItineraryEditor(root) {
         field('sort-order').value = String(list.querySelectorAll('[data-stop]').length + 1);
         field('start-time').value = '';
         field('end-time').value = '';
-        field('estimated-cost').value = checkbox.dataset.cost ?? '';
         field('note').value = '';
 
         const link = row.querySelector('[data-stop-name]');

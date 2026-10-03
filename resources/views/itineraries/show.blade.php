@@ -262,18 +262,10 @@
                             >
                         </label>
 
-                        <label class="block">
-                            <span class="text-xs font-semibold uppercase tracking-wide text-benguet-charcoal/60">Estimated cost (₱)</span>
-                            <input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                name="items[__KEY__][estimated_cost]"
-                                data-field="estimated-cost"
-                                class="mt-1 block min-h-11 w-full rounded-md border border-boracay-light bg-palawan-sand px-3 py-2 text-sm"
-                            >
-                        </label>
-
+                        {{-- No cost input. It is curated catalogue data, not the
+                             traveller's to change: a stored stop keeps what it
+                             was generated with, a new one takes the
+                             destination's own figure. See ItineraryEditor. --}}
                         <label class="block">
                             <span class="text-xs font-semibold uppercase tracking-wide text-benguet-charcoal/60">Note</span>
                             <input
@@ -533,19 +525,9 @@
                                                 >
                                             </label>
 
-                                            <label class="block">
-                                                <span class="text-xs font-semibold uppercase tracking-wide text-benguet-charcoal/60">Estimated cost (₱)</span>
-                                                <input
-                                                    type="number"
-                                                    step="0.01"
-                                                    min="0"
-                                                    name="items[{{ $item->id }}][estimated_cost]"
-                                                    data-field="estimated-cost"
-                                                    value="{{ number_format((float) $item->estimated_cost, 2, '.', '') }}"
-                                                    class="mt-1 block min-h-11 w-full rounded-md border border-boracay-light bg-palawan-sand px-3 py-2 text-sm"
-                                                >
-                                            </label>
-
+                                            {{-- No cost input, same reason as the template row. The price shown in the
+                                                 row header is the stored one and
+                                                 stays put. --}}
                                             <label class="block">
                                                 <span class="text-xs font-semibold uppercase tracking-wide text-benguet-charcoal/60">Note</span>
                                                 <input
@@ -672,7 +654,6 @@
                                     data-destination="{{ $destination->id }}"
                                     data-name="{{ $destination->name }}"
                                     data-place="{{ $destination->municipality }}, {{ $destination->province }}"
-                                    data-cost="{{ number_format((float) $destination->estimated_cost, 2, '.', '') }}"
                                     data-fee="₱{{ number_format((float) $destination->estimated_cost, 2) }}"
                                     data-url="{{ route('destinations.show', $destination) }}"
                                     class="mt-1 h-5 w-5 shrink-0 accent-boracay"

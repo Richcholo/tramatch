@@ -57,7 +57,7 @@ not make `pint --test` a pass/fail gate.
   `DB_CONNECTION=sqlite`, array cache/session, sync queue) and needs
   `pdo_sqlite` enabled in `php.ini`. Never point it at MySQL to work around a
   driver problem — `RefreshDatabase` would drop the development database.
-- The suite is currently **216 passing**. It is also the only thing that
+- The suite is currently **218 passing**. It is also the only thing that
   migrates from scratch, so it is the only check that a fresh clone can
   migrate — your dev database cannot detect a broken migration chain,
   because every migration in it has already run.
@@ -163,6 +163,18 @@ flips between the two; the markup for both lives in
   nothing, and it deliberately ignores typed start times and restarts at
   08:00. It also deliberately does not refuse an over-long day — it returns the
   finish time and the browser warns.
+- **A price is not editable.** There is no cost field in the form, and
+  `ItineraryEditor::costFor()` ignores a posted `estimated_cost` outright — a
+  stored stop keeps what it was generated with, a newly added one takes the
+  destination's own figure. `UpdateItineraryRequest` has no rule for it either,
+  so `validated()` already drops it at the boundary; the service ignores it
+  anyway because `apply()` is reachable from anywhere and would otherwise be one
+  careless caller away from rewriting the catalogue. Do not add the input back
+  because a total "looked wrong" — the header total is
+  `refreshTotals()` summing stored costs, so it is right by construction.
+  `test_a_posted_cost_is_ignored_because_prices_are_not_editable` pins the
+  request layer and `test_the_editor_itself_ignores_a_cost_in_the_draft` pins
+  the service.
 - **Typed times are stored verbatim.** `travel_minutes_from_previous` is
   derived from the real gap and clamped at 0, so an overlap after a reorder is
   the traveller's own doing and Reflow is the escape hatch. A stop saved with
