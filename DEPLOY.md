@@ -167,7 +167,40 @@ Then click **Crawl** in `/admin/sources` and watch the crawl log populate. If
 
 ## Traps specific to this repo
 
-### `retry_after` must exceed the crawl timeout — already fixed, do not undo
+### Three failures that produce no error message
+
+All three were hit during the first live deploy, and all three fail *quietly* —
+no exception, no log entry, nothing in the response to tell you why. They are
+listed first because they are the ones that cost time.
+
+**1. A cached config left pointing at the old directory → silent 500.**
+`bootstrap/cache/config.php` bakes in absolute paths when it is written. Move
+the application and every cached path still points at where it used to be, so
+log writes and compiled views go to a directory that no longer exists. The
+symptom is a 500 with **zero new lines** in `storage/logs/laravel.log`, and
+`APP_DEBUG=true` appearing to do nothing — because the cached config overrides
+`.env` entirely. Fix:
+
+```sh
+php artisan optimize:clear
+```
+
+`deploy.sh` does this before anything else, and it must stay first in the order.
+
+**2. A duplicate `APP_KEY=` line → "No application encryption key".**
+`key:generate` rewrites the *first* match; dotenv honours the *last*. One empty
+line left over from the template and the generated key is ignored. Check with
+`grep -c '^APP_KEY' .env`, which must print exactly `1`.
+
+**3. `storage:link` failing leaves a real directory behind.**
+`StorageLinkCommand` creates `public/storage` *first*, then calls `link()`,
+which throws here (see below). The empty-but-real directory survives. Combined
+with a stale config pointing `storage_path` at it, that turned
+`storage/logs/laravel.log` — with the database password and `APP_KEY` in it —
+into a URL that returned 200 to anyone who asked. `.htaccess` now denies those
+paths outright, so a repeat is refused rather than served.
+
+### `php artisan storage:link` cannot work here
 
 `config/queue.php` derives `retry_after` from `QUEUE_WORKER_TIMEOUT` (+60s);
 `AppServiceProvider` re-registers `queue:listen` with the same number. It used
@@ -280,6 +313,37 @@ non-fatal.
   and the view; there is no upload controller.
 
 It becomes load-bearing the moment profile photo uploads are implemented.
+
+### What this host allows, measured
+
+Verified on the live account rather than assumed:
+
+| | Result |
+|---|---|
+| PHP | 8.4 selectable; 8.3 **cannot** install this lock |
+| `open_basedir` | **no value** — PHP reads `../vendor/` freely, so the layout above works |
+| Symlinked document root | LiteSpeed **follows** `public_html -> public` |
+| `symlink()` | disabled |
+| `exec()` | disabled |
+| `proc_open()` | disabled — `php artisan about` and anything shelling out will fail |
+
+The disabled functions are why `storage:link` cannot work and why
+`php artisan about` errors with *"relies on proc_open"*. Neither affects the web
+request path. `open_basedir` being unrestricted is what makes the whole
+above-`public_html` layout viable, and that is not guaranteed on every Hostinger
+plan — check it before assuming.
+
+Also worth enabling in hPanel → Advanced → PHP: **OPcache**.
+
+### Trusting the proxy
+
+Hostinger terminates TLS, so PHP sees plain HTTP from loopback. `bootstrap/app.php`
+now calls `trustProxies(at: '*')`, without which Laravel generates `http://`
+URLs on an HTTPS page and session cookies are not returned — a 419 on the first
+form post. The cost is that `X-Forwarded-For` is client-influenced, so the
+login throttle can be sidestepped by forging the header; that was taken
+deliberately over the alternative, since not trusting it collapses every visitor
+onto one throttle key.
 
 ### SMTP or forgot-password fails silently
 

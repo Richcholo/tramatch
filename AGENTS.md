@@ -850,6 +850,24 @@ the runtime never executes it.
   `mv public_html public_html.hostinger-backup` it replaced, which would move
   `.env` and `storage/` wholesale.
 
+- **Three deploy failures produce no error message at all.** All hit the first
+  live deploy. (1) A cached config bakes in absolute paths, so after moving the
+  app every cached path is stale — 500 with zero new log lines and `APP_DEBUG`
+  appearing to do nothing, because the cache overrides `.env`. (2) A duplicate
+  `APP_KEY=` line: `key:generate` rewrites the first match, dotenv honours the
+  last, so `grep -c '^APP_KEY' .env` must print exactly `1`. (3) `storage:link`
+  creates `public/storage` *before* it throws, leaving a real directory that a
+  stale `storage_path` then filled — the log, database password and `APP_KEY`
+  included, served at `/storage/logs/laravel.log`. `public/.htaccess` now denies
+  those paths outright. Details in `DEPLOY.md`.
+- **What this Hostinger account allows:** PHP 8.4 only (8.3 cannot install the
+  lock); `open_basedir` unrestricted, which is what makes the above-`public_html`
+  layout work; LiteSpeed *does* follow a symlinked `public_html`; `symlink()`,
+  `exec()` and `proc_open()` are all disabled. Do not assume these on another
+  plan — they were measured, not documented.
+- `bootstrap/app.php` calls `trustProxies(at: '*')` because Hostinger terminates
+  TLS in front of PHP. Removing it brings back `http://` URLs and a 419 on the
+  first form post.
 - **`public/build` is committed on purpose.** It used to be gitignored, which
   made `git pull` deploy PHP but no CSS or JS — the site renders unstyled on a
   host that cannot run Vite. **Run `npm run build` and commit the result

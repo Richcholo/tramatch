@@ -1,3 +1,38 @@
+# ---------------------------------------------------------------------------
+# Never serve application source or framework internals.
+#
+# The deployed layout keeps these outside the document root (the app lives at
+# ~/domains/<domain>/ and public_html is a symlink to public/), so this is
+# defence in depth rather than the primary protection.
+#
+# It exists because of what actually happened: a failed `php artisan
+# storage:link` leaves a REAL public/storage/ directory behind, and a stale
+# config cache once pointed storage_path at it. That made storage/logs/
+# laravel.log -- containing the database password and APP_KEY -- readable at
+# https://<domain>/storage/logs/laravel.log for several hours.
+#
+# The real storage subdirectories are denied by name rather than all of
+# /storage, so a correct public/storage -> ../storage/app/public symlink keeps
+# serving uploaded files. Listing logs and private as well as app/framework is
+# deliberate: if someone ever points public/storage at the whole storage/
+# directory instead of app/public, the log is still refused.
+# ---------------------------------------------------------------------------
+<IfModule mod_rewrite.c>
+    RedirectMatch 404 ^/(app|bootstrap|config|database|deploy|routes|tests|vendor)(/|$)
+    RedirectMatch 404 ^/storage/(app|framework|logs|private|testing)(/|$)
+</IfModule>
+
+# Manifests, lockfiles and environment files, wherever they end up.
+<FilesMatch "(^\.env|\.env\.(example|production|backup)|composer\.(json|lock)|package(-lock)?\.json|phpunit\.xml|(^|/)\.gitignore)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
 <IfModule mod_rewrite.c>
     <IfModule mod_negotiation.c>
         Options -MultiViews -Indexes
