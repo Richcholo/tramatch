@@ -11,18 +11,6 @@ use RuntimeException;
 
 class ItineraryGenerator
 {
-    private const DAY_START = 8 * 60;
-
-    private const DAY_END = 18 * 60;
-
-    private const LUNCH_START = 12 * 60;
-
-    private const LUNCH_END = 13 * 60;
-
-    private const TRAVEL_MINUTES = 45;
-
-    private const MAX_STOPS_PER_DAY = 3;
-
     private const MAX_DESTINATION_COST = 99999999.99;
 
     private const MAX_MATCH_SCORE = 100.0;
@@ -128,10 +116,10 @@ class ItineraryGenerator
 
         for ($dayNumber = 1; $dayNumber <= $duration; $dayNumber++) {
             $stops = [];
-            $cursor = self::DAY_START;
+            $cursor = ItinerarySchedule::DAY_START_MINUTES;
 
             while (
-                count($stops) < self::MAX_STOPS_PER_DAY
+                count($stops) < ItinerarySchedule::MAX_STOPS_PER_DAY
                 && $destinationIndex < $orderedDestinations->count()
             ) {
                 $destination = $orderedDestinations->get(
@@ -142,10 +130,7 @@ class ItineraryGenerator
                     (float) $destination->recommended_minutes
                 );
 
-                $longestVisitWindow = max(
-                    self::LUNCH_START - self::DAY_START,
-                    self::DAY_END - self::LUNCH_END
-                );
+                $longestVisitWindow = ItinerarySchedule::longestVisitMinutes();
 
                 if (
                     $visitMinutes <= 0
@@ -171,16 +156,16 @@ class ItineraryGenerator
 
                 $travelMinutes = empty($stops)
                     ? 0
-                    : self::TRAVEL_MINUTES;
+                    : ItinerarySchedule::TRAVEL_MINUTES;
 
-                $start = $this->nextActivityStart(
+                $start = ItinerarySchedule::nextStart(
                     $cursor + $travelMinutes,
                     $visitMinutes
                 );
 
                 $end = $start + $visitMinutes;
 
-                if ($end > self::DAY_END) {
+                if ($end > ItinerarySchedule::DAY_END_MINUTES) {
                     if (!empty($stops)) {
                         break;
                     }
@@ -202,8 +187,8 @@ class ItineraryGenerator
                 $stops[] = [
                     'destination_id' => $destination->id,
                     'sort_order' => count($stops) + 1,
-                    'start_time' => $this->formatTime($start),
-                    'end_time' => $this->formatTime($end),
+                    'start_time' => ItinerarySchedule::format($start),
+                    'end_time' => ItinerarySchedule::format($end),
                     'travel_minutes_from_previous' => $travelMinutes,
                     'estimated_cost' => $costCents / 100,
                 ];
@@ -292,29 +277,6 @@ class ItineraryGenerator
 
             return $itinerary->load('days.items.destination');
         });
-    }
-
-    private function nextActivityStart(
-        int $earliestStart,
-        int $duration
-    ): int {
-        if (
-            $earliestStart < self::LUNCH_END
-            && $earliestStart + $duration > self::LUNCH_START
-        ) {
-            return self::LUNCH_END;
-        }
-
-        return $earliestStart;
-    }
-
-    private function formatTime(int $minutes): string
-    {
-        return sprintf(
-            '%02d:%02d',
-            intdiv($minutes, 60),
-            $minutes % 60
-        );
     }
 
     private function parseStartDate(mixed $value): ?Carbon

@@ -8,6 +8,7 @@ use App\Models\Destination;
 use App\Models\DestinationSource;
 use App\Models\DestinationSourceCrawl;
 use App\Models\DestinationUpdateProposal;
+use App\Models\Itinerary;
 use App\Models\Tag;
 use App\Models\TravelProfile;
 use App\Models\User;
@@ -479,26 +480,54 @@ class SourceCrawlingTest extends TestCase
             'status' => 'pending',
         ]);
 
+        // Not an admin page, but its PATCH form is the same class of trap this
+        // guard exists for, so the editor has to appear on the list too.
+        $traveller = User::factory()->create();
+
+        $trip = Itinerary::create([
+            'user_id' => $traveller->id,
+            'title' => 'Guarded trip',
+            'area' => 'Laguna',
+            'budget_level' => 'economy',
+            'trip_duration_days' => 1,
+        ]);
+
+        $tripDay = $trip->days()->create(['day_number' => 1]);
+
+        $tripDay->items()->create([
+            'destination_id' => $destination->id,
+            'sort_order' => 1,
+            'start_time' => '09:00',
+            'end_time' => '10:30',
+            'estimated_cost' => 500,
+        ]);
+
+        // Keyed by viewer, because a page belonging to someone else returns 403
+        // and would otherwise be skipped, quietly checking less than before.
         $pages = [
-            route('admin.sources.index'),
-            route('admin.sources.show', $source),
-            route('admin.proposals.index'),
-            route('admin.destinations.index'),
-            route('admin.destinations.create'),
-            route('admin.destinations.edit', $destination),
-            route('profile.edit'),
-            route('preferences.edit'),
+            route('admin.sources.index') => $admin,
+            route('admin.sources.show', $source) => $admin,
+            route('admin.proposals.index') => $admin,
+            route('admin.destinations.index') => $admin,
+            route('admin.destinations.create') => $admin,
+            route('admin.destinations.edit', $destination) => $admin,
+            route('profile.edit') => $admin,
+            route('preferences.edit') => $admin,
+            route('itineraries.show', $trip) => $traveller,
         ];
 
         $router = app('router');
         $checked = 0;
+        $visited = [];
 
-        foreach ($pages as $url) {
-            $response = $this->actingAs($admin)->get($url);
+        foreach ($pages as $url => $viewer) {
+            $response = $this->actingAs($viewer)->get($url);
 
             if ($response->getStatusCode() !== 200) {
                 continue;
             }
+
+            $visited[] = $url;
 
             $document = new DOMDocument();
 
@@ -528,7 +557,10 @@ class SourceCrawlingTest extends TestCase
                         $url,
                         $method,
                         $action,
-                        implode('/', $exception->getHeaders()['Allow'] ?? ['?']),
+                        // Symfony returns Allow as a string, not an array of
+                        // methods. Casting keeps the message readable instead of
+                        // fataling on the one run that needs it.
+                        implode('/', (array) ($exception->getHeaders()['Allow'] ?? ['?'])),
                         $method,
                         $method
                     ));
@@ -548,6 +580,14 @@ class SourceCrawlingTest extends TestCase
             0,
             $checked,
             'no forms were checked, so this test proves nothing'
+        );
+
+        // The skip above is silent, so a page that stops rendering would drop
+        // out of the guard without anyone noticing.
+        $this->assertContains(
+            route('itineraries.show', $trip),
+            $visited,
+            'the itinerary editor did not render, so its PATCH form went unchecked'
         );
     }
 

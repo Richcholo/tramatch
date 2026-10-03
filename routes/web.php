@@ -113,8 +113,14 @@ Route::middleware('auth')->group(function () {
             'create',
             'store',
             'show',
+            'update',
             'destroy',
         ]);
+
+    Route::post('/itineraries/{itinerary}/schedule', [
+        ItineraryController::class,
+        'schedule',
+    ])->name('itineraries.schedule');
 
     Route::patch('/itineraries/{itinerary}/complete', [
         ItineraryController::class,

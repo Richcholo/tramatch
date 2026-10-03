@@ -203,6 +203,19 @@
             top: calc(5rem + var(--i, 0) * 1.5rem);
         }
     }
+
+    /* Reflow can legitimately push a day past 18:00. The notice says so rather
+       than refusing, so it needs a tone that reads as advice, not as failure. */
+    [data-editor-notice][data-tone='warn'] {
+        border-color: color-mix(in srgb, var(--color-philippine-gold) 65%, transparent);
+        background-color: color-mix(in srgb, var(--color-philippine-gold) 20%, var(--color-palawan-sand));
+    }
+
+    [data-editor-notice][data-tone='error'] {
+        border-color: color-mix(in srgb, #b91c1c 30%, transparent);
+        background-color: color-mix(in srgb, #b91c1c 9%, var(--color-palawan-sand));
+        color: #7f1d1d;
+    }
 }
 
 .dark {

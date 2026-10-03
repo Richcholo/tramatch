@@ -147,5 +147,7 @@
     </main>
 
     <x-logout-confirmation />
+
+    @stack('scripts')
 </body>
 </html>

@@ -2,11 +2,18 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\ScheduleItineraryRequest;
+use App\Http\Requests\UpdateItineraryRequest;
+use App\Models\Destination;
+use App\Models\DestinationSwipe;
 use App\Models\Itinerary;
+use App\Services\ItineraryEditor;
 use App\Services\ItineraryGenerator;
 use App\Services\RecommendationService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 use RuntimeException;
@@ -195,7 +202,96 @@ class ItineraryController extends Controller
 
         $itinerary->load('days.items.destination');
 
-        return view('itineraries.show', compact('itinerary'));
+        return view('itineraries.show', [
+            'itinerary' => $itinerary,
+            'addableDestinations' => $this->addableDestinations($itinerary),
+        ]);
+    }
+
+    /**
+     * Places the traveller liked that this itinerary does not visit yet.
+     *
+     * This asks the swipes directly rather than going through
+     * RecommendationService, because that service only returns places which
+     * also clear the travel profile. A place the traveller liked but which does
+     * not score would then be addable but invisible, and the empty state would
+     * claim they had liked nothing. ItineraryEditor validates additions against
+     * the same swipes, so the picker and the rule that accepts a stop agree.
+     */
+    private function addableDestinations(Itinerary $itinerary): Collection
+    {
+        $inItinerary = $itinerary->days
+            ->pluck('items')
+            ->flatten()
+            ->pluck('destination_id')
+            ->map(fn ($id) => (int) $id);
+
+        $likedIds = DestinationSwipe::query()
+            ->where('user_id', $itinerary->user_id)
+            ->where('action', 'liked')
+            ->pluck('destination_id')
+            ->map(fn ($id) => (int) $id);
+
+        return Destination::query()
+            ->where('is_active', true)
+            ->whereIn('id', $likedIds)
+            ->when(
+                $inItinerary->isNotEmpty(),
+                fn ($query) => $query->whereNotIn('id', $inItinerary)
+            )
+            ->orderBy('name')
+            ->get();
+    }
+
+    public function update(
+        UpdateItineraryRequest $request,
+        Itinerary $itinerary,
+        ItineraryEditor $editor
+    ): RedirectResponse {
+        $this->ensureOwner($itinerary);
+
+        try {
+            $editor->apply(
+                $itinerary,
+                $request->validated()['items'] ?? []
+            );
+        } catch (RuntimeException $exception) {
+            return back()
+                ->withInput()
+                ->withErrors(['itinerary' => $exception->getMessage()]);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return back()
+                ->withInput()
+                ->withErrors([
+                    'itinerary' => 'The itinerary could not be saved. Please try again.',
+                ]);
+        }
+
+        return redirect()
+            ->route('itineraries.show', $itinerary)
+            ->with('status', 'Itinerary updated.');
+    }
+
+    /**
+     * Recompute the draft's times and hand them back, without writing anything.
+     * The browser is not trusted to reproduce the day window, the lunch block
+     * and the travel gap, so it asks the server that owns those rules.
+     */
+    public function schedule(
+        ScheduleItineraryRequest $request,
+        Itinerary $itinerary,
+        ItineraryEditor $editor
+    ): JsonResponse {
+        $this->ensureOwner($itinerary);
+
+        return response()->json([
+            'days' => $editor->previewReflow(
+                $itinerary,
+                $request->validated()['items'] ?? []
+            ),
+        ]);
     }
 
     public function destroy(Itinerary $itinerary): RedirectResponse

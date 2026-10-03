@@ -54,7 +54,7 @@ not make `pint --test` a pass/fail gate.
   `DB_CONNECTION=sqlite`, array cache/session, sync queue) and needs
   `pdo_sqlite` enabled in `php.ini`. Never point it at MySQL to work around a
   driver problem — `RefreshDatabase` would drop the development database.
-- The suite is currently **171 passing**. It is also the only thing that
+- The suite is currently **212 passing**. It is also the only thing that
   migrates from scratch, so it is the only check that a fresh clone can
   migrate — your dev database cannot detect a broken migration chain,
   because every migration in it has already run.
@@ -113,10 +113,16 @@ not make `pint --test` a pass/fail gate.
     requires an exact `budget_level` match, score = `preference * 0.7 + 30`.
   - `SwipeDeckService` — excludes already-swiped ids, optional
     `preferred_region` `LIKE` match against province/municipality.
-  - `ItineraryGenerator` — 08:00–18:00 day window, 12:00–13:00 lunch block,
-    45 min travel between stops, max 3 stops/day. Every selected destination
-    must already appear in the user's recommendations or generation throws.
-    All tunables are class constants at the top of the file.
+  - `ItineraryGenerator` — every selected destination must already appear in the
+    user's recommendations or generation throws. It owns only `MAX_DESTINATION_COST`
+    and `MAX_MATCH_SCORE`; every timing rule lives in `ItinerarySchedule`.
+  - `ItinerarySchedule` — the single home for the 08:00–18:00 day window, the
+    12:00–13:00 lunch block, the 45 min travel gap and the 3 stops/day cap, as
+    `DAY_START_MINUTES`, `DAY_END_MINUTES`, `LUNCH_START_MINUTES`,
+    `LUNCH_END_MINUTES`, `TRAVEL_MINUTES`, `MAX_STOPS_PER_DAY`. The generator,
+    the editor and the reflow endpoint all call it, so changing a window cannot
+    leave one of the three disagreeing. `parse()`/`format()` are the only
+    place minutes-since-midnight and `H:i` strings convert.
 - Weighted interests live in the `user_preferences` pivot keyed by
   `travel_profile_id` (not `user_id`), composite PK with `tag_id`:
   `$profile->tags()->attach($id, ['weight' => 1..3])`. `PreferenceController`
@@ -130,6 +136,55 @@ not make `pint --test` a pass/fail gate.
 - Archive is `is_active = false`; there are no soft deletes. Permanent delete
   manually removes reviews, swipes, itinerary items, and tag pivots inside a
   transaction (`Admin\DestinationController::destroy`).
+
+### Editing a generated itinerary
+
+`/itineraries/{id}` is both the read view and the editor — one URL, so the map
+and everything else stays mounted while you edit. `resources/js/itinerary-editor.js`
+flips between the two; the markup for both lives in
+`resources/views/itineraries/show.blade.php`.
+
+- **The payload is keyed by item id, never by array position.** Reordering
+  therefore never renumbers a form field, and a field name identifies the stop
+  it belongs to. Browser-invented keys are **negative** (`-1`, `-2`, …) and
+  become new stops, so existing and added rows share one field-name shape and
+  the drag code does not special-case either. The JS half of this contract is
+  the regex in `draftPayload()`; change it and the Blade field names with it.
+- **`UpdateItineraryRequest::after()` is the ownership boundary.** A positive
+  key must be an item of this itinerary and a negative key must match
+  `/\A-[1-9][0-9]{0,5}\z/`; `day_id` is checked against this trip's own days.
+  Without this a traveller could reassign a stop onto somebody else's day.
+- **Reflow is server-side**, on `POST itineraries/{itinerary}/schedule`,
+  because the day window, lunch block and travel gap then have exactly one
+  implementation. Do not port those rules to JS. It is a preview: it writes
+  nothing, and it deliberately ignores typed start times and restarts at
+  08:00. It also deliberately does not refuse an over-long day — it returns the
+  finish time and the browser warns.
+- **Typed times are stored verbatim.** `travel_minutes_from_previous` is
+  derived from the real gap and clamped at 0, so an overlap after a reorder is
+  the traveller's own doing and Reflow is the escape hatch. A stop saved with
+  no usable times takes `ItinerarySchedule::nextSlot()` and the destination's
+  `recommended_minutes`.
+- `nextSlot()` uses the **latest end on the day**, not the end of the last
+  row. After a reorder those differ — a stop dragged to the front can finish
+  long before one above it — and following the last row placed a new stop
+  *inside* a stop already there. Two real bugs came out of a manual
+  walkthrough here; keep that regression test.
+- The add picker reads `DestinationSwipe` directly rather than going through
+  `RecommendationService`. That service also requires a travel profile with
+  weighted tags, which made a liked-but-unscored place **addable but
+  invisible**, and left the empty state claiming the traveller had liked
+  nothing. The picker and `ItineraryEditor`'s accept rule must agree; they
+  both key off swipes, active destinations only.
+- No migration was added — every column it needs already exists.
+- **What is verified and what is not.** `ItineraryEditingTest` (25 tests)
+  covers the whole HTTP contract, and a manual walkthrough against MySQL
+  exercised login → reorder → reflow → add → remove and caught the two bugs
+  above. The pointer-event drag, the arrow buttons, the add dialog and the
+  reflow `fetch` have **never been clicked**: there is no browser automation
+  here. Treat that JS as unproven until someone drives it by hand. A test that
+  asserts the editor page carries every `data-*` hook the script looks for is
+  a floor, not a substitute.
 
 ### Destination-source crawling
 
@@ -668,7 +723,13 @@ migration.
   `Route::getRoutes()->match()` — the same call that throws in production. It
   fails with a message naming the page, the method and the missing
   `@method(...)`. **Adding a route or a form means adding it to that test's
-  page list**, or the guard silently checks less than it did.
+  page list**, or the guard silently checks less than it did. The list is keyed
+  by viewer because each page needs its own user to return 200, and the test
+  `continue`s on a non-200 — a page behind a missing user was silently skipped
+  rather than checked. It also asserts which pages it actually rendered, for
+  the same reason. Its own failure message fataled on
+  `implode('/', $exception->getHeaders()['Allow'] ?? ['?'])`: Symfony returns
+  `Allow` as a **string**, not a list.
 - **The layout owns the flash banner.** `layouts/app.blade.php` already renders
   `session('status')` and `$errors` inside `<main>`, so no page may render them
   again — doing so stacked two copies of every message. Admin pages once had
@@ -680,6 +741,11 @@ migration.
 - A new JS/CSS entry must be registered in **two** places: the
   `laravel({ input: [...] })` array in `vite.config.js` *and* the
   `@vite([...])` array in the layout that should load it.
+- `layouts/app.blade.php` has a `@stack('scripts')` before `</body>`, so a
+  single page can load its own entry. **`@push` must come *above*
+  `<x-app-layout>` in the child view** — below it, the layout has already
+  rendered the stack and the push silently does nothing.
+  `itineraries/show.blade.php` is the only user of this.
 - `layouts/app.blade.php` loads `app.js`, which imports Alpine, Leaflet,
   `swipe.js`, and `home.js` (Lenis + GSAP ScrollTrigger initialize
   unconditionally) and registers `/sw.js`. Smooth scrolling and GSAP therefore
