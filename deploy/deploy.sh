@@ -74,6 +74,23 @@ if [ "$DO_PULL" -eq 1 ]; then
     # Refuse to run against a dirty tree. A deploy that silently carries
     # uncommitted edits makes the server diverge from the repository, and the
     # next pull becomes a merge conflict instead of a fast-forward.
+    # composer.lock is restored rather than demanded. `composer install` on a
+    # host whose PHP differs from the machine that wrote the lock re-resolves and
+    # rewrites the file, so it is always dirty after the first deploy and would
+    # block every subsequent one. A production server must never diverge on the
+    # lock -- that is exactly how you end up installing a different dependency
+    # set than the one the suite was green against -- so discarding it is the
+    # correct behaviour, not a workaround.
+    #
+    # config.platform in composer.json is what stops the rewrite happening at
+    # all: it pins resolution to a fixed PHP regardless of the machine.
+    if ! git diff --quiet -- composer.lock 2>/dev/null; then
+        red "composer.lock was modified on this server -- discarding it."
+        red "The repository's lock is authoritative."
+        git checkout -- composer.lock
+        echo
+    fi
+
     if [ -n "$(git status --porcelain -- ':!storage' ':!bootstrap/cache')" ]; then
         red "The working tree has uncommitted changes:"
         git status --short -- ':!storage' ':!bootstrap/cache'

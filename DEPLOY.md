@@ -180,6 +180,66 @@ Reading the `queue:listen` command's own `--timeout` default tells you 60 and
 means nothing: `DevCommands::artisan()` only records a subprocess for
 `php artisan dev`, it does not reconfigure the command.
 
+### UNRESOLVED — the domain returns 403, not a PHP error
+
+`curl -sI https://tramatch.site/` returns `HTTP/2 403`. **This is not a PHP
+version problem** — a version or fatal error gives 500, not 403. A 403 means the
+request never reached PHP at all, so nothing in this document is the cause yet.
+
+Most likely one of:
+
+1. **`public_html` is not the symlink.** If `setup-website.sh` failed, or the
+   domain's document root points elsewhere, there is no `index.php` to run.
+2. **Hostinger's own block** — some accounts 403 until a domain is verified or
+   while the account is in a setup state.
+3. **The symlink is in place but the target is wrong** — check it resolves.
+
+Diagnose on the host:
+
+```sh
+cd ~/domains/tramatch.site
+ls -la public_html                 # must be a symlink to public
+ls public/index.php                # must exist
+ls public_html/index.php           # must resolve through the symlink
+```
+
+If `public_html` is missing or is still a directory, re-run:
+
+```sh
+bash deploy/setup-website.sh --force
+```
+
+Do **not** treat this as resolved until `curl -sI https://tramatch.site/` returns
+200 or 301.
+
+### PHP 8.4, not 8.3 — `composer.lock` needs it
+
+The host runs **PHP 8.4**, matching local. It started on 8.3.33, which is *not*
+enough: `composer.lock` pins seventeen Symfony 8.0.x packages that require
+`>=8.4` (`symfony/http-foundation`, `console`, `routing`, `mailer`, …), and
+`symfony/yaml` needs `>=8.4.1`.
+
+That is why `composer.lock` kept showing as modified after every deploy:
+`composer install` on 8.3 could not satisfy the lock, so Composer re-resolved
+and rewrote it. Set the host to **PHP 8.4** in hPanel → Advanced → PHP, and it
+goes away.
+
+`composer.json` now pins `"platform": {"php": "8.4.1"}` so resolution no longer
+depends on which machine runs it. The floor is `8.4.1`, not `8.4`, because of
+`symfony/yaml`.
+
+If the host is ever moved back to 8.3, `composer install` will fail outright —
+that is correct, and the fix is 8.4 rather than downgrading the dependency tree
+days before launch.
+
+### `composer.lock` is restored, not trusted, on the server
+
+`deploy.sh` discards a locally-modified `composer.lock` before checking the tree.
+A production server must not diverge on the lock: that is how you install a
+different dependency set than the one the suite was green against. Other tracked
+changes still block normally. Both behaviours are covered by a sandbox test of
+the exact logic.
+
 ### `php artisan storage:link` cannot work here
 
 Hostinger puts both `symlink()` and `exec()` in `disable_functions`. Laravel's

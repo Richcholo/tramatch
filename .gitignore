@@ -21,6 +21,14 @@
 /public/fonts-manifest.dev.json
 /public/hot
 /public/storage
+# Host artifacts, not project files. deploy/setup-website.sh creates the
+# public_html symlink on the server (Hostinger will not change a Web plan's
+# document root), and deploy/queue-worker.sh is copied into $HOME so cron can
+# reach it. Without these, deploy.sh's dirty-tree guard blocks every deploy
+# because of files the deployment itself created.
+/public_html
+/public_html.hostinger-backup
+/queue-worker.sh
 /storage/*.key
 /storage/pail
 /vendor

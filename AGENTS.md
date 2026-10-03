@@ -818,12 +818,28 @@ migration.
 
 ## Deployment (Hostinger Premium, shared hPanel, over SSH)
 
-`DEPLOY.md` is the runbook. Read it before deploying. Deployment is still on
-hold — nothing below has been run against the real host yet.
+`DEPLOY.md` is the runbook. Read it before deploying. The scripts have been
+syntax-checked and the guard logic sandbox-tested, but the host has only been
+reached as far as a 403 (see below).
 
-The plan is **Premium**: SSH and PHP 8.3 confirmed available. Node.js is
-greyed out on that tier and does not matter, because Node is only a build tool
-for Vite and the runtime never executes it.
+The plan is **Premium**: SSH confirmed available. Node.js is greyed out on
+that tier and does not matter, because Node is only a build tool for Vite and
+the runtime never executes it.
+
+- **The host must run PHP 8.4, not 8.3.** `composer.lock` pins seventeen Symfony
+  8.0.x packages requiring `>=8.4`, and `symfony/yaml` requires `>=8.4.1`. On
+  8.3 `composer install` cannot satisfy the lock, so Composer re-resolves and
+  rewrites it — which showed up as a permanently dirty `composer.lock` that
+  blocked `deploy.sh`. `composer.json` now pins
+  `"platform": {"php": "8.4.1"}` so resolution no longer varies by machine.
+  Local and host are both 8.4.
+- `deploy.sh` **discards a modified `composer.lock`** rather than blocking on it,
+  then still blocks on any other tracked change. A server that diverges on the
+  lock installs a different dependency set than the suite was tested against.
+- `/public_html`, `/public_html.hostinger-backup` and `/queue-worker.sh` are
+  gitignored because `setup-website.sh` and the cron instructions create them.
+  They were untracked and unignored, so the dirty-tree guard rejected files the
+  deployment itself had made.
 
 - **`public/build` is committed on purpose.** It used to be gitignored, which
   made `git pull` deploy PHP but no CSS or JS — the site renders unstyled on a
