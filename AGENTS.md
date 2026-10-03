@@ -911,17 +911,21 @@ for Vite and the runtime never executes it.
 
 ## Git state — check `git status` before assuming HEAD matches disk
 
-The crawling subsystem **is merged** into `main` (`77c97c5`) together with the
-curated hours; it is no longer the untracked sprawl this section used to
-describe. `agents/phase-1-implementation` is fully contained in `main`, so it
-is dead weight — do not branch from it.
+**Never push without being asked.** Commit locally and stop. Do not run
+`git push`, and do not treat "deployable" or "ready" as authorisation. This was
+corrected explicitly after two consecutive autonomous pushes to `origin/main`:
+commit and push are separate decisions, and only the user makes the second one.
+If a task seems to end in a deploy, finish the commit and say what the push
+command would be.
 
-Work lands on `integrate/bon2`, which is a descendant of `main` and was
-**never pushed**. As of the itinerary-editing work it sat 8 commits ahead of
-`main` with `main` 0 ahead of it, so `git log HEAD..main` being empty is the
-quick check that nothing upstream needs rebasing. Run `git status` anyway: an
-earlier state of this repo had the entire editor uncommitted on top of a dirty
-tree, which is easy to mistake for "already committed".
+The crawling subsystem is merged into `main`, and `main` carries the itinerary
+editor and the Hostinger deployment tooling. `agents/phase-1-implementation` is
+fully contained in `main`, so it is dead weight — do not branch from it.
+`feature/source-crawling` points at the same commit as `main`.
+
+Run `git status` before assuming HEAD matches disk: an earlier state of this
+repo had the entire editor uncommitted on top of a dirty tree, which is easy to
+mistake for "already committed".
 
 Workflow (from README): branch off `main`, open a PR, get a review before
 merging, and never force-push `main`.
