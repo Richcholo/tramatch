@@ -57,7 +57,7 @@ not make `pint --test` a pass/fail gate.
   `DB_CONNECTION=sqlite`, array cache/session, sync queue) and needs
   `pdo_sqlite` enabled in `php.ini`. Never point it at MySQL to work around a
   driver problem — `RefreshDatabase` would drop the development database.
-- The suite is currently **215 passing**. It is also the only thing that
+- The suite is currently **216 passing**. It is also the only thing that
   migrates from scratch, so it is the only check that a fresh clone can
   migrate — your dev database cannot detect a broken migration chain,
   because every migration in it has already run.
@@ -188,9 +188,14 @@ flips between the two; the markup for both lives in
   "Add to Day N" radios were ignored in favour of whichever day opened the
   dialog, and reopening the dialog kept the previous batch ticked so the same
   place could be added twice. Those are fixed and their markup contract is now
-  pinned. **Nothing here has still been clicked in a browser** — there is no
-  browser automation here, so treat the interaction itself as unproven. A test
-  asserting the page carries every `data-*` hook is a floor, not a substitute.
+  pinned. A fourth only surfaced when the user clicked the button: the edit form
+  carried Tailwind's `hidden` class while the script toggled the `hidden`
+  attribute, so it could never be shown (see the frontend gotchas below). Every
+  HTTP-level test passes with the editor permanently invisible, which is the
+  argument for reading the rendered CSS, not just the markup.
+  **The remaining drag, arrow, dialog and reflow-fetch behaviour has still never
+  been clicked** — there is no browser automation here. Treat the interaction
+  itself as unproven.
 
 ### Destination-source crawling
 
@@ -736,6 +741,18 @@ migration.
   the same reason. Its own failure message fataled on
   `implode('/', $exception->getHeaders()['Allow'] ?? ['?'])`: Symfony returns
   `Allow` as a **string**, not a list.
+- **Never put Tailwind's `hidden` class on an element JS shows with the `hidden`
+  attribute.** The class is `display: none` and an author-level display rule
+  beats the browser's own `[hidden] { display: none }`. `element.hidden = false`
+  removes an attribute the element never had, so the class wins and the element
+  stays invisible forever — with no error anywhere. The edit form shipped with
+  `class="hidden"` and the script toggled the attribute, so clicking
+  **Edit itinerary** hid the read view and the form never appeared: a blank
+  page with nothing editable. It cost a click-through to find, because every
+  HTTP-level test passes either way.
+  `test_elements_the_script_toggles_carry_no_hidden_class` now pins it for
+  `data-editor-read`, `data-editor-edit`, `data-editor-notice` and `data-travel`.
+  Pick one mechanism per element and prefer the attribute.
 - **The layout owns the flash banner.** `layouts/app.blade.php` already renders
   `session('status')` and `$errors` inside `<main>`, so no page may render them
   again — doing so stacked two copies of every message. Admin pages once had

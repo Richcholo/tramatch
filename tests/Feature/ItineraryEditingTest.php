@@ -894,6 +894,71 @@ class ItineraryEditingTest extends TestCase
         }
     }
 
+    /**
+     * The script shows and hides things with the HTML `hidden` *attribute*
+     * (`element.hidden = true`). Tailwind's `hidden` *class* is `display: none`,
+     * and an author-level display rule beats the browser's own
+     * `[hidden] { display: none }`.
+     *
+     * So an element carrying both keeps the class's display:none forever, while
+     * clearing the attribute does nothing. That is exactly what happened: the
+     * edit form had `class="hidden"`, so clicking Edit hid the read view and the
+     * form never appeared, leaving a blank page and nothing editable.
+     *
+     * Nothing about that failure is visible without a browser, so pin it here.
+     */
+    public function test_elements_the_script_toggles_carry_no_hidden_class(): void
+    {
+        $itinerary = $this->generateItinerary('alpha');
+
+        $html = $this->actingAs($this->user)
+            ->get(route('itineraries.show', $itinerary))
+            ->assertOk()
+            ->getContent();
+
+        $document = new DOMDocument();
+
+        @$document->loadHTML($html);
+
+        libxml_clear_errors();
+
+        $xpath = new DOMXPath($document);
+
+        $toggled = [
+            'data-editor-read',
+            'data-editor-edit',
+            'data-editor-notice',
+            'data-travel',
+        ];
+
+        foreach ($toggled as $hook) {
+            foreach ($xpath->query('//*[@'.$hook.']') as $element) {
+                $classes = preg_split('/\s+/', trim($element->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
+
+                $this->assertNotContains(
+                    'hidden',
+                    $classes,
+                    $hook.' carries Tailwind\'s hidden class, so clearing the hidden attribute '
+                    .'leaves it at display:none and the script can never show it'
+                );
+            }
+        }
+
+        // The edit view starts hidden and the read view does not, or the two are
+        // both on screen until the script initialises.
+        $this->assertSame(
+            1,
+            $xpath->query('//*[@data-editor-edit][@hidden]')->length,
+            'the edit form must start hidden, or the editor is on screen before anyone clicks Edit'
+        );
+
+        $this->assertSame(
+            0,
+            $xpath->query('//*[@data-editor-read][@hidden]')->length,
+            'the read view is what a traveller sees first, so it must not start hidden'
+        );
+    }
+
     public function test_the_editor_form_does_not_nest_inside_another_form(): void
     {
         $itinerary = $this->generateItinerary('alpha');

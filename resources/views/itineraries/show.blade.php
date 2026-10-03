@@ -411,8 +411,9 @@
                 action="{{ route('itineraries.update', $itinerary) }}"
                 data-editor-form
                 data-schedule-url="{{ route('itineraries.schedule', $itinerary) }}"
-                class="mt-6 hidden space-y-6"
+                class="mt-6 space-y-6"
                 data-editor-edit
+                hidden
             >
                 @csrf
                 @method('PATCH')
