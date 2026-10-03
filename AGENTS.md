@@ -618,9 +618,12 @@ even if `$hours` omits an explicit kind.
 
 ### Rewriting the CSV safely
 
-The CSV is the source of truth for the catalogue and is **untracked in git**,
-so a bad rewrite cannot be undone with `git checkout`. Two real mistakes made
-here, both from a script that trusted positional column indexes:
+The CSV is the source of truth for the catalogue and **is tracked in git**
+(`git ls-files database/data/` lists it), so a bad rewrite *can* be undone with
+`git checkout -- database/data/luzon-locations-clean.csv`. Do that before
+re-seeding, because the seeder rewrites the database immediately and a
+`git checkout` afterwards will not restore it. Two real mistakes made here, both
+from a script that trusted positional column indexes:
 
 1. Writing 4 new columns with `array_merge($header, [...])` while still
    reading rows by index produced a **31-column file whose `name` column held
@@ -809,10 +812,56 @@ migration.
 - Itinerary driving lines call the public OSRM demo API from the browser
   (`resources/js/routing.js`) and fall back to a dashed polyline on failure.
 
-## Deployment (on hold — Hostinger, shared hPanel, over SSH)
+## Deployment (Hostinger Premium, shared hPanel, over SSH)
 
-Do not start this without the user saying so. The steps below are the ones that
-were verified as *easy to get wrong*, not a substitute for the hPanel docs.
+`DEPLOY.md` is the runbook. Read it before deploying. Deployment is still on
+hold — nothing below has been run against the real host yet.
+
+The plan is **Premium**: SSH and PHP 8.3 confirmed available. Node.js is
+greyed out on that tier and does not matter, because Node is only a build tool
+for Vite and the runtime never executes it.
+
+- **`public/build` is committed on purpose.** It used to be gitignored, which
+  made `git pull` deploy PHP but no CSS or JS — the site renders unstyled on a
+  host that cannot run Vite. **Run `npm run build` and commit the result
+  whenever you touch `resources/css` or `resources/js`.** Do not re-add
+  `/public/build` to `.gitignore`. The cost is a noisy diff.
+  Stage it with **`git add -A public/build`**, not `git add public/build`: Vite
+  names output by content hash, so a rebuild produces a *new* filename instead
+  of overwriting, and a plain `git add` strands the previous one in the repo
+  permanently. This actually happened here — the committed CSS was already
+  stale when the first deploy prep ran.
+- **`.env.production.example` is the template for the server's `.env`**, not
+  `.env.example`. The latter is deliberately dev-tuned (sqlite,
+  `APP_DEBUG=true`, mail to the log) and several of those settings are silently
+  broken in production.
+- **The app lives at `~/domains/<domain>/` with `public_html` symlinked to
+  `public`.** Hostinger will not change a Web plan's document root, so the
+  domain always serves `public_html`; the symlink satisfies that while
+  `.env`, `app/`, `storage/` and `vendor/` stay outside the web.
+  `deploy/setup-website.sh` does it once and refuses to run twice without
+  `--force`, because it moves Hostinger's seeded `public_html` aside.
+  `public/index.php` uses `__DIR__`, which PHP resolves past the symlink, so
+  the autoloader is unaffected.
+- **`deploy/deploy.sh` is the repeatable deploy**: `optimize:clear` →
+  `git pull --ff-only` → `composer install --no-dev` → `chmod` storage →
+  `storage:link` → `migrate --force` → `optimize`. It refuses a dirty tree,
+  because a deploy carrying uncommitted edits makes the server diverge and
+  turns the next pull into a conflict.
+- **`optimize:clear` runs first for a reason.** `config:cache` is compiled from
+  the `.env` as it was when written, so an edited `APP_URL` or database
+  password has *no effect* until it is cleared. This bites hardest on the first
+  deploy.
+- `deploy/deploy.sh` **refuses to run when `.env` says `APP_ENV=local`.** The
+  `--no-dev` composer step *removes* dev packages rather than skipping them, so
+  running it on a developer machine deletes PHPUnit out from under the test
+  suite. Verified by accident once already.
+- **The queue worker is `deploy/queue-worker.sh`, registered as an hPanel cron
+  job every minute.** Shared hosting will not run `queue:work` as a daemon, so
+  it uses `--stop-when-empty`. Without a worker, `/admin/sources` queues crawls
+  that nobody picks up and the page deliberately does not warn about it.
+- `route:cache` works despite the closure route for `/` in `routes/web.php` —
+  Laravel 11+ serialises them. Tested, not assumed.
 
 - **`retry_after` must exceed the crawl timeout.** `config/queue.php` derives it
   from `QUEUE_WORKER_TIMEOUT` (+60s) and `AppServiceProvider` re-registers
@@ -834,18 +883,15 @@ were verified as *easy to get wrong*, not a substitute for the hPanel docs.
   Set `MAIL_MAILER=smtp` and real credentials before going live.
   Note `User` does **not** implement `MustVerifyEmail`, so nothing enforces a
   verified address even though the routes exist.
-- `.env.example` ships sqlite so a fresh clone runs with no credentials; a real
-  host wants `DB_CONNECTION=mysql` plus its own host/database/user/password.
 - Crawling from a host means crawling from a **datacentre IP**. The Azure WAF
   refusal noted above commonly rejects those while serving the same page to a
   home connection, so re-run `sources:check` on the host before trusting any
   `fetchability` verdict measured locally. Do not "fix" it by spoofing a browser
   User-Agent.
-- The rest of the sequence: fresh `APP_KEY`,
-  `composer install --no-dev --optimize-autoloader`, `npm ci --include=optional`,
-  `npm run build`, `php artisan migrate --seed --force`,
-  `php artisan storage:link`, `php artisan optimize`, promote your own account
-  to admin via tinker, and put `php artisan queue:work` in hPanel cron.
+- Promote your own account to admin over SSH after the first deploy:
+  `php artisan tinker` then
+  `App\Models\User::first()->update(['role' => 'super_admin']);`
+  (or `admin` — `isAdmin()` accepts both).
 - The CLI PHP on hPanel can differ from the web PHP, and the CA-bundle gotcha
   above is per-process: a worker started before `php.ini` gained a bundle keeps
   an empty trust store. Verify the version and extensions hPanel's CLI actually
