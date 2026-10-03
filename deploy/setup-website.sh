@@ -45,6 +45,23 @@ if [ ! -d public ]; then
     exit 1
 fi
 
+# Warn loudly when the application root is itself inside public_html. That is
+# the layout the control panel's file manager produces by default, it makes
+# .env and storage/ web-reachable, and it is why the domain returns 403 -- the
+# document root has no index.php.
+if [ -f public_html/artisan ] || [ -f public_html/.env ]; then
+    echo
+    red "WARNING: the application root appears to be INSIDE public_html."
+    red "  found public_html/artisan and/or public_html/.env"
+    echo
+    red "That is what makes the domain 403, and it puts your .env and database"
+    red "password on the public internet."
+    echo
+    red "This script moves the contents up one level and replaces public_html"
+    red "with a symlink to public/. Nothing is deleted."
+    echo
+fi
+
 if [ ! -f vendor/autoload.php ]; then
     red "Dependencies are not installed. Run:"
     red "    composer install --no-dev --optimize-autoloader"
@@ -99,10 +116,10 @@ if [ -d public_html ]; then
 
     echo
     bold "public_html exists and contains $CONTENTS entries."
-    echo "Hostinger seeds it with a placeholder .htaccess and index.php."
-    echo "This step moves it aside to public_html.hostinger-backup."
     echo
-    echo "If it contains anything of yours, copy it into public/ first."
+    echo "Moving its contents up one level, so the application root sits at"
+    echo "$(basename "$APP_ROOT") and public_html can become a symlink to public/."
+    echo "Nothing is deleted or overwritten; the directory is emptied, not moved."
     echo
 
     if [ "$FORCE" != "--force" ]; then
@@ -111,8 +128,37 @@ if [ -d public_html ]; then
         exit 1
     fi
 
-    mv public_html public_html.hostinger-backup
-    green "moved the original to public_html.hostinger-backup"
+    # A misplaced nested public_html would otherwise be moved up and collide with
+    # the directory being emptied. Removed by name and with -rf so it does not
+    # matter whether the filesystem reports it as a symlink or as a directory
+    # junction: rm -rf on a symlink removes the link, never the target.
+    if [ -e public_html/public_html ] || [ -L public_html/public_html ]; then
+        rm -rf public_html/public_html
+        green "removed the misplaced nested public_html"
+    fi
+
+    # find with -mindepth/-maxdepth handles dotfiles without relying on
+    # dotglob. Two globs looked simpler and were wrong twice: dotglob already
+    # makes `public_html/*` match dotfiles, so adding `public_html/.[!.]*`
+    # processed every dotfile twice and re-created the very public_html
+    # directory the first pass had emptied.
+    #
+    # ! -name excludes the nested public_html, which mv cannot place over the
+    # directory being emptied.
+    find public_html -mindepth 1 -maxdepth 1 ! -name 'public_html' -print0 |
+        while IFS= read -r -d '' entry; do
+            mv "$entry" .
+        done
+    green "moved $CONTENTS entries up to $APP_ROOT"
+
+    if [ -n "$(ls -A public_html 2>/dev/null)" ]; then
+        red "public_html is not empty after the move. Not deleting it."
+        red "Check by hand: ls -A public_html"
+        exit 1
+    fi
+
+    rmdir public_html
+    green "removed the emptied public_html directory"
 fi
 
 ln -s public public_html
@@ -125,6 +171,15 @@ if [ ! -e public_html/index.php ]; then
 fi
 
 green "public_html resolves to public/index.php"
+
+# The application root must not be the document root. If .env is reachable
+# over HTTP the database password is on the internet, so check rather than
+# assume -- the layout is only correct if this file is now outside the web.
+if [ -f .env ] && [ -e public_html/.env ]; then
+    red ".env is reachable through the document root. Fix this before anything else."
+    exit 1
+fi
+green ".env is not web-reachable"
 
 # ------------------------------------------------------------------ storage --
 

@@ -818,9 +818,9 @@ migration.
 
 ## Deployment (Hostinger Premium, shared hPanel, over SSH)
 
-`DEPLOY.md` is the runbook. Read it before deploying. The scripts have been
-syntax-checked and the guard logic sandbox-tested, but the host has only been
-reached as far as a 403 (see below).
+`DEPLOY.md` is the runbook. Read it before deploying. The guard and move
+logic are sandbox-tested; the host itself has only been reached as far as a 403
+caused by the app being uploaded *inside* `public_html`.
 
 The plan is **Premium**: SSH confirmed available. Node.js is greyed out on
 that tier and does not matter, because Node is only a build tool for Vite and
@@ -840,6 +840,15 @@ the runtime never executes it.
   gitignored because `setup-website.sh` and the cron instructions create them.
   They were untracked and unignored, so the dirty-tree guard rejected files the
   deployment itself had made.
+- **Never upload the project into `public_html`.** The app root belongs at
+  `~/domains/<domain>/` with `public_html` a symlink to `public/`. Hosting the
+  root inside `public_html` puts `index.php` at `public_html/public/index.php`,
+  so PHP never starts and the domain 403s — and `.env`, `storage/` and `vendor/`
+  sit in the document root, which is a public database password the moment the
+  layout is fixed any other way. `setup-website.sh` detects and repairs it by
+  moving the *contents* up; do not hand-edit the layout, and do not re-add the
+  `mv public_html public_html.hostinger-backup` it replaced, which would move
+  `.env` and `storage/` wholesale.
 
 - **`public/build` is committed on purpose.** It used to be gitignored, which
   made `git pull` deploy PHP but no CSS or JS — the site renders unstyled on a

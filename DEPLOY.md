@@ -180,37 +180,45 @@ Reading the `queue:listen` command's own `--timeout` default tells you 60 and
 means nothing: `DevCommands::artisan()` only records a subprocess for
 `php artisan dev`, it does not reconfigure the command.
 
-### UNRESOLVED — the domain returns 403, not a PHP error
+### The app must NOT be uploaded inside `public_html`
 
-`curl -sI https://tramatch.site/` returns `HTTP/2 403`. **This is not a PHP
-version problem** — a version or fatal error gives 500, not 403. A 403 means the
-request never reached PHP at all, so nothing in this document is the cause yet.
+This is the mistake that caused a 403 on first deploy, and it is easy to make:
+`public_html` is the folder the control panel's file manager opens, so a
+drag-and-drop upload of the project lands the whole Laravel root there.
 
-Most likely one of:
+The result:
 
-1. **`public_html` is not the symlink.** If `setup-website.sh` failed, or the
-   domain's document root points elsewhere, there is no `index.php` to run.
-2. **Hostinger's own block** — some accounts 403 until a domain is verified or
-   while the account is in a setup state.
-3. **The symlink is in place but the target is wrong** — check it resolves.
+- The document root is `public_html/`, but `index.php` is then at
+  `public_html/public/index.php`. There is no index at the root, so **PHP never
+  starts and the domain returns 403**, not 500.
+- Worse, `.env`, `storage/` and `vendor/` are all inside the document root. The
+  403 happens to hide them, but the moment the layout is fixed by any other
+  route — copying `public/*` up, say — your database password is served to the
+  internet.
 
-Diagnose on the host:
+Correct layout:
 
-```sh
-cd ~/domains/tramatch.site
-ls -la public_html                 # must be a symlink to public
-ls public/index.php                # must exist
-ls public_html/index.php           # must resolve through the symlink
+```
+~/domains/yourdomain.tld/     <- app root: .env, app/, storage/, vendor/
+~/domains/yourdomain.tld/public_html -> public   <- symlink
 ```
 
-If `public_html` is missing or is still a directory, re-run:
+`setup-website.sh` detects this layout, warns, and fixes it by moving the
+contents up one level. It moves files rather than renaming the directory
+precisely so `.env` and `storage/` are never relocated wholesale.
+
+Verify, and expect `.env` to be unreachable:
 
 ```sh
-bash deploy/setup-website.sh --force
+cd ~/domains/yourdomain.tld
+ls -la public_html              # -> public
+curl -sI https://yourdomain.tld/.env | head -1     # 404
+curl -sI https://yourdomain.tld/storage/logs/laravel.log | head -1   # 404
+curl -sI https://yourdomain.tld/artisan | head -1   # 404
 ```
 
-Do **not** treat this as resolved until `curl -sI https://tramatch.site/` returns
-200 or 301.
+A 403 on the domain root after this means the symlink is not resolving — check
+`ls -la public_html` and that `public/index.php` exists.
 
 ### PHP 8.4, not 8.3 — `composer.lock` needs it
 
