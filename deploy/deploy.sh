@@ -133,12 +133,36 @@ bold "-- writable directories"
 chmod -R ug+rwx storage bootstrap/cache
 green "storage/ bootstrap/cache/"
 
-# Only create the link when it is missing: --force would delete a real directory
-# if someone had ever made public/storage an actual folder.
-if [ ! -e public/storage ]; then
-    php artisan storage:link
-else
+# public/storage -> storage/app/public, created with ln -s rather than
+# `php artisan storage:link`.
+#
+# Hostinger puts both symlink() and exec() in disable_functions. Laravel's
+# Filesystem::link() tries symlink() and falls back to exec('ln -s ...') when it
+# is missing, so with both disabled artisan dies with
+# "Call to undefined function Illuminate\Filesystem\exec()". The shell has no
+# such restriction, so linking here works.
+#
+# Relative target, which is what Laravel asks for anyway: it survives the
+# project directory being moved or renamed.
+#
+# Guarded twice. `-L` also catches a broken symlink, which `-e` would not, and a
+# stale link is the realistic failure here. And a failure is reported but not
+# fatal, because nothing in the app reads this directory today -- crawl snapshots
+# go to the 'local' disk at storage/app/private, and the only web reference is
+# asset('storage/' . $user->profile_photo_path) on a column nothing ever writes.
+# Adding photo uploads later makes it load-bearing.
+if [ -L public/storage ]; then
     green "public/storage already linked"
+elif [ -e public/storage ]; then
+    red "public/storage exists but is not a symlink -- leaving it alone."
+    red "If it is a stray directory, remove it and re-run."
+else
+    if ln -s ../storage/app/public public/storage 2>/dev/null; then
+        green "public/storage -> ../storage/app/public"
+    else
+        red "Could not create public/storage. Continuing: nothing uses it yet."
+        red "Nothing breaks until profile photo uploads are implemented."
+    fi
 fi
 echo
 

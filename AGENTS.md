@@ -213,6 +213,10 @@ flips between the two; the markup for both lives in
 
 `destination_sources` → `destination_source_snapshots` (raw HTML on the `local`
 disk under `crawl-snapshots/`) → `destination_update_proposals`.
+
+The `local` disk roots at `storage/app/private`, **not** `storage/app/public`,
+so snapshots are never web-reachable and `public/storage` has nothing to do
+with them. `DestinationSourceSnapshot` reads them back with `Storage::disk('local')`.
 Admin UI: `/admin/sources`, `/admin/proposals`. CLI: `sources:crawl {sourceId}`.
 
 - `RobotsPolicyService` honors `robots.txt` (cached 24 h, `Crawl-delay`, 5 s
@@ -845,9 +849,17 @@ for Vite and the runtime never executes it.
   the autoloader is unaffected.
 - **`deploy/deploy.sh` is the repeatable deploy**: `optimize:clear` →
   `git pull --ff-only` → `composer install --no-dev` → `chmod` storage →
-  `storage:link` → `migrate --force` → `optimize`. It refuses a dirty tree,
-  because a deploy carrying uncommitted edits makes the server diverge and
-  turns the next pull into a conflict.
+  `ln -s` the public storage link → `migrate --force` → `optimize`. It refuses
+  a dirty tree, because a deploy carrying uncommitted edits makes the server
+  diverge and turns the next pull into a conflict.
+- **Never use `php artisan storage:link` on the host.** Hostinger disables both
+  `symlink()` and `exec()`, and `Filesystem::link()` falls back from one to the
+  other, so artisan dies with `Call to undefined function
+  Illuminate\Filesystem\exec()`. Use `ln -s ../storage/app/public
+  public/storage` from the shell, which is what the scripts do. It is currently
+  inert: crawl snapshots use the `local` disk at `storage/app/private`, and the
+  only web reference is `asset('storage/' . $user->profile_photo_path)` on a
+  column nothing ever writes. It becomes load-bearing if photo uploads land.
 - **`optimize:clear` runs first for a reason.** `config:cache` is compiled from
   the `.env` as it was when written, so an edited `APP_URL` or database
   password has *no effect* until it is cleared. This bites hardest on the first

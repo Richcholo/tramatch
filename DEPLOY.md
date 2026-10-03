@@ -96,7 +96,8 @@ bash deploy/deploy.sh
 ```
 
 Which is: `optimize:clear` → `git pull --ff-only` → `composer install --no-dev`
-→ `chmod` storage → `storage:link` if missing → `migrate --force` → `optimize`.
+→ `chmod` storage → `ln -s` the public storage link if missing →
+`migrate --force` → `optimize`.
 
 Subsequent deploys are the same command.
 
@@ -178,6 +179,39 @@ guards it.
 Reading the `queue:listen` command's own `--timeout` default tells you 60 and
 means nothing: `DevCommands::artisan()` only records a subprocess for
 `php artisan dev`, it does not reconfigure the command.
+
+### `php artisan storage:link` cannot work here
+
+Hostinger puts both `symlink()` and `exec()` in `disable_functions`. Laravel's
+`Filesystem::link()` tries `symlink()` and falls back to
+`exec('ln -s ...')` when it is unavailable, so with both disabled artisan dies
+with:
+
+```
+Call to undefined function Illuminate\Filesystem\exec()
+```
+
+The shell is not restricted, so create the link there instead:
+
+```sh
+cd ~/domains/yourdomain.tld
+ln -s ../storage/app/public public/storage
+```
+
+Relative target, which is what Laravel asks for anyway since it survives the
+project directory moving. `deploy/deploy.sh` does this and treats a failure as
+non-fatal.
+
+**Nothing in the app reads that directory yet**, so this is not a blocker:
+
+- Crawl snapshots use `Storage::disk('local')`, which roots at
+  `storage/app/private` — not `storage/app/public`, and not web-served.
+- The only web reference to `public/storage` is
+  `asset('storage/' . $user->profile_photo_path)` in the profile view, and
+  `profile_photo_path` is never assigned anywhere. Breeze created the column
+  and the view; there is no upload controller.
+
+It becomes load-bearing the moment profile photo uploads are implemented.
 
 ### SMTP or forgot-password fails silently
 
