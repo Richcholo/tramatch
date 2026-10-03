@@ -49,32 +49,84 @@ state between jobs. See "The queue worker" below.
 
 ---
 
-## Keeping the app outside `public_html`
+## Two layouts, pick one
 
-The app lives at `~/domains/yourdomain.tld/` and `public_html` becomes a
-**symlink to `public`**. Hostinger finds `public_html` by name, so the symlink
-satisfies it, while `.env`, `app/`, `storage/` and `vendor/` stay unreachable
-from the web.
+Hostinger will not change a Web plan's document root, so the domain always
+serves `public_html/`. There are two ways to reconcile that with Laravel wanting
+to serve from `public/`. Both work on this host; they differ in where your code
+lives and how much of a mistake is dangerous.
+
+| | Layout A — outside | Layout B — inside |
+|---|---|---|
+| App root | `~/domains/<domain>/` | `~/domains/<domain>/public_html/` |
+| `public_html` | symlink → `public` | real directory |
+| File manager reaches the code | **no** | **yes** |
+| `.env` reachable if rules fail | no | yes |
+| `.htaccess` that must be read | `public/.htaccess` | root `.htaccess` |
+| Deploy from | `~/domains/<domain>` | `~/domains/<domain>/public_html` |
+
+**Layout A** keeps `.env`, `vendor/`, `storage/` and `config/` outside the web
+root entirely, so a mistake in a rewrite rule cannot publish them. The cost is
+real though: the control panel's file manager refuses to upload anywhere but
+`public_html`, so every file change goes through SSH or git. Deploy is:
 
 ```sh
 cd ~/domains/yourdomain.tld
 git clone -b main https://github.com/Richcholo/tramatch.git .
 composer install --no-dev --optimize-autoloader
-
 cp .env.production.example .env
 php artisan key:generate
-# edit .env now -- the script checks for it
-
+# edit .env
 bash deploy/setup-website.sh --force
 ```
 
-The script refuses to run without `--force` the first time, because it moves
-Hostinger's seeded `public_html` aside to `public_html.hostinger-backup`. Check
-that backup is empty of anything you need before letting it go.
+**Layout B** is what you get from the Hostinger guide and what uploading through
+the panel produces. The application root becomes the document root, and the root
+`.htaccess` forwards requests into `public/` instead of `public/`'s contents
+being cut apart. Nothing moves on each deploy, so `git pull` cannot break paths
+— but `.env`, `vendor/`, `storage/logs/` and `config/` are all inside the web
+root, and **the root `.htaccess` is the only thing refusing them.**
 
-`public/index.php` resolves paths with `__DIR__.'/../vendor/autoload.php'`, and
-PHP's `__DIR__` is the *resolved* real path, so the symlink does not break the
-autoloader or the `storage/` lookups.
+Converting an existing Layout A install:
+
+```sh
+cd ~/domains/yourdomain.tld
+git pull                        # the root .htaccess has to be present first
+bash deploy/setup-public-html-layout.sh
+cd public_html
+php artisan optimize:clear      # cached config holds the old absolute paths
+php artisan optimize
+```
+
+The script refuses to run unless it recognises the current layout, backs up
+`.env` to `$HOME` first, and prints rollback commands at the end.
+
+### The deny rules are duplicated on purpose
+
+Both layouts refuse the same paths, in `public/.htaccess` and in the root
+`.htaccess`. Which one the server reads depends on the layout, so putting them
+in one place would mean one layout has no protection.
+
+```sh
+curl -sI https://yourdomain.tld/.env | head -1                  # 403/404
+curl -sI https://yourdomain.tld/artisan | head -1               # 403/404
+curl -sI https://yourdomain.tld/vendor/autoload.php | head -1   # 404
+curl -sI https://yourdomain.tld/storage/logs/laravel.log | head -1  # 404
+curl -sI https://yourdomain.tld/config/app.php | head -1        # 404
+```
+
+`/vendor/autoload.php` is the one to watch in Layout B: nothing else would have
+blocked it, so a 200 there means the root `.htaccess` is not being read at all.
+`/storage/profile_photos/...` must still return 200 once uploads exist — the
+rules deny `storage/logs`, `storage/app`, `storage/framework`, not `storage/`.
+
+### `public/index.php` and the symlink
+
+In Layout A, `public/index.php` resolves paths with
+`__DIR__.'/../vendor/autoload.php'`, and PHP's `__DIR__` is the *resolved* real
+path, so the symlink does not break the autoloader or the `storage/` lookups.
+In Layout B no path is rewritten at all, because `public/` stays where Laravel
+put it.
 
 ### Confirm nothing leaked
 

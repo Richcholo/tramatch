@@ -1,9 +1,12 @@
 # ---------------------------------------------------------------------------
 # Never serve application source or framework internals.
 #
-# The deployed layout keeps these outside the document root (the app lives at
-# ~/domains/<domain>/ and public_html is a symlink to public/), so this is
-# defence in depth rather than the primary protection.
+# DUPLICATED IN THE ROOT .htaccess ON PURPOSE. Which file the server reads
+# depends on the deployment layout: with the application root one level above
+# public_html and public_html a symlink to public/, this file is the only one
+# inside the document root and so the only one applied. With the application
+# root inside public_html/, the root .htaccess is read first. Both copies refuse
+# the same paths so the answer is identical either way.
 #
 # It exists because of what actually happened: a failed `php artisan
 # storage:link` leaves a REAL public/storage/ directory behind, and a stale

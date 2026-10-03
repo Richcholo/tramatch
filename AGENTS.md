@@ -840,15 +840,22 @@ the runtime never executes it.
   gitignored because `setup-website.sh` and the cron instructions create them.
   They were untracked and unignored, so the dirty-tree guard rejected files the
   deployment itself had made.
-- **Never upload the project into `public_html`.** The app root belongs at
-  `~/domains/<domain>/` with `public_html` a symlink to `public/`. Hosting the
-  root inside `public_html` puts `index.php` at `public_html/public/index.php`,
-  so PHP never starts and the domain 403s — and `.env`, `storage/` and `vendor/`
-  sit in the document root, which is a public database password the moment the
-  layout is fixed any other way. `setup-website.sh` detects and repairs it by
-  moving the *contents* up; do not hand-edit the layout, and do not re-add the
-  `mv public_html public_html.hostinger-backup` it replaced, which would move
-  `.env` and `storage/` wholesale.
+- **Two deployment layouts exist; both are supported.** Layout A keeps the app
+  root at `~/domains/<domain>/` with `public_html` a symlink to `public/`, so
+  `.env`/`vendor/`/`storage/` sit outside the web. Layout B puts the app root
+  inside `public_html/` and routes via the root `.htaccess`, which is what the
+  file manager forces. **The deny rules are duplicated in `public/.htaccess`
+  and the root `.htaccess` on purpose** — which file the server reads depends on
+  the layout, so one copy would leave the other layout unprotected. Do not
+  consolidate them.
+- **Never upload the project into `public_html` without the root `.htaccess`.**
+  The naive version of Layout B puts `index.php` at `public_html/public/index.php`,
+  so PHP never starts and the domain 403s. And `.env`, `storage/` and `vendor/`
+  end up in the document root. `setup-website.sh` detects and repairs the broken
+  arrangement by moving the *contents* up; `setup-public-html-layout.sh` does
+  the reverse conversion. Do not re-add the
+  `mv public_html public_html.hostinger-backup` the first one replaced, which
+  would move `.env` and `storage/` wholesale.
 
 - **Three deploy failures produce no error message at all.** All hit the first
   live deploy. (1) A cached config bakes in absolute paths, so after moving the
