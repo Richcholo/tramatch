@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\File;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -197,6 +198,120 @@ class InteractionMarkupTest extends TestCase
             'the app page renders no [data-navigation-loading] but loads page-transitions.js, '
             .'which drives it'
         );
+    }
+
+    /**
+     * Every `[data-*]` selector in app.css must name an attribute that a view or
+     * a script actually writes.
+     *
+     * This is the dead-code shape this file keeps running into, in its most
+     * convincing form: a rule that reads like a feature. The page-cover
+     * transition shipped that way. Forty lines of `[data-page-curtain]`
+     * keyframes and four custom properties sat in the stylesheet while the script
+     * that created the element had already been deleted, and the
+     * `setPendingTransition()` that gated its creation had no caller anywhere.
+     * Nothing could match the selector, so the transition silently did not exist
+     * -- while the CSS sat there looking like proof that it did.
+     */
+    #[Test]
+    public function every_attribute_selector_in_the_stylesheet_is_produced_by_something(): void
+    {
+        /*
+         * Attributes written by a library rather than by us. Lenis sets
+         * data-lenis-prevent itself on any element excluded from smooth
+         * scrolling; nothing in this repository writes it.
+         */
+        $writtenByALibrary = [
+            'data-lenis-prevent' => 'Lenis writes this attribute itself.',
+        ];
+
+        preg_match_all('/\[(data-[a-z-]+)\]/', $this->stylesheet(), $matches);
+
+        $this->assertNotEmpty(
+            $matches[1],
+            'no attribute selectors were found, so this guard is not looking at anything'
+        );
+
+        $sources = $this->markupAndScriptSource();
+
+        foreach (array_unique($matches[1]) as $attribute) {
+            if (isset($writtenByALibrary[$attribute])) {
+                continue;
+            }
+
+            $this->assertStringContainsString(
+                $attribute,
+                $sources,
+                'app.css styles ['.$attribute.'] but no view or script produces it, so the rule '
+                .'matches nothing and whatever it was written for never happens'
+            );
+        }
+    }
+
+    /**
+     * public/build is committed on purpose, because the host cannot run Vite: the
+     * deployed site serves whatever was committed. A source change without a
+     * rebuild therefore reaches the repository and never reaches a browser.
+     *
+     * That is not hypothetical here. The committed CSS was already stale when
+     * the first deploy was prepared, and no test could see it, because every
+     * other assertion in this file reads resources/ while the site loads the
+     * bundle.
+     */
+    #[Test]
+    public function the_committed_build_covers_every_vite_input(): void
+    {
+        $manifestPath = public_path('build/manifest.json');
+
+        $this->assertFileExists(
+            $manifestPath,
+            'public/build is not committed, so the deployed site loads no CSS or JS at all'
+        );
+
+        // Decoded by hand rather than with JSON_THROW_ON_ERROR, because that
+        // surfaces as "Syntax error" and this file's whole purpose is a
+        // failure message that names the cause.
+        $manifest = json_decode((string) file_get_contents($manifestPath), true);
+
+        $this->assertIsArray(
+            $manifest,
+            'public/build/manifest.json is not valid JSON, so @vite cannot resolve any asset and '
+            .'the deployed site loads no CSS or JS. Run `npm run build`.'
+        );
+
+        preg_match_all("/'([^']+\.(?:css|js))'/", (string) file_get_contents(base_path('vite.config.js')), $inputs);
+
+        $this->assertNotEmpty(
+            $inputs[1],
+            'no inputs were parsed out of vite.config.js, so this guard is not looking at anything'
+        );
+
+        foreach ($inputs[1] as $input) {
+            $this->assertArrayHasKey(
+                $input,
+                $manifest,
+                'vite.config.js builds '.$input.' but public/build/manifest.json has no entry for it. '
+                .'Run `npm run build` and commit the result with `git add -A public/build`.'
+            );
+        }
+    }
+
+    /**
+     * Every Blade view and every script, concatenated.
+     *
+     * An attribute can be created on either side of the divide -- the itinerary
+     * editor's notice element is written in Blade and given its tone from JS --
+     * so scanning one directory would miss half of them.
+     */
+    protected function markupAndScriptSource(): string
+    {
+        $source = '';
+
+        foreach (array_merge(File::allFiles(resource_path('views')), File::allFiles(resource_path('js'))) as $file) {
+            $source .= "\n".$file->getContents();
+        }
+
+        return $source;
     }
 
     #[Test]

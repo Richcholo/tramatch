@@ -805,9 +805,26 @@ migration.
   `#hero` (welcome.blade.php ↔ home.js and page-transitions.js), and
   `[data-swipe-deck|-card|-action|-count|-empty]` (discover/index.blade.php ↔
   swipe.js).
-- `page-transitions.js` intercepts same-origin link clicks **only** when
-  crossing the `/` boundary, then `preventDefault()` + `location.assign()`.
-  Any new home-page CTA flows through it.
+- `page-transitions.js` never intercepts navigation. It only *observes* it: a
+  same-origin link click or a same-origin form submit arms a 350 ms timer, and
+  only if the browser has not already navigated does the full-screen
+  `[data-navigation-loading]` overlay appear. There is deliberately no
+  `preventDefault()` and no `location.assign()` anywhere in it, so every link
+  works with JS disabled.
+- **That overlay's only guaranteed exit is a timer, not a page load.**
+  `LOADING_MAX_MS` (8 s) clears it unconditionally, and `beforeunload` clears
+  it too, because a navigation that never completes — the browser's stop
+  button, a dismissed `beforeunload` prompt, a swallowed link — produces no
+  page load and therefore no other way to dismiss it. It stranded a
+  full-screen spinner over a working page until this was added. Do not remove
+  the cap when touching that file.
+- The page-cover ("curtain") transition is **gone**: the element
+  `[data-page-curtain]` and its `@keyframes page-curtain-*` were left behind in
+  `app.css` after the JS that created it was deleted, so forty lines of shipped
+  CSS matched nothing while reading like proof the transition existed. Do not
+  re-add the CSS without the JS.
+  `InteractionMarkupTest::every_attribute_selector_in_the_stylesheet_is_produced_by_something`
+  now fails if app.css styles a `data-*` attribute nothing produces.
 - The PWA is hand-written — `public/sw.js`, `public/manifest.webmanifest`,
   `public/offline.html`, no build plugin. `sw.js` hardcodes the authenticated
   paths it must never cache (`/dashboard`, `/preferences`, `/recommendations`,

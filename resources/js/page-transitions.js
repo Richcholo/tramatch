@@ -1,40 +1,42 @@
 window.__tramatchPageTransitions = true;
 
 (() => {
-    const isHomePath = (pathname) => {
-        return pathname.replace(/\/+$/, '') === '';
-    };
-
-
-    let navigating = false;
-    let navigationLoadingTimer = null;
-
-    const transitionKey = 'tramatch-page-enter';
-
     /*
-     * 350ms before the overlay appears, 200ms to fade it back out.
+     * Three timings, and the third is the one that matters.
      *
-     * The delay is the point. Feedback has to land immediately or people click
-     * twice, but a full-screen takeover on every navigation is irritating when
-     * the connection is fine. Under 350ms almost every navigation finishes
-     * first and the overlay never shows at all; the button's own :active state
-     * covers the gap, because that lands within a frame.
+     * LOADING_DELAY_MS is a delay on purpose. Feedback has to land immediately
+     * or people click twice, but a full-screen takeover on every navigation is
+     * irritating when the connection is fine. Under 350ms almost every
+     * navigation finishes first and the overlay never shows at all; the
+     * button's own :active state covers the gap, because that lands within a
+     * frame.
+     *
+     * LOADING_FADE_MS is how long the fade-out takes.
+     *
+     * LOADING_MAX_MS is the guarantee, and it did not exist until a traveller
+     * reported the overlay spinning forever. This overlay used to be dismissed
+     * only by a successful page load, so any navigation that never completed
+     * left it pinned over a page that was working perfectly, with no way out
+     * but a reload: the browser's stop button, a beforeunload prompt dismissed
+     * rather than accepted, a link some other handler swallowed. Nothing in
+     * that sequence ever produces a page load, so nothing ever dismissed it.
+     *
+     * Past the cap the overlay goes away whatever is happening. A slow genuine
+     * navigation then spends its last few seconds with no overlay, which costs
+     * nothing; stranding the traveller costs everything.
      */
     const LOADING_DELAY_MS = 350;
     const LOADING_FADE_MS = 200;
+    const LOADING_MAX_MS = 8000;
 
     const loader = () => document.querySelector('[data-navigation-loading]');
 
-    const scheduleNavigationLoading = () => {
-        window.clearTimeout(navigationLoadingTimer);
-
-        navigationLoadingTimer = window.setTimeout(() => {
-            loader()?.classList.remove('hidden');
-        }, LOADING_DELAY_MS);
-    };
+    let navigationLoadingTimer = null;
+    let navigationMaxTimer = null;
 
     const clearNavigationLoading = () => {
         window.clearTimeout(navigationLoadingTimer);
+        window.clearTimeout(navigationMaxTimer);
 
         const element = loader();
 
@@ -50,6 +52,31 @@ window.__tramatchPageTransitions = true;
             element.classList.add('hidden');
             element.classList.remove('tm-loader--leaving');
         }, LOADING_FADE_MS);
+    };
+
+    const scheduleNavigationLoading = () => {
+        window.clearTimeout(navigationLoadingTimer);
+
+        navigationLoadingTimer = window.setTimeout(() => {
+            const element = loader();
+
+            if (!element) {
+                return;
+            }
+
+            // --leaving has to go as well as hidden. clearNavigationLoading adds
+            // it for the duration of the fade-out, and showing the overlay again
+            // while it is still set would render the visible state at opacity 0,
+            // which reads as a blank page rather than a loader.
+            element.classList.remove('tm-loader--leaving');
+            element.classList.remove('hidden');
+
+            window.clearTimeout(navigationMaxTimer);
+            navigationMaxTimer = window.setTimeout(
+                clearNavigationLoading,
+                LOADING_MAX_MS
+            );
+        }, LOADING_DELAY_MS);
     };
 
     /*
@@ -142,51 +169,6 @@ window.__tramatchPageTransitions = true;
         scheduleNavigationLoading();
     });
 
-    const authPaths = [
-        '/login',
-        '/register',
-    ];
-
-    const isAuthPath = (pathname) => {
-        return authPaths.includes(pathname);
-    };
-
-    const hasIntroOverlay = () => {
-        return document.querySelector('#intro-overlay') !== null;
-    };
-
-    const isHomePage = () => {
-        return document.querySelector('#hero') !== null;
-    };
-
-    const setPendingTransition = () => {
-        try {
-            sessionStorage.setItem(transitionKey, '1');
-        } catch {
-            return;
-        }
-    };
-
-    const consumePendingTransition = () => {
-        try {
-            const pending = sessionStorage.getItem(transitionKey) === '1';
-
-            sessionStorage.removeItem(transitionKey);
-
-            return pending;
-        } catch {
-            return false;
-        }
-    };
-
-    const clearPendingTransition = () => {
-        try {
-            sessionStorage.removeItem(transitionKey);
-        } catch {
-            return;
-        }
-    };
-
     const prepareIntroOverlay = () => {
         const overlay = document.getElementById('intro-overlay');
 
@@ -200,87 +182,29 @@ window.__tramatchPageTransitions = true;
                 return;
             }
         } catch {
-            
+            // sessionStorage unavailable; home.js plays the intro as normal.
         }
 
         overlay.style.opacity = '1';
     };
 
-
-    const createCurtain = () => {
-        let curtain = document.querySelector('[data-page-curtain]');
-
-        if (!curtain) {
-            curtain = document.createElement('div');
-            curtain.dataset.pageCurtain = '';
-            curtain.setAttribute('aria-hidden', 'true');
-            document.body.appendChild(curtain);
-        }
-
-        return curtain;
-    };
-
-    const animateCurtain = async (curtain, className) => {
-        curtain.classList.remove(
-            'page-curtain-entering',
-            'page-curtain-leaving'
-        );
-
-        curtain.classList.add(className);
-
-        const animations = curtain.getAnimations();
-
-        await Promise.all(
-            animations.map((animation) =>
-                animation.finished.catch(() => {})
-            )
-        );
-    };
-
-   const playPageEnter = async () => {
-        if (navigating) {
-            return;
-        }
-
-        const pendingTransition = consumePendingTransition();
-
-
-        if (hasIntroOverlay()) {
-            return;
-        }
-
-  
-        if (!pendingTransition) {
-            return;
-        }
-
-        const curtain = createCurtain();
-
-        await animateCurtain(
-            curtain,
-            'page-curtain-leaving'
-        );
-
-        if (!navigating) {
-            curtain.remove();
-        }
-    };
-
-
+    /*
+     * A beforeunload prompt is the one navigation this script cannot wait out,
+     * because the traveller may dismiss it and stay exactly where they are.
+     * itinerary-editor.js registers its own handler for unsaved changes, so
+     * this is a reachable path rather than a hypothetical one.
+     *
+     * Clearing here is also correct when the prompt is accepted: the page is
+     * about to go, and the next page's overlay starts hidden regardless.
+     */
+    window.addEventListener('beforeunload', () => {
+        clearNavigationLoading();
+        restoreSubmitters();
+    });
 
     prepareIntroOverlay();
 
-    if (document.readyState === 'loading') {
-        document.addEventListener(
-            'DOMContentLoaded',
-            playPageEnter,
-            { once: true }
-        );
-    } else {
-        void playPageEnter();
-    }
-
-    document.addEventListener('click', async (event) => {
+    document.addEventListener('click', (event) => {
         if (
             event.defaultPrevented ||
             event.button !== 0 ||
@@ -362,8 +286,7 @@ window.__tramatchPageTransitions = true;
      * One pageshow handler, deliberately. There were two -- one here for the
      * overlay and one further up for the form buttons -- and both fired on the
      * same event, so the bfcache branch had to add `hidden` directly to beat
-     * the other one's 200ms fade. On a restore an instant hide is the correct
-     * behaviour anyway, so that ordering requirement is gone.
+     * the other one's 200ms fade.
      */
     window.addEventListener('pageshow', (event) => {
         if (!event.persisted) {
@@ -375,18 +298,12 @@ window.__tramatchPageTransitions = true;
         }
 
         /*
-         * Restored from the back/forward cache. The unload left a "Working..."
-         * button and a full-screen overlay behind, so without this the page is
-         * perfectly usable and looks permanently stuck.
+         * Restored from the back/forward cache. The page was frozen mid-flight,
+         * so a "Working..." button and possibly a visible overlay were carried
+         * into the cache with it. Without this the page is perfectly usable and
+         * looks permanently stuck.
          */
-        navigating = false;
-        clearPendingTransition();
-
-        loader()?.classList.add('hidden');
+        clearNavigationLoading();
         restoreSubmitters();
-
-        document
-            .querySelector('[data-page-curtain]')
-            ?.remove();
     });
 })();

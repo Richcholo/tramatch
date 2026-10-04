@@ -195,25 +195,29 @@ hPanel → Advanced → Cron Jobs:
 | Command | `/bin/bash /home/u348491703/queue-worker.sh` |
 | Interval | every minute |
 
-**`APP_ROOT` must be edited in the copy.** It defaults to the literal
-placeholder `$HOME/domains/yourdomain.tld`, and Layout B puts the app root
-*inside* `public_html`:
+**There is nothing to edit before this works.** The app root is discovered from
+`$HOME/domains`: the script looks for a directory holding *both* `artisan` and
+`.env`, which is true of the app root in Layout A (above `public_html`) and in
+Layout B (inside it), and of nothing else. The same file is correct on both.
 
-```sh
-APP_ROOT="${APP_ROOT:-$HOME/domains/tramatch.site/public_html}"
-```
-
-Or set it on the cron line instead, which leaves the script untouched:
+If the discovery finds none, or more than one, it logs which directories it
+checked and exits non-zero. An explicit `APP_ROOT` on the cron line overrides
+discovery entirely:
 
 | Command | `APP_ROOT=$HOME/domains/tramatch.site/public_html /bin/bash /home/u348491703/queue-worker.sh` |
 
-A worker with the wrong `APP_ROOT` used to exit **0** with its output sent to
-`/dev/null`, so cron reported success every minute while nothing drained. It
-now exits non-zero and writes `~/queue-worker.log`. Do not add a `>>` redirect
-to the cron command as well — the script logs itself, and two copies of every
-line get interleaved.
+Do not add a `>>` redirect to the cron command — the script writes
+`~/queue-worker.log` itself, and two copies of every line get interleaved.
 
-Three things in it are deliberate:
+This is the second attempt at this script. The first defaulted `APP_ROOT` to
+the literal placeholder `$HOME/domains/yourdomain.tld` and exited **0** on a
+miss with the artisan output sent to `/dev/null`, so a worker left unedited did
+nothing every minute, reported success, and left every crawl sitting in
+`queued` with nothing anywhere to say why. Two deployments were lost to it, and
+the live copy of this file lives outside the repo at `~/queue-worker.sh`, so
+`git pull` never touches it. **Re-copy it after pulling.**
+
+Four things in it are deliberate:
 
 - **`--stop-when-empty`** is what makes cron safe. Without it the worker holds
   the slot until it is killed, and the next cron run stacks on top.
@@ -221,20 +225,33 @@ Three things in it are deliberate:
   `public int $timeout = 300`, and a job-level timeout outranks any worker flag,
   so passing one would be misleading rather than protective.
 - **`exit 0` at the end** keeps cron from mailing on every transient upstream
-  failure. The log and the crawl rows carry the detail.
+  failure. The log and the crawl rows carry the detail. Anything that stops the
+  worker *reaching* the queue still exits non-zero, because that is a
+  misconfiguration rather than a dead host.
+- **The log is trimmed to 512 KB in place**, because this runs every minute and
+  shared hosting charges for the quota.
 
 ### Check it is actually running
 
 ```sh
 tail -n 40 ~/queue-worker.log
+```
+
+One `run: start` / `run: end` pair per minute means cron is firing. The log
+distinguishes the three failures that all present as `status` stuck on `queued`:
+
+| In `~/queue-worker.log` | Meaning |
+|---|---|
+| nothing at all | cron is not registered or not firing — `crontab -l` |
+| `FATAL no app root found` | discovery found nothing; set `APP_ROOT` |
+| `FATAL no php binary found` | `PHP_BIN` is wrong for this host |
+| `run: start` / `run: end` with nothing between | worker runs, **queue is empty** — the dispatch is not enqueuing, so look at `SourceController`, not at cron |
+| a PHP fatal or PDO error between the pair | credentials or schema |
+
+```sh
 php artisan queue:work --stop-when-empty --tries=1 -v   # should return immediately if idle
 php artisan sources:check                                # crawls one source
 ```
-
-Then click **Crawl** in `/admin/sources` and watch the crawl log populate. If
-`status` stays `queued`, the worker is not running: check `crontab -l` first
-(it may never have been registered), then `APP_ROOT`, then
-`~/queue-worker.log` for a PHP fatal or bad DB credentials.
 
 ---
 

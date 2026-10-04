@@ -481,53 +481,16 @@
     font-family: 'Pinyon Script', 'Segoe Script', 'Brush Script MT', cursive;
 }
 
-:root {
-    --page-transition-color: #0B252B;
-    --page-cover-duration: 650ms;
-    --page-reveal-duration: 950ms;
-    --page-transition-easing: cubic-bezier(0.45, 0, 0.55, 1);
-}
-
-[data-page-curtain] {
-    position: fixed;
-    inset: 0;
-    z-index: 99999;
-    pointer-events: none;
-    background: var(--page-transition-color);
-    opacity: 0;
-}
-
-[data-page-curtain].page-curtain-entering {
-    pointer-events: auto;
-    animation: page-curtain-enter
-        var(--page-cover-duration)
-        var(--page-transition-easing)
-        both;
-}
-
-[data-page-curtain].page-curtain-leaving {
-    animation: page-curtain-leave
-        var(--page-reveal-duration)
-        var(--page-transition-easing)
-        both;
-}
-
-@keyframes page-curtain-enter {
-    from {
-        opacity: var(--curtain-start-opacity, 0);
-    }
-
-    to {
-        opacity: 1;
-    }
-}
-
-@keyframes page-curtain-leave {
-    from {
-        opacity: 1;
-    }
-
-    to {
-        opacity: 0;
-    }
-}
+/*
+ * The page-cover ("curtain") transition used to be styled here, to match the
+ * element page-transitions.js created on the way out of the home page. The JS
+ * side was removed and these rules were left behind, so forty lines of
+ * keyframes and four custom properties shipped to every visitor with nothing
+ * able to reach them: the only element that could match [data-page-curtain]
+ * was created by the deleted code, and setPendingTransition() that gated the
+ * creation had no caller either.
+ *
+ * Left in place they read as a working feature, which is exactly the problem.
+ * The transition a traveller sees is .tm-loader above, which is a full-screen
+ * overlay with a delay on it and no cover animation.
+ */
