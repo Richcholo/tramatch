@@ -235,12 +235,42 @@
     }
 
     /*
+     * Press feedback for links.
+     *
+     * This is what covers the gap page-transitions.js deliberately leaves open.
+     * That script waits 350ms before showing the loading overlay, on the
+     * reasoning that a navigation finishing inside that window needs no
+     * takeover -- and it then noted the gap was covered by "the button's own
+     * :active state". True for a <button>, and false for an <a>: nothing styled
+     * a link's press state, so on a fast connection (a cached page, a warm
+     * connection) a link click produced *no feedback at all* and the overlay
+     * that was supposed to be the backstop never fired. That is why the loading
+     * screen looked absent rather than merely subtle.
+     *
+     * Opacity, no transform. A transform would look like a button press on
+     * something the browser already renders as pressed, and would shift inline
+     * text. No `transition` either: without one the dim applies on the frame
+     * the pointer goes down and lifts on release, which is the timing a press
+     * wants. A transition would make it lag behind the click.
+     *
+     * Deliberately not wrapped in `prefers-reduced-motion`. That query is about
+     * motion, and an opacity step is not motion.
+     */
+    a:active {
+        opacity: 0.6;
+    }
+
+    /*
      * Loading overlay.
      *
      * Opacity only, no layout properties, so fading it in never moves the page
      * underneath. `will-change` is set only while visible rather than
      * permanently, which would keep a full-viewport layer on the compositor for
      * every page load.
+     *
+     * `background-color` sits under `.tm-loader__gradient`, which paints a full
+     * inset-0 gradient of its own. The flat colour behind it is only visible if
+     * the gradient fails to render, so it is a backdrop rather than the design.
      */
     .tm-loader {
         opacity: 0;

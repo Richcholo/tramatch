@@ -853,10 +853,11 @@ the runtime never executes it.
 - `deploy.sh` **discards a modified `composer.lock`** rather than blocking on it,
   then still blocks on any other tracked change. A server that diverges on the
   lock installs a different dependency set than the suite was tested against.
-- `/public_html`, `/public_html.hostinger-backup` and `/queue-worker.sh` are
-  gitignored because `setup-website.sh` and the cron instructions create them.
-  They were untracked and unignored, so the dirty-tree guard rejected files the
-  deployment itself had made.
+- `/public_html` and `/public_html.hostinger-backup` are gitignored because
+  `setup-website.sh` creates them. They were untracked and unignored, so the
+  dirty-tree guard rejected files the deployment itself had made.
+  `/queue-worker.sh` used to be here too and no longer exists — see the queue
+  worker section.
 - **Two deployment layouts exist; both are supported.** Layout A keeps the app
   root at `~/domains/<domain>/` with `public_html` a symlink to `public/`, so
   `.env`/`vendor/`/`storage/` sit outside the web. Layout B puts the app root
@@ -935,10 +936,35 @@ the runtime never executes it.
   `--no-dev` composer step *removes* dev packages rather than skipping them, so
   running it on a developer machine deletes PHPUnit out from under the test
   suite. Verified by accident once already.
-- **The queue worker is `deploy/queue-worker.sh`, registered as an hPanel cron
-  job every minute.** Shared hosting will not run `queue:work` as a daemon, so
-  it uses `--stop-when-empty`. Without a worker, `/admin/sources` queues crawls
-  that nobody picks up and the page deliberately does not warn about it.
+- **The queue is drained by `php artisan queue:drain`, registered as an hPanel
+  cron job every minute.** Shared hosting will not run `queue:work` as a
+  daemon. Without a drain, `/admin/sources` queues crawls that nobody picks up
+  and the page deliberately does not warn about it.
+  It was `deploy/queue-worker.sh` before this, and that file is deleted. It had
+  three ways to fail silently on this host, all invisible: an `APP_ROOT` whose
+  default was the literal placeholder `yourdomain.tld` (wrong value → `exit 0`
+  having done nothing, so cron reported success while crawls sat in `queued`),
+  its own PHP-binary resolution because cron has a minimal PATH, and a log at
+  `~/queue-worker.log` that nothing in the app knew about. It cost two
+  deployments and its live copy lived outside the repo, so `git pull` never
+  touched it. **Do not reintroduce a shell script for this** — the command has
+  none of those failure modes and is testable, which the script was not.
+- `DrainQueue` logs to `storage/logs/laravel.log` with a `queue:drain` prefix
+  rather than printing, because **cron discards stdout on this host**. The log
+  line that matters is `found the queue empty`: it means the drain ran and the
+  queue was genuinely empty, which is the one thing `status` stuck on `queued`
+  does not tell you. Without it you cannot distinguish a broken cron from a
+  dispatch that never enqueued.
+- **`DrainQueue` stops on the first job that throws outside its own handling.**
+  Releasing puts the row back with `available_at` in the past, so the next
+  `pop()` returns the same job and a permanently failing job never leaves the
+  queue — the drain spun on one job until its wall-clock cap, burning the cron
+  slot every minute and draining nothing. The suite measured it: 278s before
+  the `break`, 0.5s after. This is the same shape as the `retry_after` bug
+  below, reached from the other direction.
+- `pop()` is called with **no argument**. The argument is a *queue* name, not a
+  connection name, so `pop('database')` asked for a queue called "database" and
+  always returned null — the first version drained nothing and still exited 0.
 - `route:cache` works despite the closure route for `/` in `routes/web.php` —
   Laravel 11+ serialises them. Tested, not assumed.
 

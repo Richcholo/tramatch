@@ -213,6 +213,31 @@ class InteractionMarkupTest extends TestCase
      * Nothing could match the selector, so the transition silently did not exist
      * -- while the CSS sat there looking like proof that it did.
      */
+    /**
+     * A link being pressed must look pressed.
+     *
+     * page-transitions.js waits 350ms before showing the loading overlay, on the
+     * reasoning that a navigation finishing inside that window needs no
+     * full-screen takeover. Its own comment then claimed the gap was covered by
+     * "the button's own :active state" -- true for a <button>, and false for an
+     * <a>, because no rule styled a link's press state.
+     *
+     * So on a fast navigation the sequence was: click, nothing at all, new page.
+     * The loading overlay was the backstop and it had nothing to back up, which
+     * is why it read as missing rather than subtle. Verified by removing the
+     * rule: this fails.
+     */
+    #[Test]
+    public function a_pressed_link_is_visibly_pressed(): void
+    {
+        $this->assertMatchesRegularExpression(
+            '/(^|[\s,{}])a:active[^{]*\{[^}]*opacity\s*:\s*(?!1\b)[0-9.]/',
+            $this->stylesheet(),
+            'no visible press state for links, so a click on a link has no feedback until the '
+            .'loading overlay appears 350ms later -- and on a fast navigation it never appears'
+        );
+    }
+
     #[Test]
     public function every_attribute_selector_in_the_stylesheet_is_produced_by_something(): void
     {

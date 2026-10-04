@@ -182,75 +182,65 @@ Crawls are dispatched as `App\Jobs\CrawlSourceJob` and **nothing runs them
 inside a web request**. Without a worker, `/admin/sources` queues jobs that sit
 forever.
 
-Copy the worker out of the repo and register it in hPanel cron:
-
-```sh
-cp deploy/queue-worker.sh ~/queue-worker.sh
-```
-
-hPanel → Advanced → Cron Jobs:
+Register one hPanel cron job. There is nothing to install:
 
 | | |
 |---|---|
-| Command | `/bin/bash /home/u348491703/queue-worker.sh` |
+| Command | `cd ~/domains/tramatch.site/public_html && /usr/bin/php artisan queue:drain` |
 | Interval | every minute |
 
-**There is nothing to edit before this works.** The app root is discovered from
-`$HOME/domains`: the script looks for a directory holding *both* `artisan` and
-`.env`, which is true of the app root in Layout A (above `public_html`) and in
-Layout B (inside it), and of nothing else. The same file is correct on both.
+`cd` first is required: cron runs with no working directory, and this host
+disables both `symlink()` and `proc_open()`, so nothing can resolve a path on
+artisan's behalf.
 
-If the discovery finds none, or more than one, it logs which directories it
-checked and exits non-zero. An explicit `APP_ROOT` on the cron line overrides
-discovery entirely:
+**Delete `~/queue-worker.sh` when you switch to this.** It was not a
+configuration mistake. It had to be told where the app root was, through an
+`APP_ROOT` whose default was a literal placeholder — a wrong value meant `exit 0`
+having done nothing, so cron reported success every minute while crawls sat in
+`queued`. It also resolved its own PHP binary, because cron has a minimal PATH,
+and logged to a path nothing in the application knew about.
+`queue:drain` has none of that: Laravel already knows where the app is and which
+PHP is running, and it logs to `storage/logs/laravel.log` where every other
+failure already goes.
 
-| Command | `APP_ROOT=$HOME/domains/tramatch.site/public_html /bin/bash /home/u348491703/queue-worker.sh` |
+Three things in it are deliberate:
 
-Do not add a `>>` redirect to the cron command — the script writes
-`~/queue-worker.log` itself, and two copies of every line get interleaved.
-
-This is the second attempt at this script. The first defaulted `APP_ROOT` to
-the literal placeholder `$HOME/domains/yourdomain.tld` and exited **0** on a
-miss with the artisan output sent to `/dev/null`, so a worker left unedited did
-nothing every minute, reported success, and left every crawl sitting in
-`queued` with nothing anywhere to say why. Two deployments were lost to it, and
-the live copy of this file lives outside the repo at `~/queue-worker.sh`, so
-`git pull` never touches it. **Re-copy it after pulling.**
-
-Four things in it are deliberate:
-
-- **`--stop-when-empty`** is what makes cron safe. Without it the worker holds
-  the slot until it is killed, and the next cron run stacks on top.
-- **`--timeout` is deliberately omitted.** `CrawlSourceJob` declares
-  `public int $timeout = 300`, and a job-level timeout outranks any worker flag,
-  so passing one would be misleading rather than protective.
-- **`exit 0` at the end** keeps cron from mailing on every transient upstream
-  failure. The log and the crawl rows carry the detail. Anything that stops the
-  worker *reaching* the queue still exits non-zero, because that is a
-  misconfiguration rather than a dead host.
-- **The log is trimmed to 512 KB in place**, because this runs every minute and
-  shared hosting charges for the quota.
+- **It stops on the first job that throws outside its own handling.** Releasing
+  puts the row straight back with `available_at` in the past, so the next `pop()`
+  returns the same job again, and a permanently failing job never leaves the
+  queue. The suite caught this: the drain tests took 278 seconds before the
+  `break` went in, all of it one job being retried in a tight loop.
+- **`--max-seconds` defaults to 240**, under the one-minute cron interval, so a
+  run cannot reach the next tick and overlap it. Two workers on one queue is
+  exactly what `config/queue.php`'s `retry_after` invariant exists to prevent.
+- **It always exits 0.** Cron mails on non-zero, and a single unreachable
+  upstream host would then mail every minute. Each crawl records its own status
+  and `error_message` (see `EthicalSourceFetcher`).
 
 ### Check it is actually running
 
 ```sh
-tail -n 40 ~/queue-worker.log
+grep queue:drain storage/logs/laravel.log | tail -n 20
 ```
 
-One `run: start` / `run: end` pair per minute means cron is firing. The log
-distinguishes the three failures that all present as `status` stuck on `queued`:
+It logs rather than prints because cron discards stdout on this host.
+`queue:drain start` once a minute means cron is firing. The states that all
+present as `status` stuck on `queued`:
 
-| In `~/queue-worker.log` | Meaning |
+| In `storage/logs/laravel.log` | Meaning |
 |---|---|
-| nothing at all | cron is not registered or not firing — `crontab -l` |
-| `FATAL no app root found` | discovery found nothing; set `APP_ROOT` |
-| `FATAL no php binary found` | `PHP_BIN` is wrong for this host |
-| `run: start` / `run: end` with nothing between | worker runs, **queue is empty** — the dispatch is not enqueuing, so look at `SourceController`, not at cron |
-| a PHP fatal or PDO error between the pair | credentials or schema |
+| no `queue:drain` lines at all | cron not registered, or the command path is wrong |
+| `found the queue empty` | **the worker runs and the queue is empty** — the dispatch is not enqueuing. Look at `SourceController`, not at cron |
+| `job threw outside its own handling` | a job failed without recording why; it was released for the next run |
+| `hit its wall-clock cap with work still queued` | more work than one minute allows; expected mid-bulk-crawl |
+
+That third row is what separates "cron is broken" from "nothing was queued",
+which is the distinction that was missing both times this went wrong.
 
 ```sh
-php artisan queue:work --stop-when-empty --tries=1 -v   # should return immediately if idle
-php artisan sources:check                                # crawls one source
+php artisan queue:drain          # safe to run by hand; drains and exits
+php artisan queue:failed         # jobs that exhausted their retries
+php artisan sources:check        # crawls one source synchronously
 ```
 
 ---
