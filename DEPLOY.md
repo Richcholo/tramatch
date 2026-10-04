@@ -428,52 +428,56 @@ implicit TLS, and the command says so rather than printing a blank line.
 #### `554 5.7.1 <unknown[IPv6]>: Client host rejected: Access denied`
 
 Measured on this host, 2026-10-04. Hostinger's `smtp.hostinger.com` refuses the
-connection **after a successful TLS handshake and successful
-authentication** — it answers the `MAIL FROM` with a `554` whose bracketed name
-is `unknown[<the server's own IPv6 address>]`.
+transaction from **this server's own outbound IPv6**, with a bracketed name of
+`unknown[2a02:4780:5c:2350:0:14c5:8fb7:1]` — Postfix reporting that reverse DNS
+for the connecting address does not resolve.
 
-`unknown[...]` is the diagnosis: reverse DNS (PTR) for the connecting address
-does not resolve, and the server is refusing on that basis rather than on
-anything about the credentials. This is not fixable in application code. In
-order of preference:
+The rejection is at `RCPT TO`, not `MAIL FROM`: Symfony reports the expected
+code as `250/251/252`, and those are the `RCPT TO` success codes. So the
+credentials were accepted — this is not a `535`.
 
-1. **Use the PHP `mail()` transport instead of SMTP.** Set
-   `MAIL_MAILER=sendmail`. Laravel hands this to Symfony's
-   `SendmailTransport`, which invokes the host's own binary over a pipe rather
-   than opening an outbound socket — so the PTR lookup that `smtp.hostinger.com`
-   performs never happens. Keep `MAIL_HOST` and the credentials in `.env` so
-   switching back is a one-word change; `config/mail.php` already defines the
-   transport.
+**The SMTP service itself is healthy.** Verified by hand from a different
+network: TLS 1.2 negotiates, the banner is `220 ESMTP smtp.hostinger.com`, and
+it advertises `250-AUTH PLAIN LOGIN`. A client whose own IP has no resolvable
+PTR is accepted. So the refusal is specific to the address range this host
+happens to send from, not a property of the account or the mailbox.
 
-   The command comes from `MAIL_SENDMAIL_PATH`, defaulting to
-   `/usr/sbin/sendmail -bs -i`. Confirm it exists before assuming:
+**`MAIL_MAILER=sendmail` cannot be used on this host, and did not work.** An
+earlier revision of this file recommended it; that was wrong. Hostinger disables
+`proc_open`, and Symfony's `SendmailTransport` builds a `ProcessStream` in its
+constructor, which calls `proc_open()` unguarded:
 
-   ```sh
-   ls -l /usr/sbin/sendmail
-   ```
+```
+vendor/symfony/mailer/Transport/Smtp/Stream/ProcessStream.php:47
+    $this->stream = proc_open($this->command, $descriptorSpec, $pipes);
+```
 
-   If it is elsewhere, set `MAIL_SENDMAIL_PATH`. Symfony rejects any command
-   lacking `-bs` or `-t`, and fails at construction otherwise — so
-   `/usr/sbin/sendmail -t -i` is the alternative to try. Neither needs `-f`:
-   Symfony supplies the envelope sender from `MAIL_FROM_ADDRESS`, which is what
-   keeps SPF and DKIM aligned. Adding `-f` by hand is a common workaround and
-   it *breaks* that alignment.
+`mb_send_mail` is disabled too. Laravel 11+ ships no transport that reaches PHP's
+`mail()` — the only non-socket options are the HTTP API mailers. So the whole
+PHP-native family is closed off here.
 
-   Then `php artisan optimize:clear && php artisan mail:test you@example.com`.
+In order of preference:
 
-2. **Ask Hostinger support to fix the PTR record**, or to whitelist the
-   account. Beyond an agent's control and slow; only worth it if `sendmail`
-   also fails.
-3. Force an IPv4 connection — `unknown[...]` names an IPv6 address, so an
-   explicit IPv4 peer may avoid the failing lookup. Neither the SMTP transport
-   nor `MAIL_URL` exposes an address-family switch, so this is not reachable
-   from Laravel config; it is a support-ticket item.
+1. **Ask Hostinger support to allow this account's outbound address**, or to fix
+   the PTR record on it. Quote the measured evidence above: the service accepts
+   unauthenticated-PTR clients from other networks but rejects this host. This
+   is their own infrastructure and the only route that keeps mail on your own
+   domain with their SPF/DKIM.
+2. **Use an HTTPS mail API**, which needs no socket to the mail server at all.
+   Laravel's `resend` transport requires the `resend/resend-php` package, which
+   is **not** in `composer.json` — adding it is a real change, not a config one,
+   and the host runs `composer install --no-dev`, so it must be committed.
+   `ses`/`ses-v2` ship in Laravel core but need AWS credentials. Verify before
+   committing to either: `ls vendor/resend` is currently empty.
+3. **Force an IPv4 peer** via an IP literal in `MAIL_URL`. Two reasons not to.
+   `smtp.hostinger.com` has no PTR on its IPv4 either (it is Cloudflare-fronted,
+   `172.65.255.143`, `NXDOMAIN` on the reverse lookup), and more importantly
+   Symfony's `SocketStream` sets no `verify_peer` at all — so this would send the
+   SMTP password over a channel where the certificate is not checked. Do not.
 
-Do not "fix" a rejection by disabling TLS verification, and do not read the
-`554` as a bad password: the session had already authenticated by the time it
-arrived. Hostinger will not relay third-party `MAIL_FROM_ADDRESS` values, so it
-must stay on a domain this account actually serves (`support@tramatch.site`,
-which it does).
+Do not "fix" a rejection by disabling TLS verification. Hostinger will not relay
+third-party `MAIL_FROM_ADDRESS` values, so it must stay on a domain this
+account actually serves (`support@tramatch.site`, which it does).
 
 **Unverified.** No SMTP path can be tested from a development machine — the
 `554` is specific to the host's network and reverse DNS, and a local
