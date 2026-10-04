@@ -43,6 +43,30 @@ if [ ! -f .env ]; then
     exit 1
 fi
 
+# The APP_KEY check is here because this has broken the deploy twice: a
+# duplicate APP_KEY= line means key:generate rewrites the first match while
+# dotenv honours the last, so the app boots and then throws
+# MissingAppKeyException on the first request. It is a one-line fix that is
+# invisible until a request arrives, so it is worth refusing to move a live
+# application over a .env that cannot boot.
+# grep -c prints 0 AND exits non-zero on no match, so `|| echo 0` would make
+# the count "0\n0". wc -l always succeeds.
+APP_KEY_LINES="$(grep '^APP_KEY=' .env 2>/dev/null | wc -l | tr -d ' ')"
+APP_KEY_VALUE="$(grep '^APP_KEY=' .env 2>/dev/null | head -1 | cut -d= -f2- | tr -d '\r')"
+
+if [ "$APP_KEY_LINES" != "1" ]; then
+    red ".env has $APP_KEY_LINES APP_KEY lines, expected exactly 1."
+    red "Delete the extras before moving:"
+    red "    grep -n '^APP_KEY' .env"
+    exit 1
+fi
+
+if [ -z "$APP_KEY_VALUE" ]; then
+    red "APP_KEY is empty in .env. Generate one before moving:"
+    red "    php artisan key:generate --force"
+    exit 1
+fi
+
 if [ ! -f .htaccess ]; then
     red "No root .htaccess. Run 'git pull' first -- without it the document root"
     red "would be served with nothing refusing .env or storage/logs."

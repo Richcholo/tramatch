@@ -359,12 +359,24 @@ non-fatal.
 
 - Crawl snapshots use `Storage::disk('local')`, which roots at
   `storage/app/private` — not `storage/app/public`, and not web-served.
-- The only web reference to `public/storage` is
-  `asset('storage/' . $user->profile_photo_path)` in the profile view, and
-  `profile_photo_path` is never assigned anywhere. Breeze created the column
-  and the view; there is no upload controller.
 
-It becomes load-bearing the moment profile photo uploads are implemented.
+…except that **profile photo upload is implemented**
+(`ProfileController::updatePhoto` stores to the `public` disk under
+`profile-photos/`, and the view reads it back through
+`asset('storage/' . $user->profile_photo_path)`). So the link is now
+load-bearing: uploads succeed and the image 404s until it exists.
+
+```sh
+cd ~/domains/<domain>/public_html
+ln -s ../storage/app/public public/storage
+curl -sI https://yourdomain.tld/storage/profile-photos/<file> | head -1   # 200
+```
+
+**Never leave a real directory at `public/storage` on this host.** That is how
+the log became world-readable (see trap 3 above): the failed `storage:link`
+leaves one behind. If it exists and is not a symlink, remove it and re-link.
+`deploy.sh` creates the link only when missing, and deliberately does not pass
+`--force`, which would delete a real directory.
 
 ### What this host allows, measured
 

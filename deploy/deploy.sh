@@ -51,6 +51,26 @@ if [ ! -f .env ]; then
     fail "No .env. Copy .env.production.example and fill it in first."
 fi
 
+# A .env that cannot boot fails on the first request, not on deploy. It has
+# broken this deployment twice: once because APP_KEY was empty, once because a
+# duplicate APP_KEY line meant key:generate fixed the first and dotenv read the
+# second. Both surface as MissingAppKeyException with nothing in the log.
+# grep -c prints 0 AND exits non-zero when there is no match, so `|| echo 0`
+# would append a second 0 and produce "0\n0". wc -l always succeeds and counts
+# what is actually there.
+APP_KEY_LINES="$(grep '^APP_KEY=' .env 2>/dev/null | wc -l | tr -d ' ')"
+APP_KEY_VALUE="$(grep '^APP_KEY=' .env 2>/dev/null | head -1 | cut -d= -f2- | tr -d '\r')"
+
+if [ "$APP_KEY_LINES" != "1" ]; then
+    fail ".env has $APP_KEY_LINES APP_KEY lines, expected exactly 1. grep -n '^APP_KEY' .env"
+fi
+
+if [ -z "$APP_KEY_VALUE" ]; then
+    fail "APP_KEY is empty in .env. Run: php artisan key:generate --force"
+fi
+
+green "APP_KEY present and unique"
+
 # A cached config is built from the .env as it was when the cache was written.
 # Clearing it first means this deploy actually sees an edited .env -- a changed
 # DB password or APP_URL will not take effect otherwise.
