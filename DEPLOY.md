@@ -417,6 +417,45 @@ the mailer: `Password::sendResetLink()` and the verification resend on
 way, nothing is sent, and the only trace is the link in the log. Premium
 includes a mailbox; `.env.production.example` has the SMTP block.
 
+Verify with `php artisan mail:test you@example.com`. It prints the resolved
+mailer, host, port, encryption and username *before* sending, because the usual
+failure is a config that was never applied rather than a bad password. Run
+`php artisan optimize:clear` first — a stale `config:cache` overrides `.env`,
+and the command would otherwise report the settings from whenever the cache was
+written. An unset `MAIL_SCHEME` is normal and is not the fault: port 465 implies
+implicit TLS.
+
+#### `554 5.7.1 <unknown[IPv6]>: Client host rejected: Access denied`
+
+Measured on this host, 2026-10-04. Hostinger's `smtp.hostinger.com` refuses the
+connection **after a successful TLS handshake and successful
+authentication** — it answers the `MAIL FROM` with a `554` whose bracketed name
+is `unknown[<the server's own IPv6 address>]`.
+
+`unknown[...]` is the diagnosis: reverse DNS (PTR) for the connecting address
+does not resolve, and the server is refusing on that basis rather than on
+anything about the credentials. This is not fixable in application code. In
+order of preference:
+
+1. **Use the PHP `mail()` transport instead of SMTP.** `MAIL_MAILER=sendmail`
+   hands the message to the host's own MTA, which is the path Hostinger
+   supports and configures for its shared accounts. Keep `MAIL_HOST` and the
+   credentials in `.env` so switching back is a one-word change.
+   `config/mail.php` already defines this transport.
+2. **Ask Hostinger support to fix the PTR record**, or to whitelist the
+   account. Beyond an agent's control and slow; only worth it if `sendmail`
+   also fails.
+3. Force an IPv4 connection — `unknown[...]` names an IPv6 address, so an
+   explicit IPv4 peer may avoid the failing lookup. Do **not** reach for
+   `MAIL_SCHEME=null` as a fix; that changes TLS, not addressing, and turns a
+   `554` into an unencrypted-connection failure.
+
+Do not "fix" a rejection by disabling TLS verification. Note the credentials
+here are for outbound mail to *your* domain's mailbox; Hostinger will not
+relay arbitrary third-party `MAIL_FROM_ADDRESS` values, so
+`MAIL_FROM_ADDRESS` must stay on a domain this account actually serves
+(`support@tramatch.site`, which it does).
+
 ### `APP_TIMEZONE` is read by `config/app.php`, so setting it works
 
 Laravel 11+ ships a hardcoded `'UTC'` there. This repo's `config/app.php` reads

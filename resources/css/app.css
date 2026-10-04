@@ -202,15 +202,27 @@
             opacity 140ms ease-out;
     }
 
-    .group-open .tm-burger-line--top {
+    /*
+     * Keyed off the `open` ATTRIBUTE on <details>, not a `.group-open` class.
+     *
+     * There is no such class. Tailwind's `group-open:` variant expands to
+     * `:where(.group):is(:where([open], .open) *)` -- it keys off the attribute
+     * the browser sets, which is why the old `group-open:hidden` markup worked.
+     * Writing `.group-open` here matched nothing in the DOM, so the lines never
+     * moved and the button stayed a hamburger permanently: strictly worse than
+     * the instant swap it replaced.
+     *
+     * Guarded by InteractionMarkupTest.
+     */
+    .group[open] .tm-burger-line--top {
         transform: translateY(5px) rotate(45deg);
     }
 
-    .group-open .tm-burger-line--bottom {
+    .group[open] .tm-burger-line--bottom {
         transform: translateY(-5px) rotate(-45deg);
     }
 
-    .group-open .tm-burger-line--middle {
+    .group[open] .tm-burger-line--middle {
         opacity: 0;
         /* Collapses the gap so the two lines meet cleanly at the centre. */
         transform: scaleX(0.4);
@@ -241,10 +253,19 @@
         will-change: opacity;
     }
 
-    /* Applied for the duration of the fade-out, then removed along with
-       `hidden`. Opacity animates to 0 here without the element losing its
-       layout box mid-transition, which is what would make it vanish at once. */
-    .tm-loader--leaving {
+    /*
+     * Applied for the duration of the fade-out, then removed along with
+     * `hidden`. Opacity animates to 0 here without the element losing its
+     * layout box mid-transition, which is what would make it vanish at once.
+     *
+     * Needs the doubled class. `.tm-loader:not(.hidden)` above is two class
+     * selectors and this bare rule is one, so the visible state won and the
+     * fade-out never played -- the overlay just blinked out on the frame
+     * `hidden` was added. Equal specificity, later in the file.
+     *
+     * Guarded by InteractionMarkupTest.
+     */
+    .tm-loader.tm-loader--leaving {
         opacity: 0;
     }
 
@@ -345,7 +366,7 @@
 
     @media (prefers-reduced-motion: reduce) {
         .tm-loader,
-        .tm-loader--leaving {
+        .tm-loader.tm-loader--leaving {
             transition-duration: 1ms;
         }
 

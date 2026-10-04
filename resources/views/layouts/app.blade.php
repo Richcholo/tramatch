@@ -117,7 +117,7 @@
                         <button
                             type="button"
                             onclick="document.getElementById('logout-confirmation').showModal()"
-                            class="block w-full rounded-md px-4 py-3 text-left text-benguet-charcoal/70 transition hover:bg-boracay-light hover:text-boracay-dark"
+                            class="block w-full rounded-md px-4 py-3 text-left text-red-600 transition hover:bg-red-50 hover:text-red-700 active:scale-[0.98] active:duration-75"
                         >
                             Log out
                         </button>

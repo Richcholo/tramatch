@@ -100,7 +100,7 @@
         <div class="flex flex-col items-center gap-4 pt-2 text-center">
             <button
                 type="submit"
-                class="w-full rounded-full bg-boracay px-6 py-3 font-bold text-benguet-charcoal transition hover:-translate-y-0.5 hover:bg-boracay-dark hover:text-white"
+                class="w-full rounded-full bg-boracay px-6 py-3 font-bold text-benguet-charcoal transition hover:-translate-y-0.5 hover:bg-boracay-dark hover:text-white active:scale-[0.98] active:duration-75"
             >
                 {{ __('Log in') }}
             </button>

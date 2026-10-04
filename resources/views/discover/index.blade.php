@@ -134,10 +134,10 @@
                             </div>
 
                             <div class="mt-auto grid grid-cols-2 gap-3 border-t border-boracay-light pt-5">
-                                <button type="button" data-swipe-action="passed" class="min-h-12 rounded-md border border-boracay-light px-4 py-3 text-sm font-semibold text-benguet-charcoal transition hover:border-red-300 hover:bg-red-50 hover:text-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700">
+                                <button type="button" data-swipe-action="passed" class="min-h-12 rounded-md border border-boracay-light px-4 py-3 text-sm font-semibold text-benguet-charcoal transition hover:border-red-300 hover:bg-red-50 hover:text-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700 active:scale-[0.98] active:duration-75">
                                     Pass
                                 </button>
-                                <button type="button" data-swipe-action="liked" class="min-h-12 rounded-md bg-boracay px-4 py-3 text-sm font-semibold text-benguet-charcoal transition hover:bg-boracay-dark hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-volcanic-teal">
+                                <button type="button" data-swipe-action="liked" class="min-h-12 rounded-md bg-boracay px-4 py-3 text-sm font-semibold text-benguet-charcoal transition hover:bg-boracay-dark hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-volcanic-teal active:scale-[0.98] active:duration-75">
                                     Like
                                 </button>
                             </div>

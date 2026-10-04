@@ -21,8 +21,26 @@ class TestMail extends Command
         $this->line("  mailer    <info>{$mailer}</info>");
         $this->line("  host      ".config("mail.mailers.{$mailer}.host", '(n/a)'));
         $this->line("  port      ".config("mail.mailers.{$mailer}.port", '(n/a)'));
-        $this->line("  encryption".config("mail.mailers.{$mailer}.scheme", '(n/a)'));
+
+        /*
+         * MAIL_SCHEME is unset in most .env files, and the `?:` default only
+         * fires on an absent key -- not on one that is present and null. So
+         * this printed a bare "encryption" with nothing after it, which reads
+         * like the command broke. Name the fallback instead.
+         *
+         * Worth being exact about: an unset scheme is normal and not itself
+         * the fault. Port 465 implies implicit TLS in Symfony Mailer, which is
+         * why an unset MAIL_SCHEME can still connect successfully.
+         */
+        $scheme = config("mail.mailers.{$mailer}.scheme") ?? '(unset - inferred from port)';
+        $this->line("  encryption <info>{$scheme}</info>");
         $this->line("  from      <info>{$from}</info>");
+
+        if ($mailer === 'smtp') {
+            $username = config("mail.mailers.{$mailer}.username");
+            $this->line('  username  <info>'.($username ?: '(none)').'</info>');
+        }
+
         $this->newLine();
 
         $target = $this->argument('address') ?: $from;

@@ -56,7 +56,7 @@
 
                     <button
                         type="submit"
-                        class="rounded-xl bg-philippine-gold px-5 py-3 font-bold text-benguet-charcoal transition hover:bg-white"
+                        class="rounded-xl bg-philippine-gold px-5 py-3 font-bold text-benguet-charcoal transition hover:bg-white active:scale-[0.98] active:duration-75"
                     >
                         Load places
                     </button>
@@ -211,7 +211,7 @@
 
                         <button
                             type="submit"
-                            class="rounded-full bg-philippine-gold px-6 py-3 font-bold text-benguet-charcoal transition hover:bg-white"
+                            class="rounded-full bg-philippine-gold px-6 py-3 font-bold text-benguet-charcoal transition hover:bg-white active:scale-[0.98] active:duration-75"
                         >
                             Generate itinerary →
                         </button>
