@@ -43,6 +43,12 @@
 </head>
 
 <body id="top" class="min-h-screen bg-palawan-sand text-benguet-charcoal antialiased">
+    {{-- The welcome page is standalone, so the overlay the other two layouts
+         render in their own header was simply absent here. page-transitions.js
+         loaded all the same and its link handler fired on the CTA, so the
+         component was added rather than left as a no-op. --}}
+    <x-navigation-loading />
+
     <div id="intro-overlay" class="fixed inset-0 z-[9999] pointer-events-none" style="opacity: 0;">
         <div class="intro-card relative h-full w-full overflow-hidden">
             <div

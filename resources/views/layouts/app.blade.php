@@ -46,9 +46,22 @@
                     title="Navigation menu"
                     class="flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-full border border-white/30 bg-white/10 text-white shadow-sm transition hover:bg-white/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-philippine-gold [&::-webkit-details-marker]:hidden"
                 >
-                    <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                        <path class="group-open:hidden" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-                        <path class="hidden group-open:block" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    {{-- Three separate lines so they can rotate into the X.
+                         Previously two whole paths were swapped with
+                         hidden/group-open:hidden, which is an instant cut --
+                         the button looked like it glitched. --}}
+                    <svg
+                        class="tm-burger h-6 w-6"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        aria-hidden="true"
+                    >
+                        <line class="tm-burger-line tm-burger-line--top" x1="4" y1="7" x2="20" y2="7" />
+                        <line class="tm-burger-line tm-burger-line--middle" x1="4" y1="12" x2="20" y2="12" />
+                        <line class="tm-burger-line tm-burger-line--bottom" x1="4" y1="17" x2="20" y2="17" />
                     </svg>
                 </summary>
 

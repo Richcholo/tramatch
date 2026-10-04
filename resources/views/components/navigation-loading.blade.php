@@ -1,34 +1,47 @@
+{{--
+    Loading overlay shown while the next page is fetched.
+
+    Timing is the whole design here. A user on a weak connection clicks a link
+    and, with no feedback at all, reasonably concludes the click was ignored and
+    clicks again. So:
+
+      ~0ms    the button they pressed shows its :active state, which lands
+              inside a single frame
+      350ms   this overlay fades in, covering every fast navigation
+      arrive  200ms fade out (see page-transitions.js)
+
+    A gradient rather than a skeleton because it should read as "working", not
+    as "here is a different page you are not looking at". The gradient sits on
+    the brand colours so it feels like the app rather than a system dialog.
+--}}
 <div
     data-navigation-loading
     role="status"
     aria-live="polite"
-    class="pointer-events-none fixed inset-0 z-[100000] hidden bg-sea-glass"
+    class="tm-loader pointer-events-none fixed inset-0 z-[100000] hidden"
 >
     <span class="sr-only">Loading page...</span>
 
-    <div aria-hidden="true" class="border-b border-white/10 bg-volcanic-teal">
-        <div class="mx-auto flex h-[81px] max-w-[1600px] items-center justify-between px-5 sm:px-8 lg:px-12">
-            <div class="h-10 w-32 animate-pulse rounded bg-white/20"></div>
-            <div class="h-11 w-11 animate-pulse rounded-full bg-white/15"></div>
-        </div>
+    <div aria-hidden="true" class="tm-loader__gradient"></div>
+
+    <div aria-hidden="true" class="tm-loader__mark">
+        <svg class="h-12 w-12" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+            {{-- An arc with a gap, spinning. Stroke-dasharray carves the gap so
+                 no pathLength math is needed to keep the ends square. --}}
+            <circle
+                cx="20"
+                cy="20"
+                r="16"
+                stroke="currentColor"
+                stroke-width="3"
+                stroke-linecap="round"
+                stroke-dasharray="26 74"
+                class="tm-loader__arc"
+            />
+        </svg>
     </div>
 
-    <div aria-hidden="true" class="mx-auto max-w-[1600px] px-5 py-10 sm:px-8 lg:px-12">
-        <div class="mb-10 max-w-2xl">
-            <div class="h-3 w-24 animate-pulse rounded bg-boracay/40"></div>
-            <div class="mt-4 h-9 w-3/4 animate-pulse rounded bg-benguet-charcoal/10"></div>
-            <div class="mt-3 h-4 w-full max-w-lg animate-pulse rounded bg-benguet-charcoal/10"></div>
-        </div>
-
-        <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            @for ($card = 0; $card < 3; $card++)
-                <div class="rounded-md border border-boracay-light bg-island-white p-5">
-                    <div class="aspect-[16/9] animate-pulse rounded bg-boracay-light"></div>
-                    <div class="mt-5 h-5 w-2/3 animate-pulse rounded bg-benguet-charcoal/10"></div>
-                    <div class="mt-3 h-3 w-full animate-pulse rounded bg-benguet-charcoal/10"></div>
-                    <div class="mt-2 h-3 w-4/5 animate-pulse rounded bg-benguet-charcoal/10"></div>
-                </div>
-            @endfor
-        </div>
+    <div aria-hidden="true" class="tm-loader__bar">
+        <span></span>
     </div>
 </div>

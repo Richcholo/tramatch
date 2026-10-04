@@ -20,7 +20,7 @@
     "src": "node_modules/leaflet/dist/images/marker-shadow.png"
   },
   "resources/css/app.css": {
-    "file": "assets/app-Fy3GEoS5.css",
+    "file": "assets/app-BZqTRfJs.css",
     "name": "app",
     "names": [
       "app.css"
@@ -55,13 +55,13 @@
     "isEntry": true
   },
   "resources/js/itinerary-editor.js": {
-    "file": "assets/itinerary-editor-CsgMMe2f.js",
+    "file": "assets/itinerary-editor-DPhAJfPv.js",
     "name": "itinerary-editor",
     "src": "resources/js/itinerary-editor.js",
     "isEntry": true
   },
   "resources/js/page-transitions.js": {
-    "file": "assets/page-transitions-CpCHyRDn.js",
+    "file": "assets/page-transitions-jLsKNNOA.js",
     "name": "page-transitions",
     "src": "resources/js/page-transitions.js",
     "isEntry": true

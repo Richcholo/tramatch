@@ -137,6 +137,232 @@
         transform: translateY(-1px);
     }
 
+    /*
+     * Press feedback for primary actions only.
+     *
+     * Buttons already responded to hover, so a click felt dead: the surface was
+     * moving under the cursor and nothing confirmed the press. This is the
+     * fastest feedback the eye can get -- it lands inside a frame, well before
+     * the 350ms loading overlay appears -- which is what stops someone clicking
+     * twice because the first click looked ignored.
+     *
+     * transform only, so it composites on the GPU and never triggers layout.
+     * The shadow is inset rather than a filter, again to stay off the main
+     * thread.
+     *
+     * Scoped to :active, not :focus, because a keyboard user tabbing through
+     * the page should not see buttons sink as they pass.
+     */
+    .tm-primary-button:active {
+        transform: translateY(0) scale(0.975);
+        box-shadow: inset 0 2px 6px rgb(44 53 49 / 25%);
+        transition-duration: 60ms;
+    }
+
+    /* Held down, or on a form that is submitting, it should not spring back. */
+    .tm-primary-button:active,
+    .tm-primary-button[aria-busy='true'] {
+        transform: translateY(0) scale(0.975);
+    }
+
+    .tm-primary-button:focus-visible {
+        outline: 2px solid var(--color-philippine-gold);
+        outline-offset: 2px;
+    }
+
+    /*
+     * Honour a reduced-motion preference for these transitions only. Lenis
+     * smooth scroll stays on regardless -- disabling it breaks the layout.
+     */
+    @media (prefers-reduced-motion: reduce) {
+        .tm-primary-button,
+        .tm-primary-button:hover,
+        .tm-primary-button:active {
+            transition-duration: 1ms;
+            transform: none;
+        }
+    }
+
+    /*
+     * Hamburger -> X.
+     *
+     * The lines translate to meet in the middle and rotate into an X rather
+     * than two paths swapping visibility. Both transform and opacity only, so
+     * the whole thing stays off the main thread.
+     *
+     * The outer lines ease out (they decelerate into place) while the middle
+     * line fades faster, so the eye reads it as one gesture instead of three
+     * independent animations.
+     */
+    .tm-burger-line {
+        transform-box: fill-box;
+        transform-origin: center;
+        transition:
+            transform 220ms cubic-bezier(0.2, 0, 0, 1),
+            opacity 140ms ease-out;
+    }
+
+    .group-open .tm-burger-line--top {
+        transform: translateY(5px) rotate(45deg);
+    }
+
+    .group-open .tm-burger-line--bottom {
+        transform: translateY(-5px) rotate(-45deg);
+    }
+
+    .group-open .tm-burger-line--middle {
+        opacity: 0;
+        /* Collapses the gap so the two lines meet cleanly at the centre. */
+        transform: scaleX(0.4);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .tm-burger-line {
+            transition-duration: 1ms;
+        }
+    }
+
+    /*
+     * Loading overlay.
+     *
+     * Opacity only, no layout properties, so fading it in never moves the page
+     * underneath. `will-change` is set only while visible rather than
+     * permanently, which would keep a full-viewport layer on the compositor for
+     * every page load.
+     */
+    .tm-loader {
+        opacity: 0;
+        transition: opacity 200ms ease-out;
+        background-color: var(--color-sea-glass);
+    }
+
+    .tm-loader:not(.hidden) {
+        opacity: 1;
+        will-change: opacity;
+    }
+
+    /* Applied for the duration of the fade-out, then removed along with
+       `hidden`. Opacity animates to 0 here without the element losing its
+       layout box mid-transition, which is what would make it vanish at once. */
+    .tm-loader--leaving {
+        opacity: 0;
+    }
+
+    .tm-loader__gradient {
+        position: absolute;
+        inset: 0;
+        background:
+            radial-gradient(
+                120% 90% at 50% 0%,
+                color-mix(in srgb, var(--color-philippine-gold) 22%, transparent) 0%,
+                transparent 55%
+            ),
+            linear-gradient(
+                160deg,
+                var(--color-volcanic-teal) 0%,
+                color-mix(in srgb, var(--color-volcanic-teal) 70%, var(--color-benguet-charcoal)) 45%,
+                var(--color-benguet-charcoal) 100%
+            );
+    }
+
+    /* A slow diagonal sheen, so a slow connection shows movement rather than a
+       frozen frame -- otherwise the overlay gives no more reassurance than a
+       blank panel would. */
+    .tm-loader__gradient::after {
+        content: '';
+        position: absolute;
+        inset: -40%;
+        background: linear-gradient(
+            100deg,
+            transparent 35%,
+            rgb(255 255 255 / 9%) 50%,
+            transparent 65%
+        );
+        animation: tm-loader-sheen 2.4s ease-in-out infinite;
+    }
+
+    @keyframes tm-loader-sheen {
+        0% {
+            transform: translate3d(-55%, 0, 0);
+        }
+        100% {
+            transform: translate3d(55%, 0, 0);
+        }
+    }
+
+    .tm-loader__mark {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--color-philippine-gold);
+    }
+
+    .tm-loader__arc {
+        transform-box: fill-box;
+        transform-origin: center;
+        animation: tm-loader-spin 900ms linear infinite;
+    }
+
+    @keyframes tm-loader-spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    /* Indeterminate progress bar. A real animation rather than a fake one:
+       nothing here ever claims to know how much is left. */
+    .tm-loader__bar {
+        position: absolute;
+        inset: auto 0 0 0;
+        height: 3px;
+        overflow: hidden;
+        background-color: rgb(255 255 255 / 8%);
+    }
+
+    .tm-loader__bar span {
+        display: block;
+        height: 100%;
+        width: 40%;
+        background: linear-gradient(
+            90deg,
+            transparent,
+            var(--color-philippine-gold),
+            transparent
+        );
+        animation: tm-loader-sweep 1.4s ease-in-out infinite;
+    }
+
+    @keyframes tm-loader-sweep {
+        0% {
+            transform: translate3d(-100%, 0, 0);
+        }
+        100% {
+            transform: translate3d(350%, 0, 0);
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .tm-loader,
+        .tm-loader--leaving {
+            transition-duration: 1ms;
+        }
+
+        /* Keep the spinner turning -- a static overlay gives no signal that
+           anything is happening, which is the entire reason it appears. Drop
+           the decorative sheen instead. */
+        .tm-loader__gradient::after {
+            animation: none;
+        }
+
+        .tm-loader__bar span {
+            animation: none;
+            width: 100%;
+            opacity: 0.4;
+        }
+    }
+
     .tm-gold-badge {
         display: inline-flex;
         align-items: center;

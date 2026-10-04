@@ -37,6 +37,68 @@ function rowFields(row, field) {
     return row.querySelector(`[data-field="${field}"]`);
 }
 
+/**
+ * FLIP, without a library.
+ *
+ * GSAP is already a dependency but it is bundled into app.js, and this file is
+ * a separate Vite entry. Importing it here would duplicate ~70 KB into a second
+ * chunk for what amounts to one transform per moved row. The Web Animations API
+ * does exactly this natively.
+ *
+ * Measured with getBoundingClientRect rather than offsetTop because rows sit in
+ * a scrollable page and only the rect accounts for that.
+ */
+function prefersReducedMotion() {
+    return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+}
+
+/** Row positions before a DOM change, so they can be animated back from. */
+function captureTops(list, exclude) {
+    const tops = new Map();
+
+    for (const row of list.querySelectorAll('[data-stop]')) {
+        if (row === exclude) {
+            continue;
+        }
+
+        tops.set(row, row.getBoundingClientRect().top);
+    }
+
+    return tops;
+}
+
+function playFlip(before) {
+    if (prefersReducedMotion() || typeof Element.prototype.animate !== 'function') {
+        return;
+    }
+
+    for (const [row, wasAt] of before) {
+        if (!row.isConnected) {
+            continue;
+        }
+
+        const delta = wasAt - row.getBoundingClientRect().top;
+
+        if (Math.abs(delta) < 1) {
+            continue;
+        }
+
+        row.animate(
+            [
+                { transform: `translateY(${delta}px)` },
+                { transform: 'translateY(0)' },
+            ],
+            {
+                // Matches the hamburger: quick out, gentle settle. Deliberately
+                // no overshoot -- a row bouncing past its resting place reads
+                // as a mistake rather than as polish.
+                duration: 220,
+                easing: 'cubic-bezier(0.2, 0, 0, 1)',
+            },
+        );
+    }
+}
+
 function initItineraryEditor(root) {
     const form = root.querySelector('[data-editor-form]');
     const readView = root.querySelector('[data-editor-read]');
@@ -98,6 +160,8 @@ function initItineraryEditor(root) {
             return;
         }
 
+        const before = captureTops(list, row);
+
         if (offset < 0) {
             list.insertBefore(row, sibling);
         } else {
@@ -105,6 +169,7 @@ function initItineraryEditor(root) {
         }
 
         renumber(list);
+        playFlip(before);
         markDirty();
 
         // Stay on the arrow the traveller pressed, so holding space or Enter
@@ -315,6 +380,7 @@ function initItineraryEditor(root) {
 
             let pointerY = event.clientY;
             let frame = 0;
+            let lastReference = null;
 
             const place = () => {
                 frame = 0;
@@ -346,10 +412,22 @@ function initItineraryEditor(root) {
 
                 const reference = rest[index] ?? null;
 
-                if (reference) {
-                    list.insertBefore(placeholder, reference);
-                } else {
-                    list.appendChild(placeholder);
+                // Only reshuffle when the target row actually changes, not on
+                // every pointermove. Animating each one would restart the
+                // siblings' transforms mid-gesture and read as jitter, and it
+                // would measure getBoundingClientRect on every mouse event
+                // while the row is fixed to the pointer.
+                if (reference !== lastReference) {
+                    const before = captureTops(list, row);
+
+                    if (reference) {
+                        list.insertBefore(placeholder, reference);
+                    } else {
+                        list.appendChild(placeholder);
+                    }
+
+                    playFlip(before);
+                    lastReference = reference;
                 }
 
                 if (!frame) {
