@@ -10,7 +10,9 @@ use App\Models\Review;
 use App\Models\Tag;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
@@ -80,6 +82,10 @@ class DestinationController extends Controller
             $data['last_verified_at'] = now();
         }
 
+        if ($imageUrl = $this->storeUploadedImage($request)) {
+            $data['image_url'] = $imageUrl;
+        }
+
         $destination = Destination::create($data);
 
         $destination->tags()->sync($tagIds);
@@ -127,12 +133,80 @@ class DestinationController extends Controller
             $data['last_verified_at'] = now();
         }
 
+        // Both captured before the update, while the row still holds the old
+        // values. imagePath() returns null for a third-party URL, which is what
+        // stops an external image being resolved to a path on our disk and
+        // deleted.
+        $previousImageUrl = $destination->image_url;
+        $previousImagePath = $destination->imagePath();
+
+        if ($imageUrl = $this->storeUploadedImage($request)) {
+            $data['image_url'] = $imageUrl;
+        } elseif ($request->boolean('remove_image')) {
+            $data['image_url'] = null;
+        }
+
         $destination->update($data);
         $destination->tags()->sync($tagIds);
+
+        /*
+         * Compared against $previousImageUrl, not the refreshed attribute:
+         * update() has already applied $data by this point, so comparing the
+         * two against each other is always false and the old file is never
+         * removed. Replaced photos accumulated on the disk forever.
+         *
+         * Deleted only after the row has committed, so a failed update cannot
+         * orphan a file that is still referenced.
+         */
+        if (
+            $previousImagePath
+            && array_key_exists('image_url', $data)
+            && $data['image_url'] !== $previousImageUrl
+        ) {
+            Storage::disk('public')->delete($previousImagePath);
+        }
 
         return redirect()
             ->route('admin.destinations.index')
             ->with('status', 'Destination updated.');
+    }
+
+    /**
+     * Store an uploaded photo and return the URL to put in image_url.
+     *
+     * Returns null when no file was sent, which is the ordinary case: an admin
+     * editing a description must not silently lose the existing image. Callers
+     * must therefore only assign to image_url when this is non-null.
+     */
+    private function storeUploadedImage(Request $request): ?string
+    {
+        $file = $request->file('image');
+
+        if (! $file instanceof UploadedFile || ! $file->isValid()) {
+            return null;
+        }
+
+        $path = $file->store(Destination::IMAGE_DIRECTORY, 'public');
+
+        if (! $path) {
+            return null;
+        }
+
+        /*
+         * An absolute URL, deliberately.
+         *
+         * image_url is rendered raw -- src="{{ $destination->image_url }}" -- in
+         * six views, and the CSV seeds it with absolute URLs. Writing a
+         * storage-relative path would make the browser resolve it against
+         * whatever the current path happens to be, so /destinations/boracay
+         * would request /destinations/storage/destination-images/x.jpg.
+         * Keeping the column meaning "the URL of the image" means no view has
+         * to change and no migration is needed.
+         *
+         * Reachable through public/storage, which deploy.sh creates with `ln -s`
+         * rather than artisan storage:link, since symlink() is disabled here.
+         */
+        return Storage::disk('public')->url($path);
     }
 
     private function joinClosedDays(mixed $days): ?string
@@ -457,11 +531,20 @@ class DestinationController extends Controller
                 Rule::in(Destination::HOURS_KINDS),
             ],
 
-            'image_url' => [
+            'image' => [
                 'nullable',
-                'url',
-                'max:500',
+                'image',
+                'mimes:jpg,jpeg,png,webp',
+                'max:4096',
             ],
+
+            /*
+             * There is deliberately no image_url rule any more. Nothing posts
+             * that field -- the admin form uploads a file -- so a rule for it
+             * only invites the belief that the column is still editable here.
+             * image_url is now written by this controller from the uploaded
+             * file, and by the CSV seeder otherwise.
+             */
 
             'is_active' => [
                 'nullable',

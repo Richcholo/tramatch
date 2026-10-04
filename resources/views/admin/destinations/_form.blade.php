@@ -11,7 +11,50 @@
     <label class="block"><span class="text-sm font-medium">Entrance fee (PHP ₱)</span><input name="entrance_fee" type="number" step="0.01" min="0" value="{{ old('entrance_fee', $destination->entrance_fee ?? 0) }}" required class="mt-2 w-full rounded-lg border border-slate-300 outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-200"></label>
     <label class="block"><span class="text-sm font-medium">Estimated cost (PHP ₱)</span><input name="estimated_cost" type="number" step="0.01" min="0" value="{{ old('estimated_cost', $destination->estimated_cost ?? 0) }}" required class="mt-2 w-full rounded-lg border border-slate-300 outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-200"></label>
     <label class="block"><span class="text-sm font-medium">Recommended minutes</span><input name="recommended_minutes" type="number" min="15" value="{{ old('recommended_minutes', $destination->recommended_minutes ?? 120) }}" required class="mt-2 w-full rounded-lg border border-slate-300 outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-200"></label>
-    <label class="block md:col-span-2"><span class="text-sm font-medium">Image URL</span><input name="image_url" type="url" value="{{ old('image_url', $destination->image_url ?? '') }}" placeholder="https://example.com/destination.jpg" class="mt-2 w-full rounded-lg border border-slate-300 outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-200"><span class="mt-2 block text-xs text-slate-500">Use a direct image URL ending in .jpg, .jpeg, .png, or .webp.</span></label>
+    <div class="block md:col-span-2">
+        <span class="text-sm font-medium">Photo</span>
+
+        {{-- Seeded rows carry an absolute URL from the CSV, and the admin form
+             no longer has a field for it. Showing what is currently set matters
+             because an admin editing only the description must be able to see
+             that a photo exists and will survive the save. --}}
+        @if ($destination->image_url ?? null)
+            <div class="mt-2 flex flex-wrap items-center gap-4 rounded-lg border border-slate-200 p-3">
+                <img
+                    src="{{ $destination->image_url }}"
+                    alt=""
+                    class="h-20 w-32 shrink-0 rounded object-cover"
+                >
+                <div class="min-w-0 flex-1">
+                    <p class="text-sm font-medium">Current photo</p>
+                    <p class="mt-1 break-all text-xs text-slate-500">{{ $destination->image_url }}</p>
+                </div>
+            </div>
+
+            <label class="mt-3 flex items-center gap-2 text-sm text-slate-600">
+                <input type="checkbox" name="remove_image" value="1" class="rounded border-slate-300">
+                Remove the current photo
+            </label>
+        @else
+            <p class="mt-2 text-xs text-slate-500">No photo set.</p>
+        @endif
+
+        <label class="mt-3 block">
+            <span class="text-xs text-slate-500">
+                {{ ($destination->image_url ?? null) ? 'Upload a replacement' : 'Upload a photo' }}
+            </span>
+            <input
+                name="image"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                class="mt-2 block w-full text-sm text-slate-600 file:mr-4 file:rounded-lg file:border-0 file:bg-teal-700 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-teal-800"
+            >
+        </label>
+
+        <span class="mt-2 block text-xs text-slate-500">
+            JPEG, PNG or WebP, up to 4 MB. Leave empty to keep the current photo.
+        </span>
+    </div>
 </div>
 
 <p class="mt-5 text-xs text-slate-500">All amounts must be entered in Philippine pesos (PHP / ₱).</p>

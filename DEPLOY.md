@@ -195,25 +195,46 @@ hPanel → Advanced → Cron Jobs:
 | Command | `/bin/bash /home/u348491703/queue-worker.sh` |
 | Interval | every minute |
 
-Edit `APP_ROOT` at the top of that copy if your domain path differs.
+**`APP_ROOT` must be edited in the copy.** It defaults to the literal
+placeholder `$HOME/domains/yourdomain.tld`, and Layout B puts the app root
+*inside* `public_html`:
 
-Two things in it are deliberate:
+```sh
+APP_ROOT="${APP_ROOT:-$HOME/domains/tramatch.site/public_html}"
+```
+
+Or set it on the cron line instead, which leaves the script untouched:
+
+| Command | `APP_ROOT=$HOME/domains/tramatch.site/public_html /bin/bash /home/u348491703/queue-worker.sh` |
+
+A worker with the wrong `APP_ROOT` used to exit **0** with its output sent to
+`/dev/null`, so cron reported success every minute while nothing drained. It
+now exits non-zero and writes `~/queue-worker.log`. Do not add a `>>` redirect
+to the cron command as well — the script logs itself, and two copies of every
+line get interleaved.
+
+Three things in it are deliberate:
 
 - **`--stop-when-empty`** is what makes cron safe. Without it the worker holds
   the slot until it is killed, and the next cron run stacks on top.
 - **`--timeout` is deliberately omitted.** `CrawlSourceJob` declares
   `public int $timeout = 300`, and a job-level timeout outranks any worker flag,
   so passing one would be misleading rather than protective.
+- **`exit 0` at the end** keeps cron from mailing on every transient upstream
+  failure. The log and the crawl rows carry the detail.
 
 ### Check it is actually running
 
 ```sh
-php artisan queue:work --stop-when-empty --tries=1   # should return immediately if idle
-php artisan sources:check                            # crawls one source
+tail -n 40 ~/queue-worker.log
+php artisan queue:work --stop-when-empty --tries=1 -v   # should return immediately if idle
+php artisan sources:check                                # crawls one source
 ```
 
 Then click **Crawl** in `/admin/sources` and watch the crawl log populate. If
-`status` stays `queued`, cron is not firing.
+`status` stays `queued`, the worker is not running: check `crontab -l` first
+(it may never have been registered), then `APP_ROOT`, then
+`~/queue-worker.log` for a PHP fatal or bad DB credentials.
 
 ---
 
@@ -375,6 +396,29 @@ curl -sI https://yourdomain.tld/storage/profile-photos/<file> | head -1   # 200
 **Never leave a real directory at `public/storage` on this host.** That is how
 the log became world-readable (see trap 3 above): the failed `storage:link`
 leaves one behind. If it exists and is not a symlink, remove it and re-link.
+
+### An oversized upload fails silently
+
+Admin destination photos are capped at 4 MB by `DestinationController`'s
+`max:4096` rule. If a file exceeds PHP's own `upload_max_filesize` — hPanel
+defaults vary and are often lower — PHP discards **the whole request body**,
+including `$_FILES` *and* `$_POST`. Laravel then sees an empty POST, `$request-
+>file('image')` is null, the image is simply not replaced, and the admin is
+told "Destination updated."
+
+Nothing anywhere reports a problem, so check the limits before blaming the form:
+
+```sh
+php -i | grep -E 'upload_max_filesize|post_max_size'
+```
+
+Raise both in hPanel (PHP Configuration → Options) if the photo you need is
+larger than the limit. `post_max_size` must exceed `upload_max_filesize`, since
+the whole body is rejected once the limit is passed.
+
+There is a second, unrelated no-op worth knowing: a form without
+`enctype="multipart/form-data"` sends no file either, and looks identical from
+the outside. `DestinationImageUploadTest` pins that both admin forms carry it.
 `deploy.sh` creates the link only when missing, and deliberately does not pass
 `--force`, which would delete a real directory.
 
@@ -427,64 +471,61 @@ implicit TLS, and the command says so rather than printing a blank line.
 
 #### `554 5.7.1 <unknown[IPv6]>: Client host rejected: Access denied`
 
-Measured on this host, 2026-10-04. Hostinger's `smtp.hostinger.com` refuses the
-transaction from **this server's own outbound IPv6**, with a bracketed name of
-`unknown[2a02:4780:5c:2350:0:14c5:8fb7:1]` — Postfix reporting that reverse DNS
-for the connecting address does not resolve.
+Measured on this host, 2026-10-04. **Root cause: `MAIL_USERNAME` and
+`MAIL_PASSWORD` were missing from `.env`.**
 
-The rejection is at `RCPT TO`, not `MAIL FROM`: Symfony reports the expected
-code as `250/251/252`, and those are the `RCPT TO` success codes. So the
-credentials were accepted — this is not a `535`.
+Symfony's `EsmtpTransport` skips the `AUTH` exchange entirely when no username
+is configured. It went straight to `MAIL FROM` → `RCPT TO` unauthenticated, and
+Postfix refused to relay for an unauthenticated client — which is what
+"Client host rejected: Access denied" means. It had nothing to do with the
+sending address.
 
-**The SMTP service itself is healthy.** Verified by hand from a different
-network: TLS 1.2 negotiates, the banner is `220 ESMTP smtp.hostinger.com`, and
-it advertises `250-AUTH PLAIN LOGIN`. A client whose own IP has no resolvable
-PTR is accepted. So the refusal is specific to the address range this host
-happens to send from, not a property of the account or the mailbox.
+Two things made this look like a network or DNS fault, and both are traps worth
+recording:
 
-**`MAIL_MAILER=sendmail` cannot be used on this host, and did not work.** An
-earlier revision of this file recommended it; that was wrong. Hostinger disables
-`proc_open`, and Symfony's `SendmailTransport` builds a `ProcessStream` in its
-constructor, which calls `proc_open()` unguarded:
+- The bracketed name is `unknown[2a02:4780:5c:2350:0:14c5:8fb7:1]`. `unknown`
+  genuinely does mean reverse DNS did not resolve, but Postfix prints the
+  client host on *any* relay rejection, so reading it as the cause was wrong.
+- The rejection is at `RCPT TO`, and Symfony reports the expected code as
+  `250/251/252` — the RCPT success codes. `MAIL FROM` alone answers `250`. So
+  the code confirms *where* it failed and says nothing about credentials. It is
+  not a `535` because `AUTH` was never attempted.
 
-```
-vendor/symfony/mailer/Transport/Smtp/Stream/ProcessStream.php:47
-    $this->stream = proc_open($this->command, $descriptorSpec, $pipes);
-```
+**`php artisan mail:test` prints the resolved username.** That line is the
+diagnostic and it was on screen: `username  (none)`. A transport failure with no
+username is the whole explanation. When a `mail:test` failure is being reasoned
+about, read its whole output rather than the last line.
 
-`mb_send_mail` is disabled too. Laravel 11+ ships no transport that reaches PHP's
-`mail()` — the only non-socket options are the HTTP API mailers. So the whole
-PHP-native family is closed off here.
+Two unrelated findings from the same investigation, both still true:
 
-In order of preference:
+- The SMTP service is healthy. Verified by hand from another network: TLS 1.2,
+  `220 ESMTP smtp.hostinger.com`, `250-AUTH PLAIN LOGIN`.
+- **`MAIL_MAILER=sendmail` cannot be used on this host, whatever the fault.**
+  Hostinger disables `proc_open`, and Symfony's `SendmailTransport` builds a
+  `ProcessStream` in its constructor, which calls `proc_open()` unguarded:
 
-1. **Ask Hostinger support to allow this account's outbound address**, or to fix
-   the PTR record on it. Quote the measured evidence above: the service accepts
-   unauthenticated-PTR clients from other networks but rejects this host. This
-   is their own infrastructure and the only route that keeps mail on your own
-   domain with their SPF/DKIM.
-2. **Use an HTTPS mail API**, which needs no socket to the mail server at all.
-   Laravel's `resend` transport requires the `resend/resend-php` package, which
-   is **not** in `composer.json` — adding it is a real change, not a config one,
-   and the host runs `composer install --no-dev`, so it must be committed.
-   `ses`/`ses-v2` ship in Laravel core but need AWS credentials. Verify before
-   committing to either: `ls vendor/resend` is currently empty.
-3. **Force an IPv4 peer** via an IP literal in `MAIL_URL`. Two reasons not to.
-   `smtp.hostinger.com` has no PTR on its IPv4 either (it is Cloudflare-fronted,
-   `172.65.255.143`, `NXDOMAIN` on the reverse lookup), and more importantly
-   Symfony's `SocketStream` sets no `verify_peer` at all — so this would send the
-   SMTP password over a channel where the certificate is not checked. Do not.
+  ```
+  vendor/symfony/mailer/Transport/Smtp/Stream/ProcessStream.php:47
+      $this->stream = proc_open($this->command, $descriptorSpec, $pipes);
+  ```
 
-Do not "fix" a rejection by disabling TLS verification. Hostinger will not relay
-third-party `MAIL_FROM_ADDRESS` values, so it must stay on a domain this
-account actually serves (`support@tramatch.site`, which it does).
+  `mb_send_mail` is disabled too, and Laravel 11+ ships no transport reaching
+  PHP's `mail()`. Do not reach for `sendmail` as a fallback here.
 
-**Unverified.** No SMTP path can be tested from a development machine — the
-`554` is specific to the host's network and reverse DNS, and a local
-`535 authentication failed` says nothing about it. Everything above is the
-documented behaviour of the transports plus the shape of the error, not a
-measured fix. `MAIL_MAILER=log` remains the safe fallback: password reset is
-broken but nothing crashes and the link is recoverable from the log.
+Also measured, for the record: `smtp.hostinger.com` resolves to Cloudflare
+(`172.65.255.143`, and `2606:4700:…` for IPv6), and its own IPv4 has no PTR
+either (`NXDOMAIN` on the reverse lookup). So if an unauthenticated relay ever
+does need addressing, forcing an IPv4 peer is not the fix — and it should not be
+tried, because Symfony's `SocketStream` sets no `verify_peer` at all, which would
+put the SMTP password on a connection whose certificate is unchecked.
+
+`.env.production.example` carries the SMTP block. Fill in the username and
+password of a **real mailbox created in hPanel** — Hostinger will not relay for
+an address that does not exist.
+
+`MAIL_MAILER=log` remains the safe fallback if this ever regresses:
+password reset is broken but nothing crashes and the link is recoverable from
+`storage/logs/laravel.log`.
 
 ### `APP_TIMEZONE` is read by `config/app.php`, so setting it works
 

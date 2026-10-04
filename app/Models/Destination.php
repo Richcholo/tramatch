@@ -4,6 +4,7 @@ namespace App\Models;
 
 use DateTimeInterface;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -20,6 +21,14 @@ class Destination extends Model
     public const HOURS_ALERT_DEPENDENT = 'alert_dependent';
 
     public const HOURS_PER_DAY = 'per_day';
+
+    /**
+     * Where an admin-uploaded photo lands on the `public` disk.
+     *
+     * `public`, not `local`: the image has to be web-reachable, and `local`
+     * roots at storage/app/private precisely so crawl snapshots are not.
+     */
+    public const IMAGE_DIRECTORY = 'destination-images';
 
     public const HOURS_KINDS = [
         self::HOURS_OPEN,
@@ -210,6 +219,40 @@ class Destination extends Model
         }
 
         return implode(' · ', $labels);
+    }
+
+    /**
+     * Where an admin-uploaded photo lives, relative to the `public` disk.
+     *
+     * Returns null when image_url is a third-party URL, which is the case for
+     * every row the CSV seeder creates and for anything predating the upload
+     * field. Callers use that to decide whether a file is ours to delete --
+     * resolving the path component of an external URL would delete a path on
+     * our own disk that has nothing to do with it.
+     *
+     * Lives here rather than in the controller because both the controller and
+     * the tests need exactly this decision, and they must not disagree about
+     * which URLs count as local.
+     */
+    public function imagePath(): ?string
+    {
+        if (! $this->image_url) {
+            return null;
+        }
+
+        // rtrimmed, and built from a single url() call. Calling url('') and
+        // url('destination-images') separately and concatenating gave
+        // "/storage//destination-images/" whenever the disk URL carried a
+        // trailing slash, so every local path resolved to null and no uploaded
+        // photo was ever deleted.
+        $base = rtrim(Storage::disk('public')->url(''), '/');
+        $prefix = $base.'/'.self::IMAGE_DIRECTORY.'/';
+
+        if (! str_starts_with($this->image_url, $prefix)) {
+            return null;
+        }
+
+        return substr($this->image_url, strlen($base) + 1);
     }
 
     public function hoursForDay(DateTimeInterface $date): ?array
