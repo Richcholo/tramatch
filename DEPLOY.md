@@ -423,7 +423,7 @@ failure is a config that was never applied rather than a bad password. Run
 `php artisan optimize:clear` first — a stale `config:cache` overrides `.env`,
 and the command would otherwise report the settings from whenever the cache was
 written. An unset `MAIL_SCHEME` is normal and is not the fault: port 465 implies
-implicit TLS.
+implicit TLS, and the command says so rather than printing a blank line.
 
 #### `554 5.7.1 <unknown[IPv6]>: Client host rejected: Access denied`
 
@@ -437,24 +437,50 @@ does not resolve, and the server is refusing on that basis rather than on
 anything about the credentials. This is not fixable in application code. In
 order of preference:
 
-1. **Use the PHP `mail()` transport instead of SMTP.** `MAIL_MAILER=sendmail`
-   hands the message to the host's own MTA, which is the path Hostinger
-   supports and configures for its shared accounts. Keep `MAIL_HOST` and the
-   credentials in `.env` so switching back is a one-word change.
-   `config/mail.php` already defines this transport.
+1. **Use the PHP `mail()` transport instead of SMTP.** Set
+   `MAIL_MAILER=sendmail`. Laravel hands this to Symfony's
+   `SendmailTransport`, which invokes the host's own binary over a pipe rather
+   than opening an outbound socket — so the PTR lookup that `smtp.hostinger.com`
+   performs never happens. Keep `MAIL_HOST` and the credentials in `.env` so
+   switching back is a one-word change; `config/mail.php` already defines the
+   transport.
+
+   The command comes from `MAIL_SENDMAIL_PATH`, defaulting to
+   `/usr/sbin/sendmail -bs -i`. Confirm it exists before assuming:
+
+   ```sh
+   ls -l /usr/sbin/sendmail
+   ```
+
+   If it is elsewhere, set `MAIL_SENDMAIL_PATH`. Symfony rejects any command
+   lacking `-bs` or `-t`, and fails at construction otherwise — so
+   `/usr/sbin/sendmail -t -i` is the alternative to try. Neither needs `-f`:
+   Symfony supplies the envelope sender from `MAIL_FROM_ADDRESS`, which is what
+   keeps SPF and DKIM aligned. Adding `-f` by hand is a common workaround and
+   it *breaks* that alignment.
+
+   Then `php artisan optimize:clear && php artisan mail:test you@example.com`.
+
 2. **Ask Hostinger support to fix the PTR record**, or to whitelist the
    account. Beyond an agent's control and slow; only worth it if `sendmail`
    also fails.
 3. Force an IPv4 connection — `unknown[...]` names an IPv6 address, so an
-   explicit IPv4 peer may avoid the failing lookup. Do **not** reach for
-   `MAIL_SCHEME=null` as a fix; that changes TLS, not addressing, and turns a
-   `554` into an unencrypted-connection failure.
+   explicit IPv4 peer may avoid the failing lookup. Neither the SMTP transport
+   nor `MAIL_URL` exposes an address-family switch, so this is not reachable
+   from Laravel config; it is a support-ticket item.
 
-Do not "fix" a rejection by disabling TLS verification. Note the credentials
-here are for outbound mail to *your* domain's mailbox; Hostinger will not
-relay arbitrary third-party `MAIL_FROM_ADDRESS` values, so
-`MAIL_FROM_ADDRESS` must stay on a domain this account actually serves
-(`support@tramatch.site`, which it does).
+Do not "fix" a rejection by disabling TLS verification, and do not read the
+`554` as a bad password: the session had already authenticated by the time it
+arrived. Hostinger will not relay third-party `MAIL_FROM_ADDRESS` values, so it
+must stay on a domain this account actually serves (`support@tramatch.site`,
+which it does).
+
+**Unverified.** No SMTP path can be tested from a development machine — the
+`554` is specific to the host's network and reverse DNS, and a local
+`535 authentication failed` says nothing about it. Everything above is the
+documented behaviour of the transports plus the shape of the error, not a
+measured fix. `MAIL_MAILER=log` remains the safe fallback: password reset is
+broken but nothing crashes and the link is recoverable from the log.
 
 ### `APP_TIMEZONE` is read by `config/app.php`, so setting it works
 
