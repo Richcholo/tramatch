@@ -955,6 +955,21 @@ migration.
   the accepted cost in its own docblock, and still pins `object-cover` on both
   images. Its failure message on the cap assertion points at that note so the
   next person does not read it as a bug.
+- **`.tm-no-scrollbar` hides the carousel's scrollbar without stopping it
+  scrolling.** Separate from `.tm-drag-rail`, which already hid one, because that
+  class also sets `cursor: grab` — wrong for the carousel, which is driven by
+  arrows, dots, keyboard and swipe, so a grab cursor promises a drag nothing
+  implements. It needs **both** spellings: `scrollbar-width: none` covers Firefox
+  and now Chrome, and the `::-webkit-scrollbar` rule covers the rest; dropping
+  either silently brings the bar back on some browsers. `overflow-x-auto` must
+  stay on the track regardless — `goTo()` and `watchScroll()` both read
+  `scrollLeft`.
+  `the_track_hides_its_scrollbar_and_the_rule_still_exists` pins both halves: the
+  class on the track, **and** that app.css still defines it. A class in markup
+  with no rule behind it is the failure mode
+  `InteractionMarkupTest::every_attribute_selector_in_the_stylesheet_is_produced_by_something`
+  does not cover — that one guards CSS styling nothing, not markup styling
+  nothing.
 - `page-transitions.js` never intercepts navigation. It only *observes* it: a
   same-origin link click or a same-origin form submit arms a 350 ms timer, and
   only if the browser has not already navigated does the full-screen

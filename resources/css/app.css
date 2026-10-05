@@ -456,6 +456,29 @@
         transform: rotate(-8deg);
     }
 
+    /*
+     * A horizontally scrollable strip that should not show a scrollbar.
+     *
+     * Separate from .tm-drag-rail rather than reused from it, because that one
+     * also sets cursor: grab, which is wrong for a carousel track: the carousel
+     * is moved by its arrows, its dots, the keyboard and a swipe, and a grab
+     * cursor there promises a drag that nothing implements. The scrollbar is
+     * redundant here for the same reason, so it is hidden rather than kept as a
+     * second, unstyled-looking affordance.
+     *
+     * Both spellings are needed: scrollbar-width covers Firefox and now Chrome,
+     * and the -webkit- pseudo-element covers the rest. Scrolling itself is
+     * untouched, so touch, trackpad and the script's scrollTo() all still work --
+     * this only removes the visible bar.
+     */
+    .tm-no-scrollbar {
+        scrollbar-width: none;
+    }
+
+    .tm-no-scrollbar::-webkit-scrollbar {
+        display: none;
+    }
+
     .tm-drag-rail {
         cursor: grab;
         scrollbar-width: none;

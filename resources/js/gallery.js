@@ -122,7 +122,11 @@ const buildControls = (state) => {
          */
         element.setAttribute('aria-keyshortcuts', shortcut);
         element.className =
-            'flex h-11 w-11 items-center justify-center rounded-full bg-white/90 text-lg text-volcanic-teal shadow disabled:opacity-40';
+            // bg-white/75, not bg-white/90: a shade more see-through so the
+            // arrows sit on the photo instead of punching white circles in it.
+            // 90% - 15% = 75%. shadow is kept, because at this opacity the disc
+            // edge needs it to stay readable over a bright sky.
+            'flex h-11 w-11 items-center justify-center rounded-full bg-white/75 text-lg text-volcanic-teal shadow disabled:opacity-40';
         element.dataset[hook] = '';
 
         return element;

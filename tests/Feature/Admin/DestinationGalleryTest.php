@@ -572,6 +572,95 @@ class DestinationGalleryTest extends TestCase
     }
 
     /**
+     * The track hides its scrollbar, and the class that does it still exists.
+     *
+     * Two halves, and the second is the one worth having. `tm-no-scrollbar` in
+     * the markup is only worth anything while app.css still defines it, and
+     * deleting the rule leaves the markup looking perfectly correct while the
+     * scrollbar quietly comes back. InteractionMarkupTest already guards the
+     * inverse -- CSS styling a `data-*` attribute nothing produces -- but nothing
+     * covered a class in markup with no rule behind it.
+     *
+     * Both spellings are asserted because one is not enough: scrollbar-width
+     * covers Firefox and now Chrome, and the -webkit- pseudo-element covers the
+     * rest. Dropping either silently reintroduces the bar on some browsers.
+     *
+     * The buttons being 10px up and more transparent is deliberately not pinned.
+     * Those are cosmetic and carry no contract; pinning a Tailwind fraction here
+     * would only make the next deliberate tweak look like a failure.
+     */
+    #[Test]
+    public function the_track_hides_its_scrollbar_and_the_rule_still_exists(): void
+    {
+        $destination = $this->destination();
+
+        foreach (range(1, 2) as $index) {
+            $destination->images()->create([
+                'path' => 'https://images.example.com/'.$index.'.jpg',
+                'sort_order' => $index - 1,
+            ]);
+        }
+
+        $html = $this->get(route('destinations.show', $destination))
+            ->assertOk()
+            ->getContent();
+
+        $document = new DOMDocument();
+
+        @$document->loadHTML($html);
+
+        libxml_clear_errors();
+
+        $xpath = new DOMXPath($document);
+
+        $track = $xpath->query('//*[@data-gallery-track]')->item(0);
+
+        $this->assertNotNull(
+            $track,
+            'the carousel track is missing from the rendered page'
+        );
+
+        $classes = preg_split(
+            '/\s+/',
+            trim($track->getAttribute('class')),
+            -1,
+            PREG_SPLIT_NO_EMPTY
+        );
+
+        $this->assertContains(
+            'tm-no-scrollbar',
+            $classes,
+            'the carousel track no longer hides its scrollbar, so a horizontal bar '
+            .'sits under the arrows'
+        );
+
+        // Still scrollable, just not visibly so: arrows, dots, keyboard and
+        // swipe all drive it, and gallery.js scrollTo() depends on it.
+        $this->assertContains(
+            'overflow-x-auto',
+            $classes,
+            'the track must keep overflow-x-auto -- hiding the scrollbar is not a '
+            .'reason to stop scrolling, and goTo() relies on scrollLeft'
+        );
+
+        $stylesheet = (string) file_get_contents(resource_path('css/app.css'));
+
+        $this->assertMatchesRegularExpression(
+            '/\.tm-no-scrollbar\s*\{[^}]*scrollbar-width:\s*none/',
+            $stylesheet,
+            'tm-no-scrollbar has no rule in app.css, so the class on the track does '
+            .'nothing and the scrollbar returns while the markup still looks right'
+        );
+
+        $this->assertMatchesRegularExpression(
+            '/\.tm-no-scrollbar::\-webkit-scrollbar\s*\{[^}]*display:\s*none/',
+            $stylesheet,
+            'tm-no-scrollbar is missing the -webkit-scrollbar rule, so the scrollbar '
+            .'still shows on Chromium browsers'
+        );
+    }
+
+    /**
      * A single extra photo is not a carousel.
      */
     #[Test]

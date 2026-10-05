@@ -56,7 +56,7 @@
             >
                 <ul
                     data-gallery-track
-                    class="flex snap-x snap-mandatory overflow-x-auto scroll-smooth"
+                    class="tm-no-scrollbar flex snap-x snap-mandatory overflow-x-auto scroll-smooth"
                 >
                     @foreach ($destination->images as $index => $galleryImage)
                         <li
@@ -83,8 +83,13 @@
 
                 {{-- Controls are absent without JS, and that is deliberate: a
                      button that does nothing is worse than no button. The script
-                     inserts them once it is running. --}}
-                <div data-gallery-controls class="absolute inset-x-0 bottom-0 flex items-center justify-center gap-2 p-4"></div>
+                     inserts them once it is running.
+
+                     bottom-2.5 rather than bottom-0: sitting flush against the
+                     crop's bottom edge looked cramped, and 0.625rem is the 10px
+                     lift asked for. The container keeps p-4, so the buttons sit
+                     10px up with their own padding still around them. --}}
+                <div data-gallery-controls class="absolute inset-x-0 bottom-2.5 flex items-center justify-center gap-2 p-4"></div>
             </section>
         @endif
 
