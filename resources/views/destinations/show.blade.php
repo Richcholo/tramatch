@@ -23,7 +23,8 @@
         --}}
         @if ($destination->images->count() > 1)
             {{--
-                max-w-5xl is load-bearing, not decoration.
+                max-w-5xl is load-bearing, not decoration, and it is shared with the
+                hero below on purpose.
 
                 The page container runs to 1600px, but admin photos are stored
                 verbatim by DestinationController::storeUploadedImage() with no
@@ -34,14 +35,20 @@
                 puts every photo at or below its own size, so it is downscaled or
                 drawn 1:1 and stays sharp.
 
+                The hero carries the same cap. Capping only the carousel left one
+                narrow block above a full-bleed hero on an otherwise full-width
+                page, which read as a mistake, and widening the carousel back out
+                restores the upscale. Giving both the same width is the version
+                that is consistent AND sharp.
+
                 object-cover is already correct and must stay: it crops without
                 distorting. object-fill would stretch the aspect ratio, and
                 object-contain would letterbox a 2.7:1 strip. No object-fit value
                 fixes an upscale, which is why this is a width cap.
 
-                Do not widen this without also resizing the uploads -- there is no
-                GD or Imagick on this host to do that with, so srcset is not
-                available as a fallback.
+                Do not widen these without also resizing the uploads -- there is no
+                GD or Imagick on this host, on the CLI or under XAMPP, so srcset
+                is not available as a fallback.
             --}}
             <section
                 data-gallery
@@ -83,7 +90,10 @@
             </section>
         @endif
 
-        <section class="relative overflow-hidden rounded-[2rem] bg-volcanic-teal text-white shadow-xl">
+        {{-- max-w-5xl matches the carousel above; see the note there. The text
+             inside is already max-w-4xl, so this trims mostly empty image rather
+             than reflowing the title. --}}
+        <section class="relative mx-auto max-w-5xl overflow-hidden rounded-[2rem] bg-volcanic-teal text-white shadow-xl">
             @if ($destination->image_url)
                 <img
                     src="{{ $destination->image_url }}"

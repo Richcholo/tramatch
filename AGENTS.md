@@ -933,23 +933,30 @@ migration.
   `the_previous_control_is_only_disabled_on_the_first_photo` pins the two
   halves agreeing by reading the source, because there is no JS test runner
   here and the symptom was invisible to every test that existed.
-- **The carousel's `max-w-5xl` is load-bearing, not decoration.** The page
-  container runs to `max-w-[1600px]`, but
-  `DestinationController::storeUploadedImage()` stores uploads **verbatim** with
-  no resize, and they are typically 1080–1170px phone shots. An uncapped slide
-  is a ~1504px box, so the browser scales the photo up 1.3–1.4× and it renders
-  soft — that was the "blurry carousel" report.
+- **The carousel and the hero share one capped width, and `max-w-5xl` is
+  load-bearing rather than decorative.** The page container runs to
+  `max-w-[1600px]`, but `DestinationController::storeUploadedImage()` stores
+  uploads **verbatim** with no resize, and they are typically 1080–1170px phone
+  shots. An uncapped block is a ~1504px box, so the browser scales the photo up
+  1.3–1.4× and it renders soft — that was the "blurry carousel" report.
   **`object-fit` cannot fix this, and "try a different object-fit" is the wrong
   fix.** `cover` already ships and is correct: it crops without distorting.
   `fill` stretches the aspect ratio and `contain` letterboxes a 2.7:1 strip.
   No `object-fit` value prevents an upscale, so the fix is the width cap, which
   puts every photo at or below its own size.
-  There is **no GD and no Imagick on this host**, so resizing at upload time —
-  and therefore `srcset` as a fallback — is not available. If the photos are
-  ever replaced with higher-resolution ones, the cap can be revisited; widening
-  it without that reintroduces the blur.
-  `the_carousel_is_capped_so_photos_are_not_upscaled` pins both the cap and
-  `object-cover`, since removing either looks like tidying.
+  **Both** the carousel and the hero carry it. Capping only the carousel left one
+  narrow block above a full-bleed hero on an otherwise full-width page, which
+  read as a mistake; widening the carousel back out to match restores the
+  upscale. Equal widths is the version that is consistent *and* sharp. The hero's
+  text was already `max-w-4xl`, so the cap trims empty image rather than
+  reflowing the title.
+  There is **no GD and no Imagick** — verified on the CLI *and* under XAMPP — so
+  resizing at upload time, and therefore `srcset` as a fallback, is not
+  available. If the photos are ever replaced with higher-resolution ones the cap
+  can be revisited; widening it without that reintroduces the blur.
+  `the_carousel_and_the_hero_share_a_capped_width` pins the cap on both, asserts
+  the two resolve to the *same* width rather than just to a shared class name,
+  and pins `object-cover` on both images.
 - `page-transitions.js` never intercepts navigation. It only *observes* it: a
   same-origin link click or a same-origin form submit arms a 350 ms timer, and
   only if the browser has not already navigated does the full-screen

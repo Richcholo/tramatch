@@ -452,7 +452,7 @@ class DestinationGalleryTest extends TestCase
     }
 
     /**
-     * The strip is capped, and the cap is what keeps the photos sharp.
+     * The carousel and the hero share one width, and that width is capped.
      *
      * The page container runs to max-w-[1600px], while uploads are stored
      * verbatim with no resize and are typically 1080-1170px wide. A slide
@@ -464,12 +464,24 @@ class DestinationGalleryTest extends TestCase
      * 1024px is chosen because it is at or below the narrowest phone photo in
      * circulation, so the photo is downscaled or drawn 1:1. Widening this needs
      * resizing the uploads at upload time, which this host cannot do: no GD, no
-     * Imagick.
+     * Imagick, on the CLI or under XAMPP.
+     *
+     * Both blocks carry the cap rather than just the carousel. Capping only the
+     * carousel left one narrow block above a full-bleed hero on an otherwise
+     * full-width page, which read as a mistake; widening the carousel back out
+     * restores the upscale. Equal widths is the version that is consistent AND
+     * sharp, so the two are asserted against each other and not just against a
+     * literal class name.
      */
     #[Test]
-    public function the_carousel_is_capped_so_photos_are_not_upscaled(): void
+    public function the_carousel_and_the_hero_share_a_capped_width(): void
     {
-        $destination = $this->destination();
+        // image_url set deliberately: without it the hero renders a gradient div
+        // instead of an <img>, and the object-fit assertions would have nothing
+        // to look at and quietly stop testing anything.
+        $destination = $this->destination([
+            'image_url' => 'https://images.example.com/hero.jpg',
+        ]);
 
         foreach (range(1, 2) as $index) {
             $destination->images()->create([
@@ -490,47 +502,76 @@ class DestinationGalleryTest extends TestCase
 
         $xpath = new DOMXPath($document);
 
-        $classes = preg_split(
-            '/\s+/',
-            trim($xpath->query('//*[@data-gallery]')->item(0)->getAttribute('class')),
-            -1,
-            PREG_SPLIT_NO_EMPTY
-        );
+        $classesAt = function (string $query) use ($xpath): array {
+            $nodes = $xpath->query($query);
 
-        $this->assertContains(
-            'max-w-5xl',
-            $classes,
-            'the carousel is no longer capped, so each photo is scaled up past its '
-            .'own resolution and renders soft. Do not widen it without resizing '
-            .'the uploads at upload time.'
+            $this->assertGreaterThan(
+                0,
+                $nodes->length,
+                'nothing on the rendered page matched '.$query.', so this test is '
+                .'asserting on nothing'
+            );
+
+            return preg_split(
+                '/\s+/',
+                trim($nodes->item(0)->getAttribute('class')),
+                -1,
+                PREG_SPLIT_NO_EMPTY
+            );
+        };
+
+        // The hero is identified as the section carrying the destination's title,
+        // not by its position, so inserting a section above it does not silently
+        // repoint these assertions at the wrong element.
+        $carousel = $classesAt('//*[@data-gallery]');
+        $hero = $classesAt('//main//section[.//h1]');
+
+        foreach (['carousel' => $carousel, 'hero' => $hero] as $name => $list) {
+            $this->assertContains(
+                'max-w-5xl',
+                $list,
+                'the '.$name.' is no longer capped, so its photo is scaled up past '
+                .'its own resolution and renders soft. Do not widen it without '
+                .'resizing the uploads at upload time.'
+            );
+        }
+
+        // Asserted against each other as well as against the class name, because
+        // the real requirement is that they match: a shared literal class is only
+        // one way to achieve it.
+        $this->assertSame(
+            preg_grep('/^max-w-/', $carousel),
+            preg_grep('/^max-w-/', $hero),
+            'the carousel and the hero must resolve to the same width, or one of '
+            .'them reads as a mistake against the other'
         );
 
         /*
-         * object-fit is on the image, not the section. cover is what crops
+         * object-fit is on the images, not the sections. cover is what crops
          * without distorting; fill is the one that stretches, and swapping to it
          * would reintroduce the problem in a different shape. Asserted here
          * because "try another object-fit" is a tempting, wrong-looking fix.
          */
-        $imageClasses = preg_split(
-            '/\s+/',
-            trim($xpath->query('//*[@data-gallery-track]//img')->item(0)->getAttribute('class')),
-            -1,
-            PREG_SPLIT_NO_EMPTY
-        );
+        foreach ([
+            'carousel photo' => '//*[@data-gallery-track]//img',
+            'hero photo' => '//main//section[.//h1]//img',
+        ] as $name => $query) {
+            $classes = $classesAt($query);
 
-        $this->assertContains(
-            'object-cover',
-            $imageClasses,
-            'the carousel images no longer use object-cover, so they are stretched '
-            .'to the box instead of cropped to it'
-        );
+            $this->assertContains(
+                'object-cover',
+                $classes,
+                'the '.$name.' no longer uses object-cover, so it is stretched to '
+                .'the box instead of cropped to it'
+            );
 
-        $this->assertNotContains(
-            'object-fill',
-            $imageClasses,
-            'object-fill stretches an image to the box rather than cropping it, '
-            .'which distorts the aspect ratio'
-        );
+            $this->assertNotContains(
+                'object-fill',
+                $classes,
+                'object-fill stretches an image to the box rather than cropping it, '
+                .'which distorts the aspect ratio'
+            );
+        }
     }
 
     /**
