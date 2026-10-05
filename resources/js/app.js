@@ -3,6 +3,7 @@ import './swipe';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { loadDrivingRoute } from './routing';
+import initBudgetTier from './admin-budget-tier';
 import './home';
 
 window.Alpine = Alpine;
@@ -27,6 +28,13 @@ if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/sw.js');
     });
 }
+
+/*
+ * Admin-only, so it no-ops everywhere else rather than needing a guard at the
+ * call site. It reads the tier boundaries out of the rendered guideline instead
+ * of carrying its own numbers, which is why it has to run after the DOM exists.
+ */
+initBudgetTier();
 
 if (destinationMap) {
     const lat = Number(destinationMap.dataset.lat);

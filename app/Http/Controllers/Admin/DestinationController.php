@@ -395,8 +395,82 @@ class DestinationController extends Controller
             ->with('status', 'Destination permanently deleted.');
     }
 
+    /**
+     * Reduce a posted `HH:MM:SS` to `HH:MM` before validation.
+     *
+     * `opening_time` and `closing_time` are MySQL TIME columns, so PHP hands
+     * them back as `09:00:00`. The admin form pre-fills those raw values into
+     * `<input type="time">`, the browser resubmits them untouched along with
+     * every other field, and `date_format:H:i` rejects the seconds. The result
+     * was that editing *any* field on a destination that had opening hours
+     * failed with "the opening time field must match the format H:i", for a
+     * field the admin never touched.
+     *
+     * Anything unparseable is returned unchanged rather than nulled, and that is
+     * the whole point. Nulling it would make the `nullable` rule skip the field
+     * entirely, so a genuinely tampered value would be silently discarded and
+     * stored as "no hours". Leaving it alone keeps the validation error, which is
+     * the only thing standing between a mistyped time and a wrong opening window.
+     *
+     * @return array<string, string|null>
+     */
+    private function normaliseTime(mixed $value): mixed
+    {
+        if (! is_string($value)) {
+            return $value;
+        }
+
+        $trimmed = trim($value);
+
+        if ($trimmed === '') {
+            return $trimmed;
+        }
+
+        return Destination::formatTime($trimmed) ?? $trimmed;
+    }
+
+    /**
+     * Normalise every posted time field, in place on the request.
+     *
+     * Merged rather than applied after validation so the canonical `HH:MM` is
+     * what gets validated *and* stored, and so a validation failure flashes the
+     * reduced value back into the form through `old()`.
+     *
+     * @return array<string, mixed>
+     */
+    private function withNormalisedTimes(Request $request): array
+    {
+        $normalised = [];
+
+        foreach (['opening_time', 'closing_time'] as $field) {
+            if ($request->exists($field)) {
+                $normalised[$field] = $this->normaliseTime($request->input($field));
+            }
+        }
+
+        $daily = $request->input('daily_hours');
+
+        if (is_array($daily)) {
+            foreach ($daily as $day => $window) {
+                if (! is_array($window)) {
+                    continue;
+                }
+
+                foreach (['open', 'close'] as $edge) {
+                    if (array_key_exists($edge, $window)) {
+                        $normalised['daily_hours'][$day][$edge] = $this->normaliseTime($window[$edge]);
+                    }
+                }
+            }
+        }
+
+        return $normalised;
+    }
+
     private function validated(Request $request): array
     {
+        $request->merge($this->withNormalisedTimes($request));
+
         $data = $request->validate([
             'name' => [
                 'required',

@@ -23,6 +23,82 @@ class Destination extends Model
     public const HOURS_PER_DAY = 'per_day';
 
     /**
+     * What each budget tier means in pesos, and the boundary that decides it.
+     *
+     * `budget_level` is not a ranking and not a filter on a score. It is an
+     * **exact match** against the traveller's own profile:
+     * `SwipeDeckService`, `RecommendationService`, `ItineraryGenerator` and
+     * `SwipeDiscoveryController` all do `where('budget_level', $profile->
+     * budget_level)`. So a destination filed under the wrong tier does not rank
+     * lower, it becomes **invisible** to everyone in the other two tiers. That
+     * is why the admin form shows these ranges instead of leaving the choice to
+     * judgement.
+     *
+     * The boundaries are half-open and do not overlap. An earlier draft of this
+     * guideline read "Mid 501-1000" alongside "Premium 1000 and up", which
+     * double-counts exactly 1000; mid-range therefore stops at 999.
+     *
+     * `max` is null for the open-ended top tier. Order matters and is relied on
+     * by budgetTierForCost().
+     *
+     * @var array<string, array{label: string, min: int, max: int|null}>
+     */
+    public const BUDGET_TIERS = [
+        'economy' => ['label' => 'Economy', 'min' => 0, 'max' => 500],
+        'mid-range' => ['label' => 'Mid', 'min' => 501, 'max' => 999],
+        'premium' => ['label' => 'Premium', 'min' => 1000, 'max' => null],
+    ];
+
+    /**
+     * The tier a peso amount falls into.
+     *
+     * Shared with the browser: the admin form auto-fills the select from this,
+     * and the same boundaries are what the guideline on screen claims. Deriving
+     * both from one constant is the point -- a JS copy of these numbers would be
+     * free to drift from the labels above it, and nothing would notice.
+     *
+     * Negative and non-numeric input clamp to the bottom tier rather than
+     * throwing, because it is fed straight from a number input an admin is
+     * still typing into.
+     */
+    public static function budgetTierForCost(mixed $cost): string
+    {
+        $cost = is_numeric($cost) ? (float) $cost : 0.0;
+
+        if ($cost < 0) {
+            $cost = 0.0;
+        }
+
+        foreach (self::BUDGET_TIERS as $key => $tier) {
+            if ($tier['max'] === null || $cost <= $tier['max']) {
+                return $key;
+            }
+        }
+
+        return array_key_last(self::BUDGET_TIERS);
+    }
+
+    /**
+     * The guideline as readable text, for the admin form.
+     *
+     * @return array<string, string>
+     */
+    public static function budgetTierRanges(): array
+    {
+        $ranges = [];
+
+        foreach (self::BUDGET_TIERS as $key => $tier) {
+            $ranges[$key] = $tier['max'] === null
+                ? '₱'.number_format($tier['min']).' and up'
+                : ($tier['min'] === 0
+                    ? 'Free – ₱'.number_format($tier['max'])
+                    : '₱'.number_format($tier['min']).' – ₱'.number_format($tier['max']));
+        }
+
+        return $ranges;
+    }
+
+    /**
      * Where an admin-uploaded photo lands on the `public` disk.
      *
      * `public`, not `local`: the image has to be web-reachable, and `local`
@@ -330,7 +406,21 @@ class Destination extends Model
             || $this->closedDayList() !== [];
     }
 
-    public function formatTime(mixed $time): ?string
+    /**
+     * Reduce a clock time to `HH:MM`, or null if it is not one.
+     *
+     * Static because it is a pure function of its argument -- it reads nothing
+     * from the model. That matters now that the admin form and the controller
+     * both call it on a bare class name, where there is no instance to call it
+     * on. Existing `$destination->formatTime(...)` callers keep working:
+     * PHP permits calling a static method through an instance.
+     *
+     * Returns null rather than throwing for anything unparseable, including
+     * out-of-range values like `99:99`. Callers that must not silently discard a
+     * bad value are expected to check for null themselves -- see
+     * DestinationController::normaliseTime.
+     */
+    public static function formatTime(mixed $time): ?string
     {
         $time = trim((string) $time);
 

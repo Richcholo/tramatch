@@ -7,9 +7,52 @@
     <label class="block"><span class="text-sm font-medium">Municipality</span><input name="municipality" list="destination-municipalities" value="{{ old('municipality', $destination->municipality ?? '') }}" class="mt-2 w-full rounded-lg border border-slate-300 outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-200"><datalist id="destination-municipalities">@foreach ($municipalities as $municipality)<option value="{{ $municipality }}"></option>@endforeach</datalist></label>
     <label class="block"><span class="text-sm font-medium">Latitude</span><input name="latitude" type="number" step="any" value="{{ old('latitude', $destination->latitude ?? '') }}" required class="mt-2 w-full rounded-lg border border-slate-300 outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-200"></label>
     <label class="block"><span class="text-sm font-medium">Longitude</span><input name="longitude" type="number" step="any" value="{{ old('longitude', $destination->longitude ?? '') }}" required class="mt-2 w-full rounded-lg border border-slate-300 outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-200"></label>
-    <label class="block"><span class="text-sm font-medium">Budget</span><select name="budget_level" class="mt-2 w-full rounded-lg border border-slate-300 outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-200">@foreach (['economy', 'mid-range', 'premium'] as $budget)<option value="{{ $budget }}" @selected(old('budget_level', $destination->budget_level ?? 'economy') === $budget)>{{ ucfirst($budget) }}</option>@endforeach</select></label>
+    {{-- The tier boundaries live on the model so the guideline rendered here and
+         the auto-fill in admin-budget-tier.js cannot disagree. Budget tier is an
+         exact match against the traveller's profile, not a score, so a wrong tier
+         hides the destination from two thirds of users rather than ranking it
+         low. --}}
+    <div class="block" data-budget-tier>
+        <label class="block">
+            <span class="text-sm font-medium">Budget</span>
+            <select
+                name="budget_level"
+                data-budget-tier-select
+                class="mt-2 w-full rounded-lg border border-slate-300 outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-200"
+            >
+                @foreach (\App\Models\Destination::BUDGET_TIERS as $budgetKey => $budgetTier)
+                    <option value="{{ $budgetKey }}" @selected(old('budget_level', $destination->budget_level ?? 'economy') === $budgetKey)>{{ $budgetTier['label'] }}</option>
+                @endforeach
+            </select>
+        </label>
+
+        <dl class="mt-2 space-y-0.5 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            @foreach (\App\Models\Destination::budgetTierRanges() as $budgetKey => $budgetRange)
+                <div class="flex justify-between gap-3">
+                    <dt class="font-medium text-slate-700">{{ \App\Models\Destination::BUDGET_TIERS[$budgetKey]['label'] }}</dt>
+                    <dd>{{ $budgetRange }}</dd>
+                </div>
+            @endforeach
+        </dl>
+
+        <p class="mt-1 text-xs text-slate-500">
+            Taken from Estimated cost. This is an exact match, not a ranking, so a destination
+            filed under the wrong tier is invisible to travellers in the other two.
+        </p>
+
+        {{-- `hidden` the ATTRIBUTE, never a Tailwind `hidden` class. The class is
+             display:none at author level and beats the browser's own [hidden] rule,
+             so an element carrying both can never be shown by script. Pinned by
+             InteractionMarkupTest::test_elements_the_script_toggles_carry_no_hidden_class. --}}
+        <p
+            data-budget-tier-warning
+            hidden
+            role="status"
+            class="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900"
+        ></p>
+    </div>
     <label class="block"><span class="text-sm font-medium">Entrance fee (PHP ₱)</span><input name="entrance_fee" type="number" step="0.01" min="0" value="{{ old('entrance_fee', $destination->entrance_fee ?? 0) }}" required class="mt-2 w-full rounded-lg border border-slate-300 outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-200"></label>
-    <label class="block"><span class="text-sm font-medium">Estimated cost (PHP ₱)</span><input name="estimated_cost" type="number" step="0.01" min="0" value="{{ old('estimated_cost', $destination->estimated_cost ?? 0) }}" required class="mt-2 w-full rounded-lg border border-slate-300 outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-200"></label>
+    <label class="block"><span class="text-sm font-medium">Estimated cost (PHP ₱)</span><input name="estimated_cost" type="number" step="0.01" min="0" value="{{ old('estimated_cost', $destination->estimated_cost ?? 0) }}" required data-budget-tier-cost class="mt-2 w-full rounded-lg border border-slate-300 outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-200"></label>
     <label class="block"><span class="text-sm font-medium">Recommended minutes</span><input name="recommended_minutes" type="number" min="15" value="{{ old('recommended_minutes', $destination->recommended_minutes ?? 120) }}" required class="mt-2 w-full rounded-lg border border-slate-300 outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-200"></label>
     <div class="block md:col-span-2">
         <span class="text-sm font-medium">Photo</span>
@@ -68,8 +111,12 @@
     </p>
 
     <div class="mt-3 grid gap-5 md:grid-cols-3">
-        <label class="block"><span class="text-sm font-medium">Opens</span><input name="opening_time" type="time" value="{{ old('opening_time', $destination->opening_time ?? '') }}" class="mt-2 w-full rounded-lg border-slate-300"></label>
-        <label class="block"><span class="text-sm font-medium">Closes</span><input name="closing_time" type="time" value="{{ old('closing_time', $destination->closing_time ?? '') }}" class="mt-2 w-full rounded-lg border-slate-300"></label>
+        {{-- formatTime(), not the raw attribute. These are MySQL TIME columns, so
+             $destination->opening_time is "09:00:00" and the browser would post
+             that back untouched, which date_format:H:i rejects. Every edit to a
+             destination with hours failed because of it. --}}
+        <label class="block"><span class="text-sm font-medium">Opens</span><input name="opening_time" type="time" value="{{ old('opening_time', \App\Models\Destination::formatTime($destination->opening_time ?? null) ?? '') }}" class="mt-2 w-full rounded-lg border-slate-300"></label>
+        <label class="block"><span class="text-sm font-medium">Closes</span><input name="closing_time" type="time" value="{{ old('closing_time', \App\Models\Destination::formatTime($destination->closing_time ?? null) ?? '') }}" class="mt-2 w-full rounded-lg border-slate-300"></label>
         <label class="block"><span class="text-sm font-medium">Operating status</span><select name="operating_status" class="mt-2 w-full rounded-lg border-slate-300">@foreach (['unknown' => 'Unknown', 'open' => 'Open', 'temporarily_closed' => 'Temporarily closed', 'permanently_closed' => 'Permanently closed'] as $value => $label)<option value="{{ $value }}" @selected(old('operating_status', $destination->operating_status ?? 'unknown') === $value)>{{ $label }}</option>@endforeach</select></label>
         <label class="block"><span class="text-sm font-medium">Kind of window</span><select name="hours_kind" class="mt-2 w-full rounded-lg border-slate-300">@foreach (['' => 'Normal opening hours', 'always_open' => 'Open 24 hours — ungated', 'per_day' => 'Differs by day', 'registration_window' => 'Registration window, not opening hours', 'reservation_required' => 'Reservation required', 'alert_dependent' => 'Depends on a hazard alert level'] as $value => $text)<option value="{{ $value }}" @selected(old('hours_kind', $destination->hours_kind ?? '') === $value)>{{ $text }}</option>@endforeach</select>
             <span class="mt-1 block text-xs text-slate-500">Shown under the hours on the public page, so a registration window is never read as "you can walk in at 5am".</span>
@@ -104,7 +151,7 @@
                     <input
                         type="time"
                         name="daily_hours[{{ $day }}][open]"
-                        value="{{ $window['open'] ?? '' }}"
+                        value="{{ \App\Models\Destination::formatTime($window['open'] ?? null) ?? '' }}"
                         @disabled($isClosed)
                         class="rounded-lg border-slate-300"
                     >
@@ -112,7 +159,7 @@
                     <input
                         type="time"
                         name="daily_hours[{{ $day }}][close]"
-                        value="{{ $window['close'] ?? '' }}"
+                        value="{{ \App\Models\Destination::formatTime($window['close'] ?? null) ?? '' }}"
                         @disabled($isClosed)
                         class="rounded-lg border-slate-300"
                     >
