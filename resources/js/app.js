@@ -4,6 +4,7 @@ import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { loadDrivingRoute } from './routing';
 import initBudgetTier from './admin-budget-tier';
+import initGallery from './gallery';
 import './home';
 
 window.Alpine = Alpine;
@@ -35,6 +36,13 @@ if ('serviceWorker' in navigator) {
  * of carrying its own numbers, which is why it has to run after the DOM exists.
  */
 initBudgetTier();
+
+/*
+ * Only present on a destination page that has more than one extra photo. The
+ * server already rendered them all as a scrollable row, so this enhances rather
+ * than creates -- a JS failure leaves the photos visible.
+ */
+initGallery();
 
 if (destinationMap) {
     const lat = Number(destinationMap.dataset.lat);

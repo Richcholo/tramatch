@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Destination;
+use App\Models\DestinationImage;
 use App\Models\DestinationSwipe;
 use App\Models\ItineraryItem;
 use App\Models\Review;
@@ -15,6 +16,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class DestinationController extends Controller
@@ -90,6 +92,12 @@ class DestinationController extends Controller
 
         $destination->tags()->sync($tagIds);
 
+        /*
+         * After the row exists, because the gallery hangs off its id. On create
+         * the destination can never already be full, so nothing is refused here.
+         */
+        $this->storeGalleryImages($request, $destination);
+
         return redirect()
             ->route('admin.destinations.index')
             ->with('status', 'Destination created.');
@@ -148,6 +156,18 @@ class DestinationController extends Controller
 
         $destination->update($data);
         $destination->tags()->sync($tagIds);
+
+        /*
+         * Deletions before uploads, so that removing one and adding one in a
+         * single save is the natural way to swap a photo rather than hitting the
+         * cap. Doing it the other way round would refuse the replacement.
+         */
+        $this->deleteGalleryImages(
+            $destination,
+            (array) $request->input('delete_gallery_image', [])
+        );
+
+        $this->storeGalleryImages($request, $destination);
 
         /*
          * Compared against $previousImageUrl, not the refreshed attribute:
@@ -467,6 +487,105 @@ class DestinationController extends Controller
         return $normalised;
     }
 
+    /**
+     * Store newly uploaded carousel photos, up to the cap.
+     *
+     * Refuses the overflow with a validation error rather than dropping the
+     * extra files: an admin who selects four and gets no warning has no way to
+     * know the fourth was discarded. `MAX_PER_DESTINATION` is the cap and the
+     * message names it.
+     *
+     * @param  array<int, \Illuminate\Http\UploadedFile>  $files
+     * @return array{stored: int, rejected: int}
+     */
+    private function storeGalleryImages(
+        Request $request,
+        Destination $destination
+    ): array {
+        $files = array_values(array_filter(
+            (array) $request->file('gallery', []),
+            fn ($file): bool => $file instanceof UploadedFile && $file->isValid()
+        ));
+
+        if ($files === []) {
+            return ['stored' => 0, 'rejected' => 0];
+        }
+
+        $existing = $destination->images()->count();
+        $room = max(0, DestinationImage::MAX_PER_DESTINATION - $existing);
+        $accepted = array_slice($files, 0, $room);
+        $rejected = count($files) - count($accepted);
+
+        /*
+         * Raised directly rather than through a `max:` rule, because `max` counts
+         * the files in THIS request and not the room left on the destination. A
+         * destination already holding two photos, given two more, passes
+         * `max:3` -- and the third file would then be dropped by the slice above
+         * with no message at all, which is the exact silent loss this is meant to
+         * prevent.
+         */
+        if ($rejected > 0) {
+            throw ValidationException::withMessages([
+                'gallery' => 'This destination already has '.$existing.' of its '
+                    .DestinationImage::MAX_PER_DESTINATION.' extra photos, so '
+                    .$rejected.' of the '.count($files)
+                    .' you selected could not be added. Remove one first.',
+            ]);
+        }
+
+        foreach ($accepted as $file) {
+            $path = $file->store(Destination::IMAGE_DIRECTORY, 'public');
+
+            if (! $path) {
+                continue;
+            }
+
+            $destination->images()->create([
+                // An absolute URL, like image_url and DestinationImage::$path.
+                // Every view renders it straight into src="...", so a relative
+                // path would resolve against the current route.
+                'path' => Storage::disk('public')->url($path),
+                'sort_order' => DestinationImage::nextSortOrder($destination->id),
+            ]);
+        }
+
+        return ['stored' => count($accepted), 'rejected' => $rejected];
+    }
+
+    /**
+     * Delete carousel photos the admin unticked.
+     *
+     * Scoped to `$destination->images()` rather than looked up by id alone,
+     * because an id posted in `delete_gallery_image[]` is otherwise an id an
+     * admin could delete from any destination, including someone else's.
+     *
+     * The row is removed only after the file is gone, so a failed delete leaves a
+     * row pointing at a file rather than a file nothing references.
+     *
+     * @param  array<int, mixed>  $ids
+     */
+    private function deleteGalleryImages(Destination $destination, array $ids): int
+    {
+        if ($ids === []) {
+            return 0;
+        }
+
+        $deleted = 0;
+
+        foreach ($destination->images()->whereIn('id', $ids)->get() as $image) {
+            $path = $image->storagePath();
+
+            if ($path) {
+                Storage::disk('public')->delete($path);
+            }
+
+            $image->delete();
+            $deleted++;
+        }
+
+        return $deleted;
+    }
+
     private function validated(Request $request): array
     {
         $request->merge($this->withNormalisedTimes($request));
@@ -539,6 +658,37 @@ class DestinationController extends Controller
             'closing_time' => [
                 'nullable',
                 'date_format:H:i',
+            ],
+
+            /*
+             * The carousel photos. `image` above is the thumbnail and stays a
+             * single file; this is the separate multi-file field, because the two
+             * are used in different places -- the thumbnail on listing cards and
+             * the deck, the gallery only on the destination's own page.
+             *
+             * The count is capped here as a first line of defence against a huge
+             * multi-select, but the real limit is the room left on the
+             * destination, which only storeGalleryImages() knows and which it
+             * reports by name.
+             */
+            'gallery' => [
+                'nullable',
+                'array',
+            ],
+
+            'gallery.*' => [
+                'image',
+                'mimes:jpeg,jpg,png,webp',
+                'max:4096',
+            ],
+
+            'delete_gallery_image' => [
+                'nullable',
+                'array',
+            ],
+
+            'delete_gallery_image.*' => [
+                'integer',
             ],
 
             'closed_days' => [

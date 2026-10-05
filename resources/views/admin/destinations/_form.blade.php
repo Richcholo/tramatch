@@ -98,6 +98,81 @@
             JPEG, PNG or WebP, up to 4 MB. Leave empty to keep the current photo.
         </span>
     </div>
+
+    {{-- The carousel photos. Separate from the thumbnail above because they are
+         used in a different place: the thumbnail is what listing cards and the
+         swipe deck show, these only appear on the destination's own page.
+
+         A styled <input type="file" multiple> rather than a custom dialog. The
+         native picker is the GUI -- it opens on click, multi-selects, and shows
+         the chosen files before anything is uploaded -- and it needs no
+         JavaScript to function. A hand-rolled dialog would be a second upload
+         path with its own fetch, its own error handling and its own progress
+         states, none of which could be exercised here: there is no browser
+         automation in this project, so it would ship entirely unverified. --}}
+    <div class="block md:col-span-2">
+        <span class="text-sm font-medium">Extra photos</span>
+
+        @php
+            $gallery = $destination->images ?? collect();
+            $room = \App\Models\DestinationImage::MAX_PER_DESTINATION - $gallery->count();
+        @endphp
+
+        @if ($gallery->isNotEmpty())
+            <ul class="mt-2 grid gap-3 sm:grid-cols-3">
+                @foreach ($gallery as $galleryImage)
+                    <li class="overflow-hidden rounded-lg border border-slate-200">
+                        <img
+                            src="{{ $galleryImage->path }}"
+                            alt=""
+                            class="h-28 w-full object-cover"
+                        >
+                        <label class="flex items-center gap-2 border-t border-slate-200 px-3 py-2 text-xs text-slate-600">
+                            <input
+                                type="checkbox"
+                                name="delete_gallery_image[]"
+                                value="{{ $galleryImage->id }}"
+                                class="rounded border-slate-300"
+                            >
+                            Remove this photo
+                        </label>
+                    </li>
+                @endforeach
+            </ul>
+        @else
+            <p class="mt-2 text-xs text-slate-500">
+                No extra photos. The destination page shows the photo above on its own.
+            </p>
+        @endif
+
+        @if ($room > 0)
+            <label class="mt-3 block">
+                <span class="text-xs text-slate-500">Upload photos</span>
+                <input
+                    name="gallery[]"
+                    type="file"
+                    multiple
+                    accept="image/jpeg,image/png,image/webp"
+                    class="mt-2 block w-full text-sm text-slate-600 file:mr-4 file:rounded-lg file:border-0 file:bg-teal-700 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-teal-800"
+                >
+            </label>
+
+            <span class="mt-2 block text-xs text-slate-500">
+                @if ($gallery->isNotEmpty())
+                    Room for {{ $room }} more of {{ \App\Models\DestinationImage::MAX_PER_DESTINATION }}.
+                    Tick a photo above and save in one go to swap it.
+                @else
+                    Up to {{ \App\Models\DestinationImage::MAX_PER_DESTINATION }} photos.
+                @endif
+                These appear as a carousel on the destination page. JPEG, PNG or WebP, 4 MB each.
+            </span>
+        @else
+            <p class="mt-2 text-xs text-slate-500">
+                This destination already has all
+                {{ \App\Models\DestinationImage::MAX_PER_DESTINATION }} extra photos. Remove one above to add another.
+            </p>
+        @endif
+    </div>
 </div>
 
 <p class="mt-5 text-xs text-slate-500">All amounts must be entered in Philippine pesos (PHP / ₱).</p>

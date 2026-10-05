@@ -504,4 +504,26 @@ class Destination extends Model
     {
         return $this->hasMany(DestinationSource::class);
     }
+
+    /**
+     * The carousel photos on this destination's page.
+     *
+     * Always ordered, because the order is the carousel's order and every read
+     * of this relation is a render rather than a lookup.
+     *
+     * The thumbnail is not in here -- it stays on `image_url`, which is what the
+     * index, the swipe deck and the map popup all render. See DestinationImage.
+     */
+    public function images(): HasMany
+    {
+        return $this->hasMany(DestinationImage::class)->orderBy('sort_order')->orderBy('id');
+    }
+
+    /**
+     * Whether this destination has room for another carousel photo.
+     */
+    public function hasGalleryRoom(): bool
+    {
+        return $this->images()->count() < DestinationImage::MAX_PER_DESTINATION;
+    }
 }

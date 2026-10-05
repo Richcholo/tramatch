@@ -9,6 +9,59 @@
     </x-slot>
 
     <div class="space-y-10">
+        {{--
+            The carousel.
+
+            Rendered as a plain row of images that JavaScript then upgrades, so a
+            JS failure cannot make a destination's photos disappear. Every image is
+            in the HTML with a real src and alt from the start; the carousel script
+            only hides all but the current one and wires up the controls.
+
+            Only rendered at all when there is more than one photo. A single extra
+            photo is not a carousel, and a hero plus one picture reads as a mistake
+            rather than a feature.
+        --}}
+        @if ($destination->images->count() > 1)
+            <section
+                data-gallery
+                aria-roledescription="carousel"
+                aria-label="Photos of {{ $destination->name }}"
+                class="relative overflow-hidden rounded-[2rem] bg-island-white shadow-sm ring-1 ring-boracay-light"
+            >
+                <ul
+                    data-gallery-track
+                    class="flex snap-x snap-mandatory overflow-x-auto scroll-smooth"
+                >
+                    @foreach ($destination->images as $index => $galleryImage)
+                        <li
+                            data-gallery-slide
+                            class="w-full shrink-0 snap-center"
+                            {{-- aria-hidden on the ones JS is hiding, so a screen
+                                 reader is not offered four copies of the same
+                                 place. Removed entirely by the script when it
+                                 takes over. --}}
+                            @if ($index > 0) aria-hidden="true" @endif
+                            role="group"
+                            aria-roledescription="slide"
+                            aria-label="{{ $index + 1 }} of {{ $destination->images->count() }}"
+                        >
+                            <img
+                                src="{{ $galleryImage->path }}"
+                                alt="{{ $index === 0 ? $destination->name : $destination->name.' — photo '.($index + 1) }}"
+                                class="h-80 w-full object-cover sm:h-96"
+                                loading="lazy"
+                            >
+                        </li>
+                    @endforeach
+                </ul>
+
+                {{-- Controls are absent without JS, and that is deliberate: a
+                     button that does nothing is worse than no button. The script
+                     inserts them once it is running. --}}
+                <div data-gallery-controls class="absolute inset-x-0 bottom-0 flex items-center justify-center gap-2 p-4"></div>
+            </section>
+        @endif
+
         <section class="relative overflow-hidden rounded-[2rem] bg-volcanic-teal text-white shadow-xl">
             @if ($destination->image_url)
                 <img
