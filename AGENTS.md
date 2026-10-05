@@ -958,10 +958,15 @@ the runtime never executes it.
   exited 0 having done nothing. Zero or several matches is an error, logged and
   exited non-zero.
 - **`~/queue-worker.sh` is the one file in this repo with a live copy outside
-  version control**, so `git pull` never updates it and a fix in the repo does
-  nothing until you re-copy. It was still running the old version after two
-  rounds of editing it here. `/queue-worker.sh` is in `.gitignore` for that
-  reason.
+  version control**, so `git pull` never updates it. `/queue-worker.sh` is in
+  `.gitignore` for that reason, and **`deploy.sh` copies it immediately after
+  `git pull`** and reports whether the previous copy was stale. It went stale
+  three times before that was automated, every time silently — the old script
+  defaulted `APP_ROOT` to a placeholder and exited non-zero, so crawls simply
+  sat in `queued`. **The diagnostic tell:** an error mentioning `yourdomain.tld`
+  means a pre-`1bb99f2` copy is still live; the current script says *"no app root
+  under `$HOME/domains`"*. Do not hand-edit the live copy — fix the repo and
+  re-run the deploy.
 - **Two logs, deliberately, answering different questions:**
   `~/queue-worker.log` says whether cron fired and which PHP it resolved;
   `storage/logs/laravel.log` (prefix `queue:drain`) says whether the drain found

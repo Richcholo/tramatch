@@ -188,6 +188,10 @@ Copy the worker out of the repo and register it in hPanel cron:
 cp deploy/queue-worker.sh ~/queue-worker.sh
 ```
 
+**`deploy.sh` does this for you**, immediately after `git pull`, and reports
+whether the previous copy was stale. Do the manual copy above only when setting
+up for the first time.
+
 hPanel → Advanced → Cron Jobs:
 
 | | |
@@ -195,9 +199,11 @@ hPanel → Advanced → Cron Jobs:
 | Command | `/bin/bash /home/u348491703/queue-worker.sh` |
 | Interval | every minute |
 
-**Re-copy it after every pull.** It is the one file in this repo with a live
-copy outside version control at `~/queue-worker.sh`, so `git pull` never reaches
-it. That is how a fixed script kept running the old one.
+`~/queue-worker.sh` is outside the repository, so `git pull` cannot reach it, and
+it went stale three times before `deploy.sh` took the copy over. The tell is in
+the error itself: the current script says *"no app root under `$HOME/domains`"*,
+whereas anything mentioning `yourdomain.tld` is a pre-`1bb99f2` copy still
+carrying the placeholder default.
 
 ### Test it the way cron runs it
 

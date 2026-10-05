@@ -140,6 +140,59 @@ if [ "$DO_PULL" -eq 1 ]; then
     echo
 fi
 
+# ------------------------------------------------------------ queue worker --
+
+# Copy deploy/queue-worker.sh to $HOME, where the hPanel cron entry points.
+#
+# Done here rather than left as a documented manual step because it has gone
+# stale three times. The live copy lives outside the repository, so `git pull`
+# cannot reach it, and every deploy that changed the worker left cron running
+# the old one. It failed silently each time: the old script defaulted APP_ROOT to
+# a placeholder, exited non-zero, and the crawls it should have drained simply
+# sat in `queued`.
+#
+# Best placed immediately after the pull so it copies the version that was just
+# deployed rather than whatever was checked out before.
+#
+# Not fatal on failure. Nothing in the application reads this file, and failing
+# a completed deploy over a worker that drains nothing else would be worse than
+# reporting it loudly and carrying on.
+bold "-- queue worker"
+
+WORKER_SRC="deploy/queue-worker.sh"
+WORKER_DST="$HOME/queue-worker.sh"
+
+if [ ! -f "$WORKER_SRC" ]; then
+    red "No $WORKER_SRC in this checkout -- skipping the worker copy."
+else
+    # Report staleness *before* overwriting it. Afterwards there is no way to
+    # tell whether the live copy was current, which is exactly the ambiguity
+    # that made this hard to diagnose.
+    if [ -f "$WORKER_DST" ] && ! cmp -s "$WORKER_SRC" "$WORKER_DST"; then
+        red "The live ~/queue-worker.sh was STALE -- cron has been running an old copy."
+    fi
+
+    if cp "$WORKER_SRC" "$WORKER_DST" 2>/dev/null; then
+        chmod +x "$WORKER_DST" 2>/dev/null || true
+        green "~/queue-worker.sh updated"
+
+        # Prove it runs. The app root is resolved by the script itself, so this
+        # is the same thing cron will do, and it is the only check that catches
+        # a worker which starts and then does nothing.
+        if bash "$WORKER_DST" >/dev/null 2>&1; then
+            green "worker ran successfully"
+        else
+            red "worker exited non-zero. Run it by hand to see why:"
+            red "  bash ~/queue-worker.sh"
+            red "and read ~/queue-worker.log for the resolved app root."
+        fi
+    else
+        red "Could not write $WORKER_DST."
+        red "Crawls will queue and never be drained until this is fixed."
+    fi
+fi
+echo
+
 # --------------------------------------------------------------- composer --
 
 # --no-dev because phpunit and the dev tooling are not wanted on the host, and
@@ -230,9 +283,10 @@ echo "  curl -sI https://yourdomain.tld/artisan         # expect 404"
 echo "  php artisan about                                # env should say production"
 echo
 echo "Then confirm the queue worker is actually running, since crawls silently"
-echo "queue forever if it is not:"
-echo "  php artisan queue:work --stop-when-empty --tries=1"
-echo "  php artisan sources:check"
+echo "queue forever if it is not. Test the SCRIPT, not artisan: it is what"
+echo "resolves the app root and picks the PHP binary."
+echo "  bash ~/queue-worker.sh"
+echo "  grep queue:drain storage/logs/laravel.log | tail"
 echo
 echo "NOTE: crawling from here means a datacentre IP. Azure WAF refusals and"
 echo "other bot walls may differ from what you measured at home, and crawls"
