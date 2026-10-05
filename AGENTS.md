@@ -157,6 +157,18 @@ flips between the two; the markup for both lives in
   key must be an item of this itinerary and a negative key must match
   `/\A-[1-9][0-9]{0,5}\z/`; `day_id` is checked against this trip's own days.
   Without this a traveller could reassign a stop onto somebody else's day.
+- **Cross-day drag works by rewriting `day_id`, and the field it rewrites is
+  `[data-field="day-id"]`.** Every rendered row and the row template must carry
+  that attribute. The template had it and the rendered rows did **not**, so a
+  stop that arrived with the page could be added and reordered but could never
+  change day — and no HTTP-level test noticed, because the field was always
+  submitted with the correct day; it just could not be edited.
+  `test_every_rendered_stop_row_exposes_its_day_id_to_the_script` pins it.
+  Renaming the attribute in Blade without the JS silently disables the feature.
+- **`ItineraryEditingTest` names its tests `test_*` and imports no PHPUnit
+  attributes.** A `#[Test]` added there is an *unresolved attribute*: not an
+  error, silently ignored, so the method never runs and the file still reports
+  green. Check the test count, not just the tick.
 - **Reflow is server-side**, on `POST itineraries/{itinerary}/schedule`,
   because the day window, lunch block and travel gap then have exactly one
   implementation. Do not port those rules to JS. It is a preview: it writes
@@ -205,9 +217,32 @@ flips between the two; the markup for both lives in
   attribute, so it could never be shown (see the frontend gotchas below). Every
   HTTP-level test passes with the editor permanently invisible, which is the
   argument for reading the rendered CSS, not just the markup.
-  **The remaining drag, arrow, dialog and reflow-fetch behaviour has still never
-  been clicked** — there is no browser automation here. Treat the interaction
-  itself as unproven.
+  **Verified manually by the owner on 2026-10-05**, on the live site: drag,
+  arrows, the add dialog and reflow were all clicked through, including
+  **cross-day dragging** (added that day). There is still no browser automation
+  in this repo, so PHPUnit cannot protect any of it — the tests pin the markup
+  contracts and the server-side logic, and the gesture itself rests on that one
+  manual pass. **Re-click after any change to `itinerary-editor.js` or the
+  editor's markup**, because nothing in the suite will notice a break.
+
+### What was verified, and what was not
+
+Recorded because AGENTS.md previously carried a blanket "unproven" note that was
+both wrong and unhelpful. Provenance matters: these were clicked by a human in a
+browser, not asserted by a test.
+
+| Verified by hand, 2026-10-05 | Still only covered by markup/server tests |
+|---|---|
+| Itinerary drag, incl. across days | Drag gestures on a viewport other than the one used |
+| Arrow reorder, add dialog, reflow | — |
+| Destination photo carousel: scroll, touch, keyboard, dots | — |
+| Budget tier auto-fill and mismatch warning | — |
+| The navigation loading overlay | Timing under a slow connection |
+
+The loading overlay is the one that behaves differently by design: it appears
+only when a navigation takes longer than 350 ms, so a click-through on a fast
+connection proves it does **not** appear, not that it works. Throttle the network
+before judging it.
 
 ### Destination-source crawling
 
