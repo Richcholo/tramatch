@@ -57,7 +57,7 @@ not make `pint --test` a pass/fail gate.
   `DB_CONNECTION=sqlite`, array cache/session, sync queue) and needs
   `pdo_sqlite` enabled in `php.ini`. Never point it at MySQL to work around a
   driver problem — `RefreshDatabase` would drop the development database.
-- The suite is currently **218 passing**. It is also the only thing that
+- The suite is currently **321 passing**. It is also the only thing that
   migrates from scratch, so it is the only check that a fresh clone can
   migrate — your dev database cannot detect a broken migration chain,
   because every migration in it has already run.
@@ -203,8 +203,70 @@ flips between the two; the markup for both lives in
   invisible**, and left the empty state claiming the traveller had liked
   nothing. The picker and `ItineraryEditor`'s accept rule must agree; they
   both key off swipes, active destinations only.
+- **Trip length is chosen in two places, and they are not the same mechanism.**
+  The generation form has a `days` field; the itinerary page has an
+  **Add a day** button that POSTs to `itineraries.days.store`. Pre-generation
+  sets the length up front and the generator lays out all the days;
+  `ItineraryGenerator::durationFor()` takes the posted value and falls back to
+  `$profile->trip_duration_days` when it is blank or absent, so every existing
+  caller that never posts `days` still works.
+  `Itinerary::MAX_DAYS` (30) is the single ceiling and matches what
+  `PreferenceController` validates on the profile.
+- **Add a day is its own endpoint, deliberately not a field on the editor
+  form.** A stop posts `items[<key>][day_id]`, and `UpdateItineraryRequest`
+  checks that against the trip's own day ids, so a day has to exist as a row
+  before any stop can be filed against it. Inventing the row in the browser
+  would mean posting a day id the ownership check is built to reject.
+  `ItineraryEditor::addDay()` creates the row, dates it from the trip's
+  `start_date` with the same arithmetic the generator uses (undated trips stay
+  undated), and bumps `trip_duration_days` so the header count cannot drift
+  from the days on screen. It adds exactly one day and refuses past
+  `MAX_DAYS`.
+- **Removing a day is its own endpoint too, and it is deliberately refused
+  while the day holds stops.** `itineraries.days.destroy` takes an
+  `ItineraryDay`, so `ItineraryEditor::removeDay()` deletes a *day* and never
+  its items: silently taking three stops off someone's trip because they asked
+  for one fewer day is the kind of loss nobody recovers from and everybody
+  blames on the app. The refusal names the day. Two other refusals: a day that
+  is not this trip's (403, in the controller, because route model binding
+  resolves an `ItineraryDay` from the whole table and nothing about a posted
+  day id is specific to the URL's trip) and the last remaining day, which would
+  leave the header reading "0 day(s)".
+  `renumberDays()` then slides the survivors up from 1 and **re-dates** them
+  from the same `start_date` arithmetic. That is the part to keep: leaving the
+  old numbers alone would show a trip that appears to begin on its second day,
+  and leaving the old dates alone would show day 2 on the date day 3 used to
+  be. It walks the days **in ascending order** precisely because
+  `unique(['itinerary_id','day_number'])` means each target number must already
+  have been vacated by the row ahead of it — a descending walk collides.
+- **A day's Remove button is inside the editor form; its form is outside it.**
+  The button has to sit on the card it removes, so unlike the add-a-day button
+  it cannot just live in the section header. It is bound to a form rendered
+  after `</form>` with the HTML5 `form="remove-day-{id}"` attribute — the same
+  escape hatch `admin/sources/index` uses. These forms carry Tailwind's
+  `hidden` **class**, which is correct here and is not the toggle trap in the
+  frontend section: nothing ever shows them.
+  `test_each_days_remove_button_points_at_a_form_for_that_day` pins the binding
+  and the `@method('DELETE')`, and asserts there is one bound button per day.
+- **`test_every_form_posts_to_a_route_that_accepts_its_method` needs a
+  two-day trip to cover this.** Its fixture was a one-day trip, and the Remove
+  button is suppressed on a one-day trip, so the new DELETE route rendered no
+  form at all and the guard stayed green while checking nothing. Widen the
+  fixture the next time a control appears only above one day.
+- **The add-a-day form is a sibling of the editor form, never inside it.** It
+  sits in the section header next to the Edit toggle. The nested-form trap in
+  the frontend section applies with full force here: a form inside
+  `data-editor-form` would have its start tag discarded and its `</form>` close
+  the *editor*, taking every stop field out of the payload with it.
+  `test_the_add_a_day_form_is_not_nested_inside_the_editor_form` pins both the
+  form's presence and its position.
+- Days with no stops render "Nothing planned for this day yet. Edit the
+  itinerary and add a stop." That copy replaced "No destinations fit this day's
+  schedule.", which was true when a day could only be empty because the
+  generator ran out of room, and became a lie the moment a traveller could
+  create an empty day on purpose.
 - No migration was added — every column it needs already exists.
-- **What is verified and what is not.** `ItineraryEditingTest` (25 tests)
+- **What is verified and what is not.** `ItineraryEditingTest` (49 tests)
   covers the whole HTTP contract, and a manual walkthrough against MySQL
   exercised login → reorder → reflow → add → remove. A later read of
   `itinerary-editor.js` found three more bugs the tests could not see: rows

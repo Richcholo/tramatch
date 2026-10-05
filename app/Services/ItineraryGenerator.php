@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Destination;
 use App\Models\Itinerary;
+use App\Models\TravelProfile;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -32,17 +33,7 @@ class ItineraryGenerator
             );
         }
 
-        $duration = filter_var(
-            $profile->trip_duration_days,
-            FILTER_VALIDATE_INT,
-            ['options' => ['min_range' => 1]]
-        );
-
-        if ($duration === false) {
-            throw new RuntimeException(
-                'Choose a valid trip duration first.'
-            );
-        }
+        $duration = $this->durationFor($data, $profile);
 
         $area = trim((string) ($data['area'] ?? ''));
 
@@ -277,6 +268,50 @@ class ItineraryGenerator
 
             return $itinerary->load('days.items.destination');
         });
+    }
+
+    /**
+     * How many days the trip runs.
+     *
+     * The saved preference is the default, not the answer: a traveller whose
+     * profile says three days may be planning a long weekend and choose four on
+     * the generation form. A value is only taken when it is a whole number
+     * inside 1..Itinerary::MAX_DAYS, so a crafted request cannot ask for zero
+     * days or five hundred, and anything unusable falls back to the profile
+     * rather than failing the whole generation over a field the traveller may
+     * never have seen.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function durationFor(array $data, TravelProfile $profile): int
+    {
+        $requested = $data['days'] ?? null;
+
+        $duration = $requested === null || $requested === ''
+            ? false
+            : filter_var(
+                $requested,
+                FILTER_VALIDATE_INT,
+                ['options' => ['min_range' => 1, 'max_range' => Itinerary::MAX_DAYS]]
+            );
+
+        if ($duration !== false) {
+            return $duration;
+        }
+
+        $fallback = filter_var(
+            $profile->trip_duration_days,
+            FILTER_VALIDATE_INT,
+            ['options' => ['min_range' => 1, 'max_range' => Itinerary::MAX_DAYS]]
+        );
+
+        if ($fallback === false) {
+            throw new RuntimeException(
+                'Choose a valid trip duration first.'
+            );
+        }
+
+        return $fallback;
     }
 
     private function parseStartDate(mixed $value): ?Carbon

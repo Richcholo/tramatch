@@ -101,6 +101,155 @@ class ItineraryEditor
     }
 
     /**
+     * Append one empty day to a trip.
+     *
+     * A day is a real row, not a client-side placeholder, because every stop on
+     * it posts an itinerary_day_id that UpdateItineraryRequest checks against
+     * this trip's own days. Inventing the row in the browser would mean posting
+     * an id that does not exist yet, and the ownership check exists precisely
+     * to reject those.
+     *
+     * The day starts empty on purpose. Deciding what goes on it is the
+     * traveller's, and the picker already offers every place they liked that
+     * this trip does not visit yet.
+     */
+    public function addDay(Itinerary $itinerary): ItineraryDay
+    {
+        return DB::transaction(function () use ($itinerary) {
+            $lastNumber = (int) $itinerary->days()->max('day_number');
+
+            if ($lastNumber >= Itinerary::MAX_DAYS) {
+                throw new RuntimeException(
+                    'A trip cannot run longer than '.Itinerary::MAX_DAYS.' days.'
+                );
+            }
+
+            $dayNumber = $lastNumber + 1;
+
+            $day = $itinerary->days()->create([
+                'day_number' => $dayNumber,
+                // Derived from the trip's own start date, the same way the
+                // generator dates day N. An undated trip stays undated rather
+                // than being given a date the traveller never chose.
+                'date' => $itinerary->start_date
+                    ? $itinerary->start_date->copy()->addDays($dayNumber - 1)->toDateString()
+                    : null,
+            ]);
+
+            $itinerary->update([
+                'trip_duration_days' => $dayNumber,
+            ]);
+
+            return $day;
+        });
+    }
+
+    /**
+     * Take a day off a trip.
+     *
+     * The mirror of addDay(), and its own endpoint for the same reason: the day
+     * is a row, so it cannot be part of a draft that is written whole.
+     *
+     * A day that still holds stops is refused rather than deleted along with
+     * them. Silently taking three stops off someone's trip because they asked
+     * for one fewer day is the kind of loss nobody recovers from and everybody
+     * blames on the app, and the traveller has the tools to move or delete them
+     * first. The refusal names the day so they know which one to empty.
+     *
+     * The last day cannot go either: a trip with no days has nothing to show,
+     * and the header would read "0 day(s)".
+     */
+    public function removeDay(Itinerary $itinerary, ItineraryDay $day): Itinerary
+    {
+        if ((int) $day->itinerary_id !== (int) $itinerary->id) {
+            // The controller rejects this first, the same way it rejects a stop
+            // belonging to another trip. This only fires if that check is ever
+            // weakened.
+            throw new RuntimeException('That day is not part of this trip.');
+        }
+
+        return DB::transaction(function () use ($itinerary, $day) {
+            $days = $itinerary->days()->get();
+
+            if ($days->count() <= 1) {
+                throw new RuntimeException(
+                    'One day is the least an itinerary can have.'
+                );
+            }
+
+            if ($day->items()->exists()) {
+                throw new RuntimeException(
+                    'Move or remove the stops on day '.$day->day_number
+                    .' before taking that day off.'
+                );
+            }
+
+            $day->delete();
+
+            $this->renumberDays(
+                $itinerary,
+                // Cast rather than ===: day_number has no id cast, so a driver
+                // handing back a string would fail to match, leave the deleted
+                // day in the collection, and quietly write a trip_duration_days
+                // one too high.
+                $days->reject(
+                    fn (ItineraryDay $candidate) => (int) $candidate->id === (int) $day->id
+                )->values()
+            );
+
+            return $itinerary->load('days.items.destination');
+        });
+    }
+
+    /**
+     * Re-number the surviving days from 1 and bring the stored trip length back
+     * in step with them.
+     *
+     * Every card prints day_number and the header prints trip_duration_days, so
+     * removing day 1 of 3 and leaving the survivors numbered 2 and 3 would show
+     * a trip that appears to begin on its second day and claims to be longer
+     * than it is.
+     *
+     * Ascending order is what keeps the unique (itinerary_id, day_number) index
+     * satisfied: each target number has already been vacated by the row ahead of
+     * it, so no update ever collides with a day that is still sitting there. A
+     * day that keeps its number keeps its date too, because the date is derived
+     * from the number and nothing about it changed.
+     *
+     * @param  Collection<int, ItineraryDay>  $days
+     */
+    private function renumberDays(Itinerary $itinerary, Collection $days): void
+    {
+        $days
+            ->sortBy(fn (ItineraryDay $day) => (int) $day->day_number)
+            ->values()
+            ->each(function (ItineraryDay $day, int $index) use ($itinerary) {
+                $dayNumber = $index + 1;
+
+                if ((int) $day->day_number === $dayNumber) {
+                    return;
+                }
+
+                $day->update([
+                    'day_number' => $dayNumber,
+                    // Same arithmetic as addDay() and the generator, so a day
+                    // that slides up the trip keeps following the start date. An
+                    // undated trip stays undated.
+                    'date' => $itinerary->start_date
+                        ? $itinerary->start_date
+                            ->copy()
+                            ->addDays($dayNumber - 1)
+                            ->toDateString()
+                        : null,
+                ]);
+            });
+
+        $itinerary->update([
+            'trip_duration_days' => $days->count(),
+        ]);
+    }
+
+    /**
      * The stops on one day, in the order the draft asks for, with each one
      * resolved to its destination.
      *

@@ -186,14 +186,33 @@
                     </p>
                 </div>
 
-                <button
-                    type="button"
-                    data-editor-toggle
-                    aria-pressed="false"
-                    class="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-boracay px-5 py-3 text-sm font-semibold text-volcanic-teal transition hover:bg-boracay hover:text-white"
-                >
-                    Edit itinerary
-                </button>
+                <div class="flex flex-wrap items-center gap-3">
+                    {{-- Its own form, deliberately outside the editor's. A day is a
+                         row that must exist before a stop can be filed against it,
+                         so it cannot ride the draft payload the editor saves. --}}
+                    <form method="POST" action="{{ route('itineraries.days.store', $itinerary) }}">
+                        @csrf
+
+                        <button
+                            type="submit"
+                            class="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-boracay px-5 py-3 text-sm font-semibold text-volcanic-teal transition hover:bg-boracay hover:text-white"
+                        >
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14M5 12h14" />
+                            </svg>
+                            Add a day
+                        </button>
+                    </form>
+
+                    <button
+                        type="button"
+                        data-editor-toggle
+                        aria-pressed="false"
+                        class="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-boracay px-5 py-3 text-sm font-semibold text-volcanic-teal transition hover:bg-boracay hover:text-white"
+                    >
+                        Edit itinerary
+                    </button>
+                </div>
             </div>
 
             {{-- One row shape, cloned by the editor when a stop is added. Keeping
@@ -388,7 +407,7 @@
                                 @empty
                                     <div class="rounded-2xl bg-palawan-sand p-5">
                                         <p class="text-sm text-benguet-charcoal/60">
-                                            No destinations fit this day’s schedule.
+                                            Nothing planned for this day yet. Edit the itinerary and add a stop.
                                         </p>
                                     </div>
                                 @endforelse
@@ -439,13 +458,32 @@
                                     @endif
                                 </div>
 
-                                <button
-                                    type="button"
-                                    data-reflow
-                                    class="inline-flex min-h-11 items-center justify-center rounded-md border border-philippine-gold bg-philippine-gold/20 px-3 py-2 text-xs font-bold text-benguet-charcoal transition hover:bg-philippine-gold"
-                                >
-                                    Reflow times
-                                </button>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <button
+                                        type="button"
+                                        data-reflow
+                                        class="inline-flex min-h-11 items-center justify-center rounded-md border border-philippine-gold bg-philippine-gold/20 px-3 py-2 text-xs font-bold text-benguet-charcoal transition hover:bg-philippine-gold"
+                                    >
+                                        Reflow times
+                                    </button>
+
+                                    {{-- The form this button submits to lives after the
+                                         editor's, because a form inside it would be
+                                         swallowed by the HTML parser and take every
+                                         stop field with it. The `form` attribute
+                                         binds the two without nesting. Hidden on a
+                                         one-day trip, which cannot lose its only
+                                         day -- see ItineraryEditor::removeDay(). --}}
+                                    @if ($itinerary->days->count() > 1)
+                                        <button
+                                            type="submit"
+                                            form="remove-day-{{ $day->id }}"
+                                            class="inline-flex min-h-11 items-center justify-center rounded-md border border-red-200 px-3 py-2 text-xs font-bold text-red-700 transition hover:bg-red-50"
+                                        >
+                                            Remove day
+                                        </button>
+                                    @endif
+                                </div>
                             </div>
 
                             <ol
@@ -616,6 +654,26 @@
                     </button>
                 </div>
             </form>
+
+            {{-- One remove-a-day form per day, here rather than inside the
+                 editor's form above. A nested <form> is discarded by the HTML
+                 parser and the first inner </form> closes the *outer* form, so a
+                 button inside the editor pointing at a form beside it is the only
+                 arrangement that posts where it looks like it posts. Each is
+                 hidden with Tailwind's hidden class on purpose: unlike the editor
+                 itself, nothing ever shows these, so display:none is what we want
+                 rather than the trap described in AGENTS.md. --}}
+            @foreach ($itinerary->days as $day)
+                <form
+                    id="remove-day-{{ $day->id }}"
+                    method="POST"
+                    action="{{ route('itineraries.days.destroy', [$itinerary, $day]) }}"
+                    class="hidden"
+                >
+                    @csrf
+                    @method('DELETE')
+                </form>
+            @endforeach
 
             <dialog
                 data-add-dialog

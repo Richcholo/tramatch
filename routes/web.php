@@ -117,6 +117,16 @@ Route::middleware('auth')->group(function () {
             'destroy',
         ]);
 
+    Route::post('/itineraries/{itinerary}/days', [
+        ItineraryController::class,
+        'addDay',
+    ])->name('itineraries.days.store');
+
+    Route::delete('/itineraries/{itinerary}/days/{day}', [
+        ItineraryController::class,
+        'removeDay',
+    ])->name('itineraries.days.destroy');
+
     Route::post('/itineraries/{itinerary}/schedule', [
         ItineraryController::class,
         'schedule',

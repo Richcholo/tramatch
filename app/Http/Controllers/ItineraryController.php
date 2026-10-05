@@ -7,6 +7,7 @@ use App\Http\Requests\UpdateItineraryRequest;
 use App\Models\Destination;
 use App\Models\DestinationSwipe;
 use App\Models\Itinerary;
+use App\Models\ItineraryDay;
 use App\Services\ItineraryEditor;
 use App\Services\ItineraryGenerator;
 use App\Services\RecommendationService;
@@ -83,6 +84,11 @@ class ItineraryController extends Controller
 
         return view('itineraries.create', [
             'profile' => $profile,
+            // Handed over rather than referenced as \App\Models\Itinerary::MAX_DAYS
+            // in the template. Every other view takes its values from the
+            // controller, and this was the only fully-qualified model reference
+            // anywhere under resources/views.
+            'maxDays' => Itinerary::MAX_DAYS,
             'areas' => $areas,
             'area' => $area,
             'destinations' => $destinations,
@@ -116,6 +122,17 @@ class ItineraryController extends Controller
                 'nullable',
                 'date_format:Y-m-d',
                 'after_or_equal:today',
+            ],
+
+            // Nullable because the form always submits it, but a crafted
+            // request may not: the generator then falls back to the saved
+            // preference. Bounded here so the error names the field the
+            // traveller actually filled in.
+            'days' => [
+                'nullable',
+                'integer',
+                'min:1',
+                'max:'.Itinerary::MAX_DAYS,
             ],
 
             'destination_ids' => [
@@ -292,6 +309,79 @@ class ItineraryController extends Controller
                 $request->validated()['items'] ?? []
             ),
         ]);
+    }
+
+    /**
+     * Append a day to a trip.
+     *
+     * A separate action rather than a field on the editor form, because a new
+     * day needs a row that exists before any stop can be filed against it, and
+     * the editor's payload is keyed by day id the browser can only know after
+     * the row exists. One click, one day: adding days through a single form
+     * would have to invent ids client-side and hand the ownership check a value
+     * it is built to reject.
+     */
+    public function addDay(
+        Itinerary $itinerary,
+        ItineraryEditor $editor
+    ): RedirectResponse {
+        $this->ensureOwner($itinerary);
+
+        try {
+            $editor->addDay($itinerary);
+        } catch (RuntimeException $exception) {
+            return back()->withErrors(['itinerary' => $exception->getMessage()]);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return back()->withErrors([
+                'itinerary' => 'The day could not be added. Please try again.',
+            ]);
+        }
+
+        return redirect()
+            ->route('itineraries.show', $itinerary)
+            ->with('status', 'Day added. Add stops to it below.');
+    }
+
+    /**
+     * Take a day off a trip.
+     *
+     * The counterpart to addDay(), and its own endpoint for the same reason: a
+     * day is a stored row, so it cannot ride the draft the editor saves.
+     *
+     * The ownership check is repeated here even though the day is route-model
+     * bound. Binding resolves an ItineraryDay from the whole table, so nothing
+     * about it is specific to this trip, and a traveller who posted another
+     * traveller's day id must be refused rather than have it deleted.
+     */
+    public function removeDay(
+        Itinerary $itinerary,
+        ItineraryDay $day,
+        ItineraryEditor $editor
+    ): RedirectResponse {
+        $this->ensureOwner($itinerary);
+
+        abort_unless(
+            (int) $day->itinerary_id === (int) $itinerary->id,
+            403
+        );
+
+        try {
+            $editor->removeDay($itinerary, $day);
+        } catch (RuntimeException $exception) {
+            return back()->withErrors(['itinerary' => $exception->getMessage()]);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return back()->withErrors([
+                'itinerary' => 'The day could not be removed. Please try again.',
+            ]);
+        }
+
+        return redirect()
+            ->route('itineraries.show', $itinerary)
+            ->with('status', 'Day removed.');
     }
 
     public function destroy(Itinerary $itinerary): RedirectResponse

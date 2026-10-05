@@ -11,6 +11,7 @@ use App\Models\TravelProfile;
 use App\Models\User;
 use App\Services\ItineraryEditor;
 use DOMDocument;
+use DOMElement;
 use DOMXPath;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -87,6 +88,526 @@ class ItineraryEditingTest extends TestCase
         ])->assertRedirect();
 
         return $this->user->itineraries()->firstOrFail();
+    }
+
+    /**
+     * The add-a-day form must not sit inside the editor's form.
+     *
+     * A nested <form> is the trap recorded in AGENTS.md: the HTML parser drops
+     * the inner start tag and the first inner </form> closes the *outer* form,
+     * so every control after that point leaves the editor and the button
+     * silently submits the wrong endpoint. The add form is deliberately a
+     * sibling of the editor form, and this is what keeps it that way.
+     *
+     * Matched on the exact action rather than on "/days" appearing in it. The
+     * remove-a-day forms live at /itineraries/{id}/days/{day}, so a substring
+     * match counts those too and this assertion would go off as soon as day
+     * removal existed.
+     */
+    public function test_the_add_a_day_form_is_not_nested_inside_the_editor_form(): void
+    {
+        $itinerary = $this->generateItinerary('alpha');
+
+        $html = $this->actingAs($this->user)
+            ->get(route('itineraries.show', $itinerary))
+            ->assertOk()
+            ->getContent();
+
+        $document = new DOMDocument();
+
+        @$document->loadHTML($html);
+
+        libxml_clear_errors();
+
+        $xpath = new DOMXPath($document);
+
+        $addForms = $xpath->query(
+            '//form[@action="'.route('itineraries.days.store', $itinerary).'"]'
+        );
+
+        $this->assertSame(
+            1,
+            $addForms->length,
+            'the page must render exactly one add-a-day form, or the button is either '
+            .'dead or posting somewhere unexpected'
+        );
+
+        $this->assertSame(
+            0,
+            $xpath->query('ancestor::form', $addForms->item(0))->length,
+            'the add-a-day form is nested inside another form, so its submit button '
+            .'will not post where it looks like it posts'
+        );
+
+        // Same reasoning, checked on the whole page rather than the one form:
+        // a nested form anywhere on /itineraries/{id} breaks whichever form
+        // encloses it, and the editor is the one carrying every stop field.
+        foreach ($xpath->query('//form') as $form) {
+            for ($node = $form->parentNode; $node instanceof DOMElement; $node = $node->parentNode) {
+                $this->assertNotSame(
+                    'form',
+                    strtolower($node->nodeName),
+                    'a form is nested inside another form on the itinerary page'
+                );
+            }
+        }
+    }
+
+    /**
+     * The remove-a-day button has to sit on the day card it removes, which puts
+     * it inside the editor's form -- so its own form cannot be there too.
+     *
+     * This is the add-a-day problem in the harder direction. That form could
+     * simply live in the section header; this one cannot move without moving the
+     * button off the card it belongs to. The HTML5 `form` attribute is what
+     * binds a button to a form it is not a descendant of, and if the id ever
+     * drifts from the form's the click quietly submits the editor instead.
+     */
+    public function test_each_days_remove_button_points_at_a_form_for_that_day(): void
+    {
+        $itinerary = $this->tripOfDays(3, ['alpha']);
+
+        $html = $this->actingAs($this->user)
+            ->get(route('itineraries.show', $itinerary))
+            ->assertOk()
+            ->getContent();
+
+        $document = new DOMDocument();
+
+        @$document->loadHTML($html);
+
+        libxml_clear_errors();
+
+        $xpath = new DOMXPath($document);
+
+        foreach ($itinerary->days as $day) {
+            $id = 'remove-day-'.$day->id;
+
+            $this->assertSame(
+                1,
+                $xpath->query('//form[@id="'.$id.'"]')->length,
+                'day '.$day->day_number.' has no remove form, so its Remove day '
+                .'button submits the editor instead of removing anything'
+            );
+
+            $this->assertSame(
+                1,
+                $xpath->query('//form[@id="'.$id.'"]'
+                    .'[@action="'.route('itineraries.days.destroy', [$itinerary, $day]).'"]')->length,
+                'the remove form for day '.$day->day_number.' does not post to that day\'s route'
+            );
+
+            // A plain POST against a DELETE route is a MethodNotAllowed, which is
+            // exactly the failure @method() exists to prevent.
+            $this->assertSame(
+                1,
+                $xpath->query('//form[@id="'.$id.'"]'
+                    .'//input[@name="_method"][@value="DELETE"]')->length,
+                'the remove form for day '.$day->day_number.' is missing @method(\'DELETE\')'
+            );
+        }
+
+        $this->assertSame(
+            3,
+            $xpath->query('//button[@form]')->length,
+            'every day card needs exactly one bound button'
+        );
+
+        // And every bound button on the page resolves to a form that exists.
+        foreach ($xpath->query('//button[@form]') as $button) {
+            $this->assertSame(
+                1,
+                $xpath->query('//form[@id="'.$button->getAttribute('form').'"]')->length,
+                'a button references a form that does not exist'
+            );
+        }
+    }
+
+    /**
+     * A one-day trip cannot lose its only day, so the button is not offered.
+     * The route still refuses the request; this is about not offering a control
+     * whose every press ends in an error.
+     */
+    public function test_the_remove_day_button_is_hidden_while_the_trip_has_one_day(): void
+    {
+        $html = $this->actingAs($this->user)
+            ->get(route('itineraries.show', $this->tripOfDays(1, ['alpha'])))
+            ->assertOk()
+            ->getContent();
+
+        $document = new DOMDocument();
+
+        @$document->loadHTML($html);
+
+        libxml_clear_errors();
+
+        $xpath = new DOMXPath($document);
+
+        $this->assertSame(
+            0,
+            $xpath->query('//button[@form]')->length,
+            'a one-day trip offers no Remove day button'
+        );
+    }
+
+    public function test_a_day_can_be_added_to_a_generated_trip(): void
+    {
+        $itinerary = $this->generateItinerary('alpha');
+
+        $this->assertCount(1, $itinerary->days);
+
+        $this->actingAs($this->user)
+            ->post(route('itineraries.days.store', $itinerary))
+            ->assertRedirect(route('itineraries.show', $itinerary));
+
+        $itinerary->refresh();
+
+        $this->assertSame(
+            [1, 2],
+            $itinerary->days->pluck('day_number')->map(fn ($n) => (int) $n)->all()
+        );
+
+        // The header reads trip_duration_days, so a day the traveller can see
+        // but a count that says one is the number lying.
+        $this->assertSame(2, (int) $itinerary->trip_duration_days);
+    }
+
+    public function test_an_added_day_starts_empty_rather_than_stealing_a_stop(): void
+    {
+        $itinerary = $this->generateItinerary('alpha', 'bravo');
+        $stopCount = $itinerary->days->first()->items->count();
+
+        $this->actingAs($this->user)
+            ->post(route('itineraries.days.store', $itinerary))
+            ->assertRedirect();
+
+        $itinerary->refresh();
+
+        $this->assertCount(0, $itinerary->days->last()->items);
+        $this->assertSame($stopCount, $itinerary->days->first()->items->count());
+    }
+
+    public function test_an_added_day_is_dated_from_the_trip_start_date(): void
+    {
+        $startDate = now()->addDays(10)->startOfDay();
+
+        $this->actingAs($this->user)->post(route('itineraries.store'), [
+            'title' => 'Dated trip',
+            'area' => 'Laguna',
+            'start_date' => $startDate->toDateString(),
+            'destination_ids' => [$this->destinations['alpha']->id],
+        ])->assertRedirect();
+
+        $itinerary = $this->user->itineraries()->firstOrFail();
+
+        $this->actingAs($this->user)
+            ->post(route('itineraries.days.store', $itinerary))
+            ->assertRedirect();
+
+        // Day 2 is one day after day 1, the same arithmetic the generator uses.
+        $this->assertSame(
+            $startDate->copy()->addDay()->toDateString(),
+            $itinerary->refresh()->days->last()->date->toDateString()
+        );
+    }
+
+    public function test_an_added_day_on_an_undated_trip_stays_undated(): void
+    {
+        $itinerary = $this->generateItinerary('alpha');
+
+        $this->assertNull($itinerary->start_date);
+
+        $this->actingAs($this->user)
+            ->post(route('itineraries.days.store', $itinerary))
+            ->assertRedirect();
+
+        $this->assertNull($itinerary->refresh()->days->last()->date);
+    }
+
+    public function test_adding_a_day_reaches_the_ceiling_and_then_refuses(): void
+    {
+        $itinerary = $this->generateItinerary('alpha');
+
+        // Seed the tail rather than clicking the button thirty times: the guard
+        // under test is the bound, not the loop.
+        foreach (range(2, Itinerary::MAX_DAYS) as $dayNumber) {
+            $itinerary->days()->create(['day_number' => $dayNumber]);
+        }
+
+        $this->actingAs($this->user)
+            ->post(route('itineraries.days.store', $itinerary))
+            ->assertSessionHasErrors('itinerary');
+
+        $this->assertCount(Itinerary::MAX_DAYS, $itinerary->refresh()->days);
+    }
+
+    public function test_another_traveller_cannot_add_a_day_to_someone_elses_trip(): void
+    {
+        $itinerary = $this->generateItinerary('alpha');
+        $stranger = User::factory()->create();
+
+        $this->actingAs($stranger)
+            ->post(route('itineraries.days.store', $itinerary))
+            ->assertForbidden();
+
+        $this->assertCount(1, $itinerary->refresh()->days);
+    }
+
+    public function test_the_added_day_is_editable_and_can_take_a_stop(): void
+    {
+        $itinerary = $this->generateItinerary('alpha');
+
+        $this->actingAs($this->user)
+            ->post(route('itineraries.days.store', $itinerary));
+
+        $newDay = $itinerary->refresh()->days->last();
+
+        // The point of adding a day in the editor: the traveller can put
+        // something on it through the normal draft payload.
+        $this->actingAs($this->user)
+            ->patch(route('itineraries.update', $itinerary), [
+                'items' => [
+                    '-1' => [
+                        'day_id' => $newDay->id,
+                        'sort_order' => 1,
+                        'destination_id' => $this->destinations['bravo']->id,
+                        'start_time' => '09:00',
+                        'end_time' => '10:30',
+                    ],
+                ],
+            ])
+            ->assertRedirect();
+
+        $this->assertSame(
+            'Bravo Falls',
+            $itinerary->refresh()->days->last()->items->first()->destination->name
+        );
+    }
+
+    /**
+     * A trip of a known length, which the day-removal tests need.
+     *
+     * The generator lays out every day it is asked for, so asking for three
+     * gives three day rows with only the first holding a stop. That is exactly
+     * the starting point removal requires: a day can only be taken off while it
+     * is empty, so the trailing days are the ones under test.
+     *
+     * @param  array<int, string>  $slugs
+     */
+    private function tripOfDays(
+        int $days,
+        array $slugs,
+        ?string $startDate = null
+    ): Itinerary {
+        $this->actingAs($this->user)->post(route('itineraries.store'), [
+            'title' => 'Lakeside loop',
+            'area' => 'Laguna',
+            'days' => $days,
+            'start_date' => $startDate,
+            'destination_ids' => array_map(
+                fn (string $slug) => $this->destinations[$slug]->id,
+                $slugs
+            ),
+        ])->assertRedirect();
+
+        return $this->user->itineraries()->latest('id')->firstOrFail();
+    }
+
+    /**
+     * Moving the one stop onto the last day, which leaves every day before it
+     * empty.
+     *
+     * The generator always starts filling at day 1, so a trip whose *first* day
+     * is empty cannot be produced by generating one -- and removing the first
+     * day is the case where the survivors have to be renumbered down rather
+     * than trimmed from the end.
+     */
+    private function tripWhoseFirstDayIsEmpty(int $days): Itinerary
+    {
+        $itinerary = $this->tripOfDays($days, ['alpha']);
+        $lastDay = $itinerary->days->last();
+        $item = $itinerary->days->first()->items->first();
+
+        $this->actingAs($this->user)
+            ->patch(route('itineraries.update', $itinerary), [
+                'items' => [
+                    $item->id => $this->row($item, [
+                        'day_id' => $lastDay->id,
+                        'sort_order' => 1,
+                    ]),
+                ],
+            ])
+            ->assertRedirect();
+
+        $this->assertCount(0, $itinerary->refresh()->days->first()->items);
+
+        return $itinerary->refresh();
+    }
+
+    public function test_a_day_can_be_taken_off_a_trip(): void
+    {
+        $itinerary = $this->tripOfDays(3, ['alpha']);
+
+        $this->actingAs($this->user)
+            ->delete(route('itineraries.days.destroy', [$itinerary, $itinerary->days[1]]))
+            ->assertRedirect(route('itineraries.show', $itinerary));
+
+        $itinerary->refresh();
+
+        $this->assertSame(
+            [1, 2],
+            $itinerary->days->pluck('day_number')->map(fn ($n) => (int) $n)->all()
+        );
+
+        // The header reads trip_duration_days, so a count left saying three
+        // while two day cards are on screen is the number lying.
+        $this->assertSame(2, (int) $itinerary->trip_duration_days);
+    }
+
+    public function test_removing_the_first_day_re_numbers_the_days_that_are_left(): void
+    {
+        $itinerary = $this->tripWhoseFirstDayIsEmpty(3);
+
+        $this->actingAs($this->user)
+            ->delete(route('itineraries.days.destroy', [$itinerary, $itinerary->days->first()]))
+            ->assertRedirect();
+
+        $itinerary->refresh();
+
+        // Days 2 and 3 survive but must become 1 and 2, or the trip appears to
+        // begin on its second day and the header claims three days.
+        $this->assertSame(
+            [1, 2],
+            $itinerary->days->pluck('day_number')->map(fn ($n) => (int) $n)->all()
+        );
+        $this->assertSame(2, (int) $itinerary->trip_duration_days);
+
+        // The stop that was on day 3 travels with it rather than being swept up
+        // by the renumbering.
+        $this->assertCount(0, $itinerary->days->first()->items);
+        $this->assertCount(1, $itinerary->days->last()->items);
+    }
+
+    /**
+     * A day that slides up the trip has to move with the start date. Leaving the
+     * old date behind means the page shows day 2 on the date day 3 used to be.
+     */
+    public function test_a_day_that_shifts_up_the_trip_is_re_dated(): void
+    {
+        $startDate = now()->addDays(10)->startOfDay();
+
+        $itinerary = $this->tripOfDays(
+            3,
+            ['alpha'],
+            $startDate->toDateString()
+        );
+
+        $this->actingAs($this->user)
+            ->delete(route('itineraries.days.destroy', [$itinerary, $itinerary->days[1]]))
+            ->assertRedirect();
+
+        // The day that was day 3 is now day 2, so it is one day after the start
+        // rather than two.
+        $this->assertSame(
+            $startDate->copy()->addDay()->toDateString(),
+            $itinerary->refresh()->days->last()->date->toDateString()
+        );
+    }
+
+    public function test_a_shifted_day_on_an_undated_trip_stays_undated(): void
+    {
+        $itinerary = $this->tripOfDays(3, ['alpha']);
+
+        $this->actingAs($this->user)
+            ->delete(route('itineraries.days.destroy', [$itinerary, $itinerary->days[1]]))
+            ->assertRedirect();
+
+        $this->assertNull($itinerary->refresh()->days->last()->date);
+    }
+
+    /**
+     * The refusal that matters: shortening a trip must never quietly take stops
+     * with it. The traveller gets told which day to empty instead.
+     */
+    public function test_a_day_holding_stops_is_kept_rather_than_deleted_with_them(): void
+    {
+        $itinerary = $this->tripOfDays(2, ['alpha']);
+        $day = $itinerary->days->first();
+
+        $this->assertGreaterThan(0, $day->items->count());
+
+        $this->actingAs($this->user)
+            ->delete(route('itineraries.days.destroy', [$itinerary, $day]))
+            ->assertSessionHasErrors('itinerary');
+
+        $itinerary->refresh();
+
+        $this->assertCount(2, $itinerary->days);
+        $this->assertSame(2, (int) $itinerary->trip_duration_days);
+        $this->assertGreaterThan(0, $itinerary->days->first()->items->count());
+    }
+
+    public function test_the_error_names_the_day_that_has_to_be_emptied(): void
+    {
+        $itinerary = $this->tripOfDays(2, ['alpha']);
+
+        $this->actingAs($this->user)
+            ->delete(route('itineraries.days.destroy', [$itinerary, $itinerary->days->first()]))
+            ->assertSessionHasErrors([
+                'itinerary' => 'Move or remove the stops on day 1 before taking that day off.',
+            ]);
+    }
+
+    public function test_the_last_day_cannot_be_taken_off(): void
+    {
+        $itinerary = $this->tripOfDays(1, ['alpha']);
+        $day = $itinerary->days->first();
+
+        $this->actingAs($this->user)
+            ->delete(route('itineraries.days.destroy', [$itinerary, $day]))
+            ->assertSessionHasErrors('itinerary');
+
+        $this->assertCount(1, $itinerary->refresh()->days);
+        $this->assertSame(1, (int) $itinerary->trip_duration_days);
+    }
+
+    public function test_another_traveller_cannot_take_a_day_off_someone_elses_trip(): void
+    {
+        $itinerary = $this->tripOfDays(2, ['alpha']);
+        $stranger = User::factory()->create();
+
+        $this->actingAs($stranger)
+            ->delete(route('itineraries.days.destroy', [$itinerary, $itinerary->days->last()]))
+            ->assertForbidden();
+
+        $this->assertCount(2, $itinerary->refresh()->days);
+    }
+
+    /**
+     * Route model binding resolves an ItineraryDay from the whole table, so
+     * nothing about a posted day id is specific to the trip in the URL. This is
+     * the check that stops one traveller shortening another traveller's trip.
+     */
+    public function test_a_day_from_another_trip_cannot_be_removed(): void
+    {
+        $itinerary = $this->tripOfDays(2, ['alpha']);
+
+        $other = Itinerary::create([
+            'user_id' => $this->user->id,
+            'title' => 'Another trip',
+            'area' => 'Laguna',
+            'budget_level' => 'economy',
+            'trip_duration_days' => 1,
+        ]);
+
+        $foreignDay = $other->days()->create(['day_number' => 1]);
+
+        $this->actingAs($this->user)
+            ->delete(route('itineraries.days.destroy', [$itinerary, $foreignDay]))
+            ->assertForbidden();
+
+        $this->assertCount(1, $other->refresh()->days);
+        $this->assertCount(2, $itinerary->refresh()->days);
     }
 
     /**

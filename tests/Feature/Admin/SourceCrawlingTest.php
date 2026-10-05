@@ -489,7 +489,11 @@ class SourceCrawlingTest extends TestCase
             'title' => 'Guarded trip',
             'area' => 'Laguna',
             'budget_level' => 'economy',
-            'trip_duration_days' => 1,
+            // Two days, not one, so the remove-a-day buttons render. They are
+            // suppressed on a single-day trip, and a fixture that did not know
+            // that would leave the DELETE route below unchecked while the guard
+            // still reported green.
+            'trip_duration_days' => 2,
         ]);
 
         $tripDay = $trip->days()->create(['day_number' => 1]);
@@ -501,6 +505,8 @@ class SourceCrawlingTest extends TestCase
             'end_time' => '10:30',
             'estimated_cost' => 500,
         ]);
+
+        $trip->days()->create(['day_number' => 2]);
 
         // Keyed by viewer, because a page belonging to someone else returns 403
         // and would otherwise be skipped, quietly checking less than before.
