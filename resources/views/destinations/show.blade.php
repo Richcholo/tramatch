@@ -22,11 +22,32 @@
             rather than a feature.
         --}}
         @if ($destination->images->count() > 1)
+            {{--
+                max-w-5xl is load-bearing, not decoration.
+
+                The page container runs to 1600px, but admin photos are stored
+                verbatim by DestinationController::storeUploadedImage() with no
+                resize, and they are typically 1080-1170px phone shots. Letting a
+                slide fill a ~1504px box scales the photo up by roughly 1.3-1.4x,
+                which is what made these look soft: the browser is inventing
+                pixels that were never in the file. Capping the strip at 1024px
+                puts every photo at or below its own size, so it is downscaled or
+                drawn 1:1 and stays sharp.
+
+                object-cover is already correct and must stay: it crops without
+                distorting. object-fill would stretch the aspect ratio, and
+                object-contain would letterbox a 2.7:1 strip. No object-fit value
+                fixes an upscale, which is why this is a width cap.
+
+                Do not widen this without also resizing the uploads -- there is no
+                GD or Imagick on this host to do that with, so srcset is not
+                available as a fallback.
+            --}}
             <section
                 data-gallery
                 aria-roledescription="carousel"
                 aria-label="Photos of {{ $destination->name }}"
-                class="relative overflow-hidden rounded-[2rem] bg-island-white shadow-sm ring-1 ring-boracay-light"
+                class="relative mx-auto max-w-5xl overflow-hidden rounded-[2rem] bg-island-white shadow-sm ring-1 ring-boracay-light"
             >
                 <ul
                     data-gallery-track

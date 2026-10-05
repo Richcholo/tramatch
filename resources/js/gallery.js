@@ -71,11 +71,23 @@ const paint = (state) => {
         dot.setAttribute('aria-current', current ? 'true' : 'false');
     }
 
-    for (const control of state.controls) {
-        control.disabled =
-            control.dataset.galleryPrev !== undefined
-                ? state.current === 0
-                : state.current === state.slides.length - 1;
+    /*
+     * state.prev and state.next, not a guess from the control's own markup.
+     *
+     * These used to be told apart by sniffing `dataset.galleryPrev` on each
+     * button, while buildControls() actually wrote `dataset[key]` with key being
+     * the keyboard shortcut -- so the attribute was data-arrow-left, the check
+     * was never true for either button, and both fell through to the "last
+     * slide" rule. The visible effect was that reaching the final photo disabled
+     * Previous as well, leaving no way back at all. One argument doing two
+     * unrelated jobs, and the two halves were never wired to each other.
+     */
+    if (state.prev) {
+        state.prev.disabled = state.current === 0;
+    }
+
+    if (state.next) {
+        state.next.disabled = state.current === state.slides.length - 1;
     }
 
     if (state.status) {
@@ -90,7 +102,13 @@ const buildControls = (state) => {
 
     controls.replaceChildren();
 
-    const button = (label, glyph, key) => {
+    /*
+     * `shortcut` and `hook` are separate arguments, and `hook` is what
+     * identifies the button from the outside. They were one argument once, which
+     * is what let paint() and buildControls() disagree about which button was
+     * which -- see the note in paint().
+     */
+    const button = (label, glyph, shortcut, hook) => {
         const element = document.createElement('button');
 
         element.type = 'button';
@@ -102,16 +120,16 @@ const buildControls = (state) => {
          * label is mandatory rather than decorative. The glyph itself is then
          * hidden from the accessibility tree to avoid it being read twice.
          */
-        element.setAttribute('aria-keyshortcuts', key);
+        element.setAttribute('aria-keyshortcuts', shortcut);
         element.className =
             'flex h-11 w-11 items-center justify-center rounded-full bg-white/90 text-lg text-volcanic-teal shadow disabled:opacity-40';
-        element.dataset[key] = '';
+        element.dataset[hook] = '';
 
         return element;
     };
 
-    const previous = button('Previous photo', '‹', 'ArrowLeft');
-    const next = button('Next photo', '›', 'ArrowRight');
+    const previous = button('Previous photo', '‹', 'ArrowLeft', 'galleryPrev');
+    const next = button('Next photo', '›', 'ArrowRight', 'galleryNext');
 
     previous.addEventListener('click', () => goTo(state, state.current - 1));
     next.addEventListener('click', () => goTo(state, state.current + 1));
@@ -138,10 +156,18 @@ const buildControls = (state) => {
 
     controls.append(previous, ...dots, next, status);
 
+    /*
+     * `controls` is deliberately left alone here. It is the container element
+     * that was emptied at the top of this function, and it used to be
+     * overwritten here with the two buttons -- so the name referred to a
+     * different kind of thing before and after this line. paint() now uses
+     * state.prev and state.next instead.
+     */
     Object.assign(state, {
         dots,
         status,
-        controls: [previous, next],
+        prev: previous,
+        next,
     });
 };
 
@@ -205,6 +231,8 @@ export default function initGallery() {
             slides,
             dots: [],
             status: null,
+            prev: null,
+            next: null,
             current: 0,
             reducedMotion: window.matchMedia?.(
                 '(prefers-reduced-motion: reduce)'

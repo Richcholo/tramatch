@@ -57,7 +57,7 @@ not make `pint --test` a pass/fail gate.
   `DB_CONNECTION=sqlite`, array cache/session, sync queue) and needs
   `pdo_sqlite` enabled in `php.ini`. Never point it at MySQL to work around a
   driver problem — `RefreshDatabase` would drop the development database.
-- The suite is currently **321 passing**. It is also the only thing that
+- The suite is currently **323 passing**. It is also the only thing that
   migrates from scratch, so it is the only check that a fresh clone can
   migrate — your dev database cannot detect a broken migration chain,
   because every migration in it has already run.
@@ -297,7 +297,7 @@ browser, not asserted by a test.
 |---|---|
 | Itinerary drag, incl. across days | Drag gestures on a viewport other than the one used |
 | Arrow reorder, add dialog, reflow | — |
-| Destination photo carousel: scroll, touch, keyboard, dots | — |
+| Destination photo carousel: scroll, touch, keyboard, dots | Previous/Next enabling as the slide changes |
 | Budget tier auto-fill and mismatch warning | — |
 | The navigation loading overlay | Timing under a slow connection |
 
@@ -918,6 +918,38 @@ migration.
   `#hero` (welcome.blade.php ↔ home.js and page-transitions.js), and
   `[data-swipe-deck|-card|-action|-count|-empty]` (discover/index.blade.php ↔
   swipe.js).
+- **`gallery.js` must never identify its own controls by sniffing their
+  markup.** `paint()` used to disable each arrow by asking it whether it had
+  `dataset.galleryPrev`, while `buildControls()` wrote `dataset[key]` with
+  `key` being the *keyboard shortcut* — so the attribute actually written was
+  `data-arrow-left`. The check was therefore never true for either button, both
+  fell through to the "last slide" branch, and **reaching the final photo
+  disabled Previous as well: no way back.** One argument doing two unrelated
+  jobs, and the two halves were never wired to each other.
+  `buildControls()` now takes `shortcut` and `hook` as separate arguments and
+  puts `prev` / `next` on `state`, which `paint()` reads directly. It also no
+  longer overwrites `state.controls` — that name meant the container element
+  before that line and a button array after it.
+  `the_previous_control_is_only_disabled_on_the_first_photo` pins the two
+  halves agreeing by reading the source, because there is no JS test runner
+  here and the symptom was invisible to every test that existed.
+- **The carousel's `max-w-5xl` is load-bearing, not decoration.** The page
+  container runs to `max-w-[1600px]`, but
+  `DestinationController::storeUploadedImage()` stores uploads **verbatim** with
+  no resize, and they are typically 1080–1170px phone shots. An uncapped slide
+  is a ~1504px box, so the browser scales the photo up 1.3–1.4× and it renders
+  soft — that was the "blurry carousel" report.
+  **`object-fit` cannot fix this, and "try a different object-fit" is the wrong
+  fix.** `cover` already ships and is correct: it crops without distorting.
+  `fill` stretches the aspect ratio and `contain` letterboxes a 2.7:1 strip.
+  No `object-fit` value prevents an upscale, so the fix is the width cap, which
+  puts every photo at or below its own size.
+  There is **no GD and no Imagick on this host**, so resizing at upload time —
+  and therefore `srcset` as a fallback — is not available. If the photos are
+  ever replaced with higher-resolution ones, the cap can be revisited; widening
+  it without that reintroduces the blur.
+  `the_carousel_is_capped_so_photos_are_not_upscaled` pins both the cap and
+  `object-cover`, since removing either looks like tidying.
 - `page-transitions.js` never intercepts navigation. It only *observes* it: a
   same-origin link click or a same-origin form submit arms a 350 ms timer, and
   only if the browser has not already navigated does the full-screen

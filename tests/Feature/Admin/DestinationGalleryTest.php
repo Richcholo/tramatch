@@ -6,6 +6,8 @@ use App\Models\Destination;
 use App\Models\DestinationImage;
 use App\Models\Tag;
 use App\Models\User;
+use DOMDocument;
+use DOMXPath;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -392,6 +394,143 @@ class DestinationGalleryTest extends TestCase
                 'photo '.$index.' is missing from the server-rendered page'
             );
         }
+    }
+
+    /**
+     * Which control gets disabled has to come from buildControls(), never from
+     * the control's own markup.
+     *
+     * paint() used to decide by asking each button whether it had a
+     * `dataset.galleryPrev`, while buildControls() wrote `dataset[key]` where key
+     * was the *keyboard shortcut* -- so the attribute it actually wrote was
+     * data-arrow-left. The check was therefore never true for either button, so
+     * both fell through to the "last slide" branch: reaching the final photo
+     * disabled Previous as well and there was no way back. One argument doing
+     * two unrelated jobs, with the two halves never wired to each other.
+     *
+     * There is no JS test runner in this project, so this reads the source to
+     * pin that the two halves agree. That is weaker than executing it, but it
+     * fails the moment they drift apart again, which is the thing that actually
+     * happened -- and the symptom was invisible to every test that existed.
+     */
+    #[Test]
+    public function the_previous_control_is_only_disabled_on_the_first_photo(): void
+    {
+        $source = (string) file_get_contents(resource_path('js/gallery.js'));
+
+        /*
+         * Matched on the whole expression rather than on the bare property name,
+         * so the prose in paint() explaining what went wrong does not trip it.
+         */
+        $this->assertFalse(
+            str_contains($source, 'dataset.galleryPrev !== undefined'),
+            'paint() is identifying the previous button by sniffing dataset.galleryPrev '
+            .'again. buildControls() does not write that attribute, so the test is never '
+            .'true and both buttons end up disabled on the last photo, stranding the '
+            .'traveller on the final image with no way back.'
+        );
+
+        $this->assertMatchesRegularExpression(
+            '/state\.prev\.disabled\s*=\s*state\.current === 0/',
+            $source,
+            'the previous button is no longer disabled on the first photo'
+        );
+
+        $this->assertMatchesRegularExpression(
+            '/state\.next\.disabled\s*=\s*state\.current === state\.slides\.length - 1/',
+            $source,
+            'the next button is no longer disabled on the last photo'
+        );
+
+        // paint() can only reach the buttons if buildControls() hands them over.
+        $this->assertMatchesRegularExpression(
+            '/Object\.assign\(\s*state\s*,\s*\{[^}]*\bprev:\s*previous\b[^}]*\bnext\b[^}]*\}\s*\)/s',
+            $source,
+            'buildControls() no longer puts prev and next on state, so paint() has '
+            .'nothing to disable and neither arrow is ever disabled'
+        );
+    }
+
+    /**
+     * The strip is capped, and the cap is what keeps the photos sharp.
+     *
+     * The page container runs to max-w-[1600px], while uploads are stored
+     * verbatim with no resize and are typically 1080-1170px wide. A slide
+     * filling that container is a ~1504px box, so the browser scales the photo up
+     * by 1.3-1.4x and softens it. Nothing in the request mentions resolution,
+     * so removing max-w-5xl looks like tidying and quietly reintroduces the blur
+     * -- and there is no browser test here to notice.
+     *
+     * 1024px is chosen because it is at or below the narrowest phone photo in
+     * circulation, so the photo is downscaled or drawn 1:1. Widening this needs
+     * resizing the uploads at upload time, which this host cannot do: no GD, no
+     * Imagick.
+     */
+    #[Test]
+    public function the_carousel_is_capped_so_photos_are_not_upscaled(): void
+    {
+        $destination = $this->destination();
+
+        foreach (range(1, 2) as $index) {
+            $destination->images()->create([
+                'path' => 'https://images.example.com/'.$index.'.jpg',
+                'sort_order' => $index - 1,
+            ]);
+        }
+
+        $html = $this->get(route('destinations.show', $destination))
+            ->assertOk()
+            ->getContent();
+
+        $document = new DOMDocument();
+
+        @$document->loadHTML($html);
+
+        libxml_clear_errors();
+
+        $xpath = new DOMXPath($document);
+
+        $classes = preg_split(
+            '/\s+/',
+            trim($xpath->query('//*[@data-gallery]')->item(0)->getAttribute('class')),
+            -1,
+            PREG_SPLIT_NO_EMPTY
+        );
+
+        $this->assertContains(
+            'max-w-5xl',
+            $classes,
+            'the carousel is no longer capped, so each photo is scaled up past its '
+            .'own resolution and renders soft. Do not widen it without resizing '
+            .'the uploads at upload time.'
+        );
+
+        /*
+         * object-fit is on the image, not the section. cover is what crops
+         * without distorting; fill is the one that stretches, and swapping to it
+         * would reintroduce the problem in a different shape. Asserted here
+         * because "try another object-fit" is a tempting, wrong-looking fix.
+         */
+        $imageClasses = preg_split(
+            '/\s+/',
+            trim($xpath->query('//*[@data-gallery-track]//img')->item(0)->getAttribute('class')),
+            -1,
+            PREG_SPLIT_NO_EMPTY
+        );
+
+        $this->assertContains(
+            'object-cover',
+            $imageClasses,
+            'the carousel images no longer use object-cover, so they are stretched '
+            .'to the box instead of cropped to it'
+        );
+
+        $this->assertNotContains(
+            'object-fill',
+            $imageClasses,
+            'object-fill stretches an image to the box rather than cropping it, '
+            .'which distorts the aspect ratio'
+        );
     }
 
     /**
