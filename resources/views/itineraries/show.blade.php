@@ -459,7 +459,13 @@
                                         data-key="{{ $item->id }}"
                                         class="rounded-xl border border-boracay-light bg-white p-4 shadow-sm"
                                     >
-                                        <input type="hidden" name="items[{{ $item->id }}][day_id]" value="{{ $day->id }}">
+                                        {{-- data-field="day-id" is what makes cross-day dragging
+                                             possible: itinerary-editor.js rewrites this value when a row
+                                             is dropped into a different day's list. The template row had
+                                             the hook and the rendered rows did not, so a row that arrived
+                                             with the page could be added and reordered but never
+                                             moved between days. --}}
+                                        <input type="hidden" name="items[{{ $item->id }}][day_id]" data-field="day-id" value="{{ $day->id }}">
                                         <input type="hidden" name="items[{{ $item->id }}][sort_order]" data-field="sort-order" value="{{ $item->sort_order }}">
                                         <input type="hidden" name="items[{{ $item->id }}][destination_id]" data-field="destination-id" value="{{ $item->destination_id }}">
 

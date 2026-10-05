@@ -351,6 +351,55 @@ function initItineraryEditor(root) {
 
     /* ---------------------------------------------------------------- drag */
 
+    /**
+     * Which day's list is under the pointer right now.
+     *
+     * Resolved per move rather than once at pointerdown, which is the whole
+     * difference between reordering within a day and dragging between days. The
+     * days are a two-column grid on desktop and stacked on mobile, so this has to
+     * consider X as well as Y -- a pointer below the source day's last row can be
+     * over a completely different column.
+     *
+     * Hit-tested from the lists' own rectangles rather than with
+     * document.elementFromPoint, because the dragged row is fixed to the pointer
+     * and would otherwise be the thing under it.
+     */
+    function listUnder(pointerX, pointerY, fallback) {
+        const lists = [...editView.querySelectorAll('[data-stop-list]')];
+
+        for (const candidate of lists) {
+            const box = candidate.getBoundingClientRect();
+
+            if (
+                pointerX >= box.left &&
+                pointerX <= box.right &&
+                pointerY >= box.top &&
+                pointerY <= box.bottom
+            ) {
+                return candidate;
+            }
+        }
+
+        return fallback;
+    }
+
+    /**
+     * Point a row at the day it now sits in.
+     *
+     * The hidden day_id input is the whole contract: it is what
+     * UpdateItineraryRequest validates against this trip's own days, and what
+     * the server reads to move the item. A row that lands in another day's list
+     * without this being rewritten would post its old day_id and silently snap
+     * back on reload.
+     */
+    function adoptDay(row, list) {
+        const field = row.querySelector('[data-field="day-id"]');
+
+        if (field && list.dataset.dayId) {
+            field.value = list.dataset.dayId;
+        }
+    }
+
     function draggable(row) {
         const handle = row.querySelector('[data-drag-handle]');
 
@@ -361,30 +410,36 @@ function initItineraryEditor(root) {
 
             event.preventDefault();
 
-            const list = row.closest('[data-stop-list]');
+            const source = row.closest('[data-stop-list]');
             const placeholder = document.createElement('li');
             const box = row.getBoundingClientRect();
             const offsetY = event.clientY - box.top;
+            const offsetX = event.clientX - box.left;
 
             placeholder.style.height = `${box.height}px`;
             placeholder.className = 'rounded-xl border-2 border-dashed border-boracay bg-boracay-light/40';
             placeholder.setAttribute('aria-hidden', 'true');
 
-            list.insertBefore(placeholder, row);
+            source.insertBefore(placeholder, row);
             row.style.position = 'fixed';
             row.style.zIndex = '40';
             row.style.top = `${event.clientY - offsetY}px`;
+            row.style.left = `${event.clientX - offsetX}px`;
             row.style.width = `${box.width}px`;
             row.style.pointerEvents = 'none';
             document.body.style.userSelect = 'none';
 
             let pointerY = event.clientY;
+            let pointerX = event.clientX;
             let frame = 0;
             let lastReference = null;
+            let lastList = source;
+            let crossed = false;
 
             const place = () => {
                 frame = 0;
                 row.style.top = `${pointerY - offsetY}px`;
+                row.style.left = `${pointerX - offsetX}px`;
 
                 const edge = 90;
 
@@ -397,7 +452,30 @@ function initItineraryEditor(root) {
 
             const onMove = (moveEvent) => {
                 pointerY = moveEvent.clientY;
+                pointerX = moveEvent.clientX;
 
+                /*
+                 * Re-home the placeholder first, so the index search below runs
+                 * against the list the pointer is actually over. Doing it the other
+                 * way round would compute an index in the source list and then
+                 * insert into a different one.
+                 */
+                const target = listUnder(pointerX, pointerY, source);
+
+                if (target !== lastList) {
+                    lastList = target;
+                    crossed = true;
+
+                    if (target) {
+                        target.appendChild(placeholder);
+                    }
+
+                    // Force the reshuffle below to run: the reference that was
+                    // current belongs to the list we just left.
+                    lastReference = null;
+                }
+
+                const list = lastList;
                 const rest = [...list.querySelectorAll('[data-stop]')].filter((node) => node !== row);
                 let index = rest.length;
 
@@ -444,13 +522,33 @@ function initItineraryEditor(root) {
                 row.style.position = '';
                 row.style.zIndex = '';
                 row.style.width = '';
+                row.style.left = '';
                 row.style.pointerEvents = '';
                 document.body.style.userSelect = '';
 
                 placeholder.replaceWith(row);
 
-                renumber(list);
-                refreshTravel(list);
+                const destination = row.closest('[data-stop-list]') ?? source;
+
+                if (crossed) {
+                    adoptDay(row, destination);
+                }
+
+                /*
+                 * Both lists, not just the destination. Moving a row out of a day
+                 * leaves a gap in the source day's ordering, and renumbering only
+                 * the destination would post sort_order 1,3,4 for a day that now
+                 * has three stops -- which the reflow endpoint and the schedule
+                 * both read.
+                 */
+                renumber(destination);
+                refreshTravel(destination);
+
+                if (destination !== source) {
+                    renumber(source);
+                    refreshTravel(source);
+                }
+
                 markDirty();
             };
 

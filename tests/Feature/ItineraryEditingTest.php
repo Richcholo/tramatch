@@ -965,6 +965,144 @@ public function test_the_editor_itself_ignores_a_cost_in_the_draft(): void
     }
 
     /**
+     * An itinerary with at least one item per day, so every rendered row is
+     * reachable. Generated rather than hand-built so the shape matches what the
+     * editor actually has to cope with.
+     */
+    private function itineraryWithStops(): Itinerary
+    {
+        return $this->generateItinerary(...array_keys($this->destinations));
+    }
+
+    /**
+     * Cross-day dragging needs the day id to be *writable* by script.
+     *
+     * itinerary-editor.js rewrites a row's hidden day_id when it is dropped into
+     * another day's list. That is the entire server contract for moving a stop
+     * between days -- UpdateItineraryRequest validates it against this trip's own
+     * days and the server reads it to reassign the item -- so a rendered row
+     * without the `data-field="day-id"` hook is a row that can be added and
+     * reordered but can never change day.
+     *
+     * The template row had the hook and the rows the server rendered did not.
+     * Every HTTP-level test passed throughout, because nothing about a POST body
+     * changes: the field was always submitted with the right day, it just could
+     * not be edited. This is the same blind spot as the drag code itself.
+     *
+     * Named `test_` rather than carrying `#[Test]`: every other test in this file
+     * uses the prefix, and this class imports no PHPUnit attributes. An
+     * unimported `#[Test]` is not an error -- it is silently ignored, so the
+     * method is never run and the file still reports green. That is worth knowing
+     * before adding a test here and trusting the count.
+     */
+    public function test_every_rendered_stop_row_exposes_its_day_id_to_the_script(): void
+    {
+        $itinerary = $this->itineraryWithStops();
+
+        $html = $this->actingAs($itinerary->user)
+            ->get(route('itineraries.show', $itinerary))
+            ->assertOk()
+            ->getContent();
+
+        $document = new DOMDocument();
+
+        @$document->loadHTML($html);
+
+        libxml_clear_errors();
+
+        $xpath = new DOMXPath($document);
+
+        /*
+         * `not(ancestor::template)`, not `not(self::template)`.
+         *
+         * DOMDocument parses <template> content as ordinary children, so
+         * excluding only the template element still leaves its inner [data-stop]
+         * in the result set -- and that row's day id is deliberately EMPTY,
+         * because the template sits outside the day loop and has no day to bind
+         * to. Asserting on it fails for a reason that has nothing to do with
+         * cross-day dragging.
+         */
+        $rows = $xpath->query('//*[@data-stop and not(ancestor::template)]');
+
+        $this->assertGreaterThan(
+            0,
+            $rows->length,
+            'no rendered stop rows to assert on'
+        );
+
+        foreach ($rows as $row) {
+            // XPath rather than $row->querySelector(): DOMElement has no
+            // querySelector in PHP's DOM extension, so the obvious call fatals
+            // rather than returning null and quietly asserting on nothing.
+            $fields = (new DOMXPath($row->ownerDocument))
+                ->query('.//*[@data-field="day-id"]', $row);
+
+            $this->assertSame(
+                1,
+                $fields->length,
+                'a rendered stop row has no [data-field="day-id"], so dragging it to '
+                .'another day would post the old day and silently snap back on reload'
+            );
+
+            $this->assertNotSame(
+                '',
+                trim($fields->item(0)->getAttribute('value')),
+                'the day id input is empty, so the row cannot say which day it belongs to'
+            );
+        }
+
+        /*
+         * And it has to agree with the day whose list it sits in, or the script
+         * would rewrite a value that already contradicts its surroundings.
+         */
+        foreach ($xpath->query('//*[@data-stop-list]') as $list) {
+            $dayId = $list->getAttribute('data-day-id');
+
+            $fields = $xpath->query('.//*[@data-field="day-id"]', $list);
+
+            for ($i = 0; $i < $fields->length; $i++) {
+                $this->assertSame(
+                    $dayId,
+                    trim($fields->item($i)->getAttribute('value')),
+                    'a stop row in day '.$dayId.' carries day id '
+                    .trim($fields->item($i)->getAttribute('value'))
+                );
+            }
+        }
+    }
+
+    /**
+     * The row template a cloned stop is built from needs the same hook, or an
+     * added stop could never be dragged between days either.
+     */
+    public function test_the_stop_row_template_exposes_its_day_id_too(): void
+    {
+        $itinerary = $this->itineraryWithStops();
+
+        $html = $this->actingAs($itinerary->user)
+            ->get(route('itineraries.show', $itinerary))
+            ->assertOk()
+            ->getContent();
+
+        $document = new DOMDocument();
+
+        @$document->loadHTML($html);
+
+        libxml_clear_errors();
+
+        $xpath = new DOMXPath($document);
+
+        $templates = $xpath->query('//template//*[@data-field="day-id"]');
+
+        $this->assertGreaterThan(
+            0,
+            $templates->length,
+            'the stop row template has no day id field, so a newly added stop could not '
+            .'be dragged between days'
+        );
+    }
+
+    /**
      * The script shows and hides things with the HTML `hidden` *attribute*
      * (`element.hidden = true`). Tailwind's `hidden` *class* is `display: none`,
      * and an author-level display rule beats the browser's own
