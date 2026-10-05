@@ -26,7 +26,16 @@
 </IfModule>
 
 # Manifests, lockfiles and environment files, wherever they end up.
-<FilesMatch "(^\.env|\.env\.(example|production|backup)|composer\.(json|lock)|package(-lock)?\.json|phpunit\.xml|(^|/)\.gitignore)$">
+#
+# \.sh is in this list because the queue worker is the one file in this project
+# that gets copied to a path the cron entry points at, and the natural place to
+# put it is the document root. Nothing denies a stray file there: the rules above
+# only cover named directories, and the front-controller rule further down has
+# `!-f`, so an existing file is served as-is. A copy of queue-worker.sh sitting
+# next to index.php was therefore readable at /queue-worker.sh, disclosing the
+# deployment layout and log paths. It holds no secrets, which is not the same as
+# being fine to publish.
+<FilesMatch "(^\.env|\.env\.(example|production|backup)|composer\.(json|lock)|package(-lock)?\.json|phpunit\.xml|\.sh$|(^|/)\.gitignore)$">
     <IfModule mod_authz_core.c>
         Require all denied
     </IfModule>

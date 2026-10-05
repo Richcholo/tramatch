@@ -245,6 +245,22 @@ Admin UI: `/admin/sources`, `/admin/proposals`. CLI: `sources:crawl {sourceId}`.
 - The crawler User-Agent and contact address come from `config/crawling.php`
   (env `CRAWLER_CONTACT`). `RobotsPolicyService` matches robots groups on
   `crawling.token`, which must stay a prefix of `crawling.user_agent`.
+  `CRAWLER_CONTACT` is `support@tramatch.site` in **all three** of `.env`,
+  `.env.example` and `.env.production.example`, deliberately not a placeholder:
+  a bot identifying itself as `+mailto:admin@yourdomain.tld` is a mailbox nobody
+  can complain to, which defeats the point of an identifiable crawler. **The
+  server's own `.env` predates that change and still needs editing**, then
+  `optimize:clear`, or the old address keeps shipping from the cached config.
+- **A `.sh` file in the document root is refused by both `.htaccess` copies.**
+  It was not, and a copy of `queue-worker.sh` was readable at `/queue-worker.sh`:
+  the `RedirectMatch` rules only cover *named directories*, and the
+  front-controller `RewriteRule` has `!-f`, so any real file next to `index.php`
+  is served as-is. The worker is the one file here that gets copied to wherever
+  cron points, and the document root is the natural place to put it.
+  `HtaccessRulesTest` now pins this, plus that the two copies refuse the same
+  directories — the duplication is deliberate, since only one file is read per
+  layout, so drift leaves half the installs unprotected. **Any new file type
+  added to one copy must be added to both.**
 - `DestinationSourceParser` only *proposes* changes. Nothing touches
   `destinations` until an admin approves.
 - **The crawler may only propose hours and fees**: `entrance_fee`,

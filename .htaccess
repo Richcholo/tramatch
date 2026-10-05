@@ -51,7 +51,12 @@
     RewriteRule ^(.*)$ public/$1 [L,QSA]
 </IfModule>
 
-<FilesMatch "(^\.env|\.env\.(example|production|backup)|composer\.(json|lock)|package(-lock)?\.json|phpunit\.xml|artisan$|(^|/)\.gitignore)$">
+# Kept identical to the copy in public/.htaccess -- see the note at the top of
+# that file. The \.sh entry covers queue-worker.sh: this layout puts the whole
+# application inside the document root, and a copy of the worker parked next to
+# index.php would otherwise be served at /queue-worker.sh, because nothing here
+# refuses a file that is not in one of the named directories.
+<FilesMatch "(^\.env|\.env\.(example|production|backup)|composer\.(json|lock)|package(-lock)?\.json|phpunit\.xml|artisan$|\.sh$|(^|/)\.gitignore)$">
     <IfModule mod_authz_core.c>
         Require all denied
     </IfModule>
