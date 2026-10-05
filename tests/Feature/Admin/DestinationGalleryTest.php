@@ -452,29 +452,33 @@ class DestinationGalleryTest extends TestCase
     }
 
     /**
-     * The carousel and the hero share one width, and that width is capped.
+     * The carousel is the same width as the hero, and that width is uncapped.
      *
-     * The page container runs to max-w-[1600px], while uploads are stored
-     * verbatim with no resize and are typically 1080-1170px wide. A slide
-     * filling that container is a ~1504px box, so the browser scales the photo up
-     * by 1.3-1.4x and softens it. Nothing in the request mentions resolution,
-     * so removing max-w-5xl looks like tidying and quietly reintroduces the blur
-     * -- and there is no browser test here to notice.
+     * This asserts a decision with a known cost, and it is here so the cost is
+     * visible rather than rediscovered.
      *
-     * 1024px is chosen because it is at or below the narrowest phone photo in
-     * circulation, so the photo is downscaled or drawn 1:1. Widening this needs
-     * resizing the uploads at upload time, which this host cannot do: no GD, no
-     * Imagick, on the CLI or under XAMPP.
+     * The page container runs to max-w-[1600px], so both blocks render ~1504px
+     * wide, while uploads are stored verbatim with no resize and are typically
+     * 1080-1170px wide. That is a 1.3-1.4x upscale, so the photos render soft on
+     * wide screens. There is a sharp version: max-w-5xl (1024px) on both, which
+     * was implemented and then reverted. The owner judged the narrower pair the
+     * wrong look and asked twice for the carousel to match the hero instead.
      *
-     * Both blocks carry the cap rather than just the carousel. Capping only the
-     * carousel left one narrow block above a full-bleed hero on an otherwise
-     * full-width page, which read as a mistake; widening the carousel back out
-     * restores the upscale. Equal widths is the version that is consistent AND
-     * sharp, so the two are asserted against each other and not just against a
-     * literal class name.
+     * So the honest state is: consistent and full width, knowingly soft. The real
+     * fix is resizing the uploads so a 1504px box has enough pixels, which also
+     * makes srcset possible -- and that needs GD or Imagick, which are absent
+     * from both the CLI and XAMPP.
+     *
+     * If this test fails on the cap assertion, read the note above before
+     * "fixing" it: re-adding the cap is a real option, but it is a design change
+     * the owner rejected twice, not a bug.
+     *
+     * The object-fit assertions are unaffected by any of that -- cover is correct
+     * at any width, and "try another object-fit" remains the wrong fix for an
+     * upscale because no object-fit value prevents one.
      */
     #[Test]
-    public function the_carousel_and_the_hero_share_a_capped_width(): void
+    public function the_carousel_matches_the_hero_and_neither_is_capped(): void
     {
         // image_url set deliberately: without it the hero renders a gradient div
         // instead of an <img>, and the object-fit assertions would have nothing
@@ -526,32 +530,25 @@ class DestinationGalleryTest extends TestCase
         $carousel = $classesAt('//*[@data-gallery]');
         $hero = $classesAt('//main//section[.//h1]');
 
-        foreach (['carousel' => $carousel, 'hero' => $hero] as $name => $list) {
-            $this->assertContains(
-                'max-w-5xl',
-                $list,
-                'the '.$name.' is no longer capped, so its photo is scaled up past '
-                .'its own resolution and renders soft. Do not widen it without '
-                .'resizing the uploads at upload time.'
-            );
-        }
-
-        // Asserted against each other as well as against the class name, because
-        // the real requirement is that they match: a shared literal class is only
-        // one way to achieve it.
+        // The real requirement: they match. Compared as resolved width classes,
+        // not against one shared literal, so the guard survives the cap being
+        // added to both or to neither.
         $this->assertSame(
-            preg_grep('/^max-w-/', $carousel),
-            preg_grep('/^max-w-/', $hero),
+            preg_grep('/^(max-w-|mx-auto)/', $carousel),
+            preg_grep('/^(max-w-|mx-auto)/', $hero),
             'the carousel and the hero must resolve to the same width, or one of '
             .'them reads as a mistake against the other'
         );
 
-        /*
-         * object-fit is on the images, not the sections. cover is what crops
-         * without distorting; fill is the one that stretches, and swapping to it
-         * would reintroduce the problem in a different shape. Asserted here
-         * because "try another object-fit" is a tempting, wrong-looking fix.
-         */
+        $this->assertSame(
+            [],
+            preg_grep('/^max-w-/', $carousel),
+            'the carousel has been capped. That was implemented and reverted: the '
+            .'owner asked twice for it to match the full-width hero, accepting that '
+            .'the photos are upscaled and soft. Re-adding a cap is a valid design '
+            .'change but it is not a bug fix -- see the note on this test.'
+        );
+
         foreach ([
             'carousel photo' => '//*[@data-gallery-track]//img',
             'hero photo' => '//main//section[.//h1]//img',

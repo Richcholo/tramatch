@@ -23,38 +23,36 @@
         --}}
         @if ($destination->images->count() > 1)
             {{--
-                max-w-5xl is load-bearing, not decoration, and it is shared with the
-                hero below on purpose.
+                Full width, matching the hero below.
 
-                The page container runs to 1600px, but admin photos are stored
-                verbatim by DestinationController::storeUploadedImage() with no
-                resize, and they are typically 1080-1170px phone shots. Letting a
-                slide fill a ~1504px box scales the photo up by roughly 1.3-1.4x,
-                which is what made these look soft: the browser is inventing
-                pixels that were never in the file. Capping the strip at 1024px
-                puts every photo at or below its own size, so it is downscaled or
-                drawn 1:1 and stays sharp.
+                Deliberately uncapped, and that is a decision with a known cost,
+                so it is written down rather than left to be "tidied" either way.
+                The page container runs to 1600px, so this block is ~1504px wide,
+                while admin photos are stored verbatim by
+                DestinationController::storeUploadedImage() with no resize and are
+                typically 1080-1170px phone shots. So the browser scales each photo
+                up by roughly 1.3-1.4x and it renders soft.
 
-                The hero carries the same cap. Capping only the carousel left one
-                narrow block above a full-bleed hero on an otherwise full-width
-                page, which read as a mistake, and widening the carousel back out
-                restores the upscale. Giving both the same width is the version
-                that is consistent AND sharp.
+                The alternative was max-w-5xl (1024px) on both this and the hero,
+                which was sharp and also consistent -- but the owner judged a
+                narrower media pair the wrong look for the page, twice, and asked
+                for the carousel to match the hero instead. Their call, taken.
 
-                object-cover is already correct and must stay: it crops without
-                distorting. object-fill would stretch the aspect ratio, and
-                object-contain would letterbox a 2.7:1 strip. No object-fit value
-                fixes an upscale, which is why this is a width cap.
+                object-cover is correct and must stay: it crops without
+                distorting. object-fill would stretch the aspect ratio and
+                object-contain would letterbox a ~3.9:1 strip.
 
-                Do not widen these without also resizing the uploads -- there is no
-                GD or Imagick on this host, on the CLI or under XAMPP, so srcset
-                is not available as a fallback.
+                The real fix is to resize the uploads so there are enough pixels
+                for a 1504px box, which also makes srcset possible. There is no GD
+                and no Imagick here -- checked on the CLI and under XAMPP -- so
+                that needs an extension enabled on the host plus a backfill of the
+                existing photos. Until then this stays soft on wide screens.
             --}}
             <section
                 data-gallery
                 aria-roledescription="carousel"
                 aria-label="Photos of {{ $destination->name }}"
-                class="relative mx-auto max-w-5xl overflow-hidden rounded-[2rem] bg-island-white shadow-sm ring-1 ring-boracay-light"
+                class="relative overflow-hidden rounded-[2rem] bg-island-white shadow-sm ring-1 ring-boracay-light"
             >
                 <ul
                     data-gallery-track
@@ -90,10 +88,7 @@
             </section>
         @endif
 
-        {{-- max-w-5xl matches the carousel above; see the note there. The text
-             inside is already max-w-4xl, so this trims mostly empty image rather
-             than reflowing the title. --}}
-        <section class="relative mx-auto max-w-5xl overflow-hidden rounded-[2rem] bg-volcanic-teal text-white shadow-xl">
+        <section class="relative overflow-hidden rounded-[2rem] bg-volcanic-teal text-white shadow-xl">
             @if ($destination->image_url)
                 <img
                     src="{{ $destination->image_url }}"
