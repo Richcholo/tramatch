@@ -936,25 +936,41 @@ the runtime never executes it.
   `--no-dev` composer step *removes* dev packages rather than skipping them, so
   running it on a developer machine deletes PHPUnit out from under the test
   suite. Verified by accident once already.
-- **The queue is drained by `php artisan queue:drain`, registered as an hPanel
-  cron job every minute.** Shared hosting will not run `queue:work` as a
-  daemon. Without a drain, `/admin/sources` queues crawls that nobody picks up
-  and the page deliberately does not warn about it.
-  It was `deploy/queue-worker.sh` before this, and that file is deleted. It had
-  three ways to fail silently on this host, all invisible: an `APP_ROOT` whose
-  default was the literal placeholder `yourdomain.tld` (wrong value → `exit 0`
-  having done nothing, so cron reported success while crawls sat in `queued`),
-  its own PHP-binary resolution because cron has a minimal PATH, and a log at
-  `~/queue-worker.log` that nothing in the app knew about. It cost two
-  deployments and its live copy lived outside the repo, so `git pull` never
-  touched it. **Do not reintroduce a shell script for this** — the command has
-  none of those failure modes and is testable, which the script was not.
-- `DrainQueue` logs to `storage/logs/laravel.log` with a `queue:drain` prefix
-  rather than printing, because **cron discards stdout on this host**. The log
-  line that matters is `found the queue empty`: it means the drain ran and the
-  queue was genuinely empty, which is the one thing `status` stuck on `queued`
-  does not tell you. Without it you cannot distinguish a broken cron from a
-  dispatch that never enqueued.
+- **The queue worker is `deploy/queue-worker.sh`, registered as an hPanel cron
+  job every minute.** Shared hosting will not run `queue:work` as a daemon.
+  Without a worker, `/admin/sources` queues crawls that nobody picks up and the
+  page deliberately does not warn about it.
+  **The script holds no job-handling logic.** It finds the app root, finds the
+  PHP binary, records that cron ran, and calls `php artisan queue:drain`, which
+  owns the behaviour and is the part with tests. Do not move drain logic into
+  the shell: it was there before, could not be tested, and a placeholder
+  `APP_ROOT` plus a silent `exit 0` survived two deployments because of it.
+- **Test the worker with `/bin/bash ~/queue-worker.sh`, never with
+  `php artisan queue:drain`.** They are not the same test. The script is what
+  resolves the app root, picks the PHP binary and sees cron's minimal
+  environment; none of that happens when artisan is invoked directly. Running
+  `php` by hand and concluding the worker was broken was the mistake twice —
+  `php` worked every time, the wrapper around it did not.
+- The script discovers the app root when `APP_ROOT` is unset: a directory under
+  `$HOME/domains` holding **both** `artisan` and `.env`, which is true of the
+  app root in Layout A and Layout B and of nothing else. There is **no default
+  path** — the old literal placeholder `yourdomain.tld` is why a wrong worker
+  exited 0 having done nothing. Zero or several matches is an error, logged and
+  exited non-zero.
+- **`~/queue-worker.sh` is the one file in this repo with a live copy outside
+  version control**, so `git pull` never updates it and a fix in the repo does
+  nothing until you re-copy. It was still running the old version after two
+  rounds of editing it here. `/queue-worker.sh` is in `.gitignore` for that
+  reason.
+- **Two logs, deliberately, answering different questions:**
+  `~/queue-worker.log` says whether cron fired and which PHP it resolved;
+  `storage/logs/laravel.log` (prefix `queue:drain`) says whether the drain found
+  work. The first cannot answer the second, and "cron is broken" is
+  indistinguishable from "nothing was ever queued" without it.
+- `DrainQueue` logs its own progress rather than printing, because **cron
+  discards stdout on this host**. The line that matters is
+  `found the queue empty`: it means the drain ran and the queue was genuinely
+  empty, which is the one thing `status` stuck on `queued` does not tell you.
 - **`DrainQueue` stops on the first job that throws outside its own handling.**
   Releasing puts the row back with `available_at` in the past, so the next
   `pop()` returns the same job and a permanently failing job never leaves the

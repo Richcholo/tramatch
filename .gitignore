@@ -23,15 +23,15 @@
 /public/storage
 # Host artifacts, not project files. deploy/setup-website.sh creates the
 # public_html symlink on the server (Hostinger will not change a Web plan's
-# document root). Without this, deploy.sh's dirty-tree guard blocks every deploy
-# because of a file the deployment itself created.
+# document root), and deploy/queue-worker.sh is copied into $HOME so cron can
+# reach it. Without these, deploy.sh's dirty-tree guard blocks every deploy
+# because of files the deployment itself created.
 #
-# /queue-worker.sh is gone from here and from the repo. The queue is now drained
-# by `php artisan queue:drain` straight from the cron command, so there is no
-# file in $HOME to be out of sync with the repository. A stale copy on the host
-# is harmless but worth deleting.
+# Re-copy the worker after every pull. It is the one file in this repo with a
+# live copy outside version control, which is exactly why it goes stale.
 /public_html
 /public_html.hostinger-backup
+/queue-worker.sh
 /storage/*.key
 /storage/pail
 /vendor
