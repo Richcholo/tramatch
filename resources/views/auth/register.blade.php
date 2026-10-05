@@ -26,7 +26,7 @@
 
                 <x-text-input
                     id="first_name"
-                    class="mt-2 block w-full rounded-xl border-boracay-light bg-white focus:border-boracay focus:ring-boracay"
+                    class="mt-2 block w-full rounded-lg border-boracay-light bg-white focus:border-boracay focus:ring-boracay"
                     type="text"
                     name="first_name"
                     :value="old('first_name')"
@@ -51,7 +51,7 @@
 
                 <x-text-input
                     id="last_name"
-                    class="mt-2 block w-full rounded-xl border-boracay-light bg-white focus:border-boracay focus:ring-boracay"
+                    class="mt-2 block w-full rounded-lg border-boracay-light bg-white focus:border-boracay focus:ring-boracay"
                     type="text"
                     name="last_name"
                     :value="old('last_name')"
@@ -76,7 +76,7 @@
 
             <x-text-input
                 id="email"
-                class="mt-2 block w-full rounded-xl border-boracay-light bg-white focus:border-boracay focus:ring-boracay"
+                class="mt-2 block w-full rounded-lg border-boracay-light bg-white focus:border-boracay focus:ring-boracay"
                 type="email"
                 name="email"
                 :value="old('email')"
@@ -100,7 +100,7 @@
             <div class="relative mt-2">
                 <x-text-input
                     id="password"
-                    class="block w-full rounded-xl border-boracay-light bg-white pr-12 focus:border-boracay focus:ring-boracay"
+                    class="block w-full rounded-lg border-boracay-light bg-white pr-12 focus:border-boracay focus:ring-boracay"
                     type="password"
                     name="password"
                     required
@@ -142,7 +142,7 @@
             <div class="relative mt-2">
                 <x-text-input
                     id="password_confirmation"
-                    class="block w-full rounded-xl border-boracay-light bg-white pr-12 focus:border-boracay focus:ring-boracay"
+                    class="block w-full rounded-lg border-boracay-light bg-white pr-12 focus:border-boracay focus:ring-boracay"
                     type="password"
                     name="password_confirmation"
                     required
