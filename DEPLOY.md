@@ -182,33 +182,60 @@ Crawls are dispatched as `App\Jobs\CrawlSourceJob` and **nothing runs them
 inside a web request**. Without a worker, `/admin/sources` queues jobs that sit
 forever.
 
-Copy the worker out of the repo and register it in hPanel cron:
+`deploy.sh` installs the worker after `git pull` and **prints the exact cron
+command to register**, derived from the path it actually installed. Copy that
+line verbatim into hPanel → Advanced → Cron Jobs, interval every minute.
 
-```sh
-cp deploy/queue-worker.sh ~/queue-worker.sh
+```
+worker installed: /home/u348491703/domains/tramatch.site/public_html/queue-worker.sh
+cron command:     /bin/bash /home/u348491703/domains/tramatch.site/public_html/queue-worker.sh
 ```
 
-**`deploy.sh` does this for you**, immediately after `git pull`, and reports
-whether the previous copy was stale. Do the manual copy above only when setting
-up for the first time.
+It also reports whether the previously installed copy was **stale**, before
+overwriting it — afterwards there is no way to tell, which is what made this
+undiagnosable for three rounds. The tell is in the error itself: the current
+script says *"no app root under `$HOME/domains`"*, whereas anything mentioning
+`yourdomain.tld` is a pre-`1bb99f2` copy still carrying the placeholder default.
 
-hPanel → Advanced → Cron Jobs:
+### Where the worker lives
 
-| | |
-|---|---|
-| Command | `/bin/bash /home/u348491703/queue-worker.sh` |
-| Interval | every minute |
+The default is **inside the document root**, at the application root, because
+that is where this host has it and hPanel's file manager returns 403 for anything
+outside `public_html`.
 
-`~/queue-worker.sh` is outside the repository, so `git pull` cannot reach it, and
-it went stale three times before `deploy.sh` took the copy over. The tell is in
-the error itself: the current script says *"no app root under `$HOME/domains`"*,
-whereas anything mentioning `yourdomain.tld` is a pre-`1bb99f2` copy still
-carrying the placeholder default.
+That is safe, and the two facts are independent:
+
+- cron executes the file over the **filesystem**, which `.htaccess` does not
+  govern at all;
+- **both** `.htaccess` copies refuse `*.sh`, so it is not readable over HTTP.
+
+Verify after every deploy, since it is load-bearing while it sits there:
+
+```sh
+curl -sI https://yourdomain.tld/queue-worker.sh   # expect 403 or 404
+```
+
+That check is in `deploy.sh`'s closing list for this reason. `HtaccessRulesTest`
+pins the rule in both copies, and also that the two copies refuse the same
+directories — only one is read per layout, so drift leaves half the installs
+unprotected.
+
+To move it outside the web root instead, where it does not depend on `.htaccess`
+at all:
+
+```sh
+bash deploy/deploy.sh --worker-dest="$HOME/queue-worker.sh"
+```
+
+The 403 above comes from the **hPanel file manager**, not the filesystem — over
+SSH a plain `cp` outside `public_html` should work. Worth attempting, since a
+file that is one `.htaccess` edit away from being public is a thinner guarantee
+than one that is never in the document root.
 
 ### Test it the way cron runs it
 
 ```sh
-/bin/bash ~/queue-worker.sh; echo "exit=$?"
+/bin/bash /home/u348491703/domains/tramatch.site/public_html/queue-worker.sh; echo "exit=$?"
 ```
 
 Run *that*, not `php artisan queue:drain`. The two are not the same test: the

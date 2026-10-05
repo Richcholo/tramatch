@@ -23,15 +23,37 @@
 /public/storage
 # Host artifacts, not project files. deploy/setup-website.sh creates the
 # public_html symlink on the server (Hostinger will not change a Web plan's
-# document root), and deploy/queue-worker.sh is copied into $HOME so cron can
-# reach it. Without these, deploy.sh's dirty-tree guard blocks every deploy
-# because of files the deployment itself created.
+# document root), and deploy/queue-worker.sh is installed next to the application
+# so cron can reach it. Without these, deploy.sh's dirty-tree guard blocks every
+# deploy because of a file the deployment itself created.
 #
-# Re-copy the worker after every pull. It is the one file in this repo with a
-# live copy outside version control, which is exactly why it goes stale.
+# The worker is listed at every position it can legitimately land, because the
+# guard keys on tracked-ness and a stray copy is not tracked. Getting this wrong
+# does not fail loudly -- deploy.sh just refuses to run with "the working tree has
+# uncommitted changes", naming a file the operator never touched.
+#
+# Which rule actually covers which position, measured with `git check-ignore -v`:
+#
+#   /queue-worker.sh             covers queue-worker.sh on its own. Anchored, since
+#                                the deploy.sh default installs it at the repo root.
+#   public/queue-worker.sh       covers itself on its own. Needed: public/ is
+#                                tracked, so nothing else would match it. This is
+#                                the Layout A position, where public_html is a
+#                                symlink to public/.
+#   public_html/queue-worker.sh  REDUNDANT today -- /public_html above already
+#                                covers it. Kept deliberately: if /public_html is
+#                                ever removed, this is the only thing stopping a
+#                                worker copy from blocking every deploy. Do not
+#                                cite it as the current protection; check with
+#                                `git check-ignore -v` before removing anything.
+#
+# deploy.sh installs it and prints the matching cron command, so the file and the
+# cron entry cannot drift apart unnoticed.
 /public_html
 /public_html.hostinger-backup
 /queue-worker.sh
+public/queue-worker.sh
+public_html/queue-worker.sh
 /storage/*.key
 /storage/pail
 /vendor

@@ -12,6 +12,11 @@
 #   --no-pull     skip `git pull` (deploy whatever is already checked out)
 #   --ref=<ref>   pull a specific ref instead of the tracked branch
 #   --migrate-only run only the migrations, for a hotfix that ships no code
+#   --worker-dest=<path>
+#                 where to install queue-worker.sh, for a cron entry that points
+#                 somewhere other than the application root. Defaults to
+#                 <app root>/queue-worker.sh, which is public_html/ on a Layout B
+#                 host. The deploy prints the matching cron command either way.
 #
 # Assembled from the pitfalls this repo actually hits; see DEPLOY.md.
 
@@ -23,12 +28,14 @@ cd "$APP_ROOT"
 DO_PULL=1
 MIGRATE_ONLY=0
 REF=""
+WORKER_DEST="$APP_ROOT/queue-worker.sh"
 
 for arg in "$@"; do
     case "$arg" in
         --no-pull)     DO_PULL=0 ;;
         --migrate-only) MIGRATE_ONLY=1; DO_PULL=0 ;;
         --ref=*)       REF="${arg#--ref=}" ;;
+        --worker-dest=*) WORKER_DEST="${arg#--worker-dest=}" ;;
         *) echo "Unknown option: $arg" >&2; exit 1 ;;
     esac
 done
@@ -142,17 +149,23 @@ fi
 
 # ------------------------------------------------------------ queue worker --
 
-# Copy deploy/queue-worker.sh to $HOME, where the hPanel cron entry points.
+# Install deploy/queue-worker.sh where the hPanel cron entry points.
 #
 # Done here rather than left as a documented manual step because it has gone
-# stale three times. The live copy lives outside the repository, so `git pull`
-# cannot reach it, and every deploy that changed the worker left cron running
-# the old one. It failed silently each time: the old script defaulted APP_ROOT to
-# a placeholder, exited non-zero, and the crawls it should have drained simply
-# sat in `queued`.
+# stale three times. The live copy is a *copy*, so `git pull` cannot reach it, and
+# every deploy that changed the worker left cron running the old one. It failed
+# silently each time: the old script defaulted APP_ROOT to a placeholder, exited
+# non-zero, and the crawls it should have drained simply sat in `queued`.
 #
-# Best placed immediately after the pull so it copies the version that was just
-# deployed rather than whatever was checked out before.
+# Destination defaults to queue-worker.sh at the application root, which is
+# public_html/queue-worker.sh on a Layout B host -- the document root. That is
+# where it lives on this host, so the default matches the real arrangement rather
+# than one that has to be remembered.
+#
+# Living inside the document root is safe, and deliberately so here: both
+# .htaccess copies refuse *.sh, so the file is executable by cron over the
+# filesystem but not readable over HTTP. Execution and serving are independent --
+# .htaccess governs only the second.
 #
 # Not fatal on failure. Nothing in the application reads this file, and failing
 # a completed deploy over a worker that drains nothing else would be worse than
@@ -160,32 +173,44 @@ fi
 bold "-- queue worker"
 
 WORKER_SRC="deploy/queue-worker.sh"
-WORKER_DST="$HOME/queue-worker.sh"
+
+# Absolute, so the cron command printed below is unambiguous. A relative path here
+# is what produced three rounds of "which copy is cron actually running".
+WORKER_DST="$(cd "$(dirname "$WORKER_DEST")" 2>/dev/null && pwd)/$(basename "$WORKER_DEST")" \
+    || WORKER_DST="$APP_ROOT/queue-worker.sh"
 
 if [ ! -f "$WORKER_SRC" ]; then
-    red "No $WORKER_SRC in this checkout -- skipping the worker copy."
+    red "No $WORKER_SRC in this checkout -- skipping the worker install."
 else
     # Report staleness *before* overwriting it. Afterwards there is no way to
     # tell whether the live copy was current, which is exactly the ambiguity
     # that made this hard to diagnose.
     if [ -f "$WORKER_DST" ] && ! cmp -s "$WORKER_SRC" "$WORKER_DST"; then
-        red "The live ~/queue-worker.sh was STALE -- cron has been running an old copy."
+        red "The live worker was STALE -- cron has been running an older copy."
     fi
 
     if cp "$WORKER_SRC" "$WORKER_DST" 2>/dev/null; then
         chmod +x "$WORKER_DST" 2>/dev/null || true
-        green "~/queue-worker.sh updated"
+        green "installed: $WORKER_DST"
 
-        # Prove it runs. The app root is resolved by the script itself, so this
-        # is the same thing cron will do, and it is the only check that catches
-        # a worker which starts and then does nothing.
+        # Prove it runs, from the path cron will use. The app root is resolved by
+        # the script itself, so this is the same thing cron does, and it is the
+        # only check that catches a worker which starts and does nothing.
         if bash "$WORKER_DST" >/dev/null 2>&1; then
             green "worker ran successfully"
         else
             red "worker exited non-zero. Run it by hand to see why:"
-            red "  bash ~/queue-worker.sh"
+            red "  bash $WORKER_DST"
             red "and read ~/queue-worker.log for the resolved app root."
         fi
+
+        # The one thing that cannot be automated: which command cron runs. Printed
+        # from the path actually installed, so the cron entry and the deployed
+        # file cannot drift apart unnoticed -- which is how three rounds of
+        # debugging went looking at the wrong file.
+        echo
+        bold "  hPanel cron command (every minute):"
+        echo "    /bin/bash $WORKER_DST"
     else
         red "Could not write $WORKER_DST."
         red "Crawls will queue and never be drained until this is fixed."
@@ -280,6 +305,7 @@ echo
 echo "  curl -sI https://yourdomain.tld/                # expect 200"
 echo "  curl -sI https://yourdomain.tld/.env            # expect 404"
 echo "  curl -sI https://yourdomain.tld/artisan         # expect 404"
+echo "  curl -sI https://yourdomain.tld/queue-worker.sh # expect 403 or 404"
 echo "  php artisan about                                # env should say production"
 echo
 echo "Then confirm the queue worker is actually running, since crawls silently"

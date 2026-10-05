@@ -961,28 +961,47 @@ the runtime never executes it.
   owns the behaviour and is the part with tests. Do not move drain logic into
   the shell: it was there before, could not be tested, and a placeholder
   `APP_ROOT` plus a silent `exit 0` survived two deployments because of it.
-- **Test the worker with `/bin/bash ~/queue-worker.sh`, never with
-  `php artisan queue:drain`.** They are not the same test. The script is what
-  resolves the app root, picks the PHP binary and sees cron's minimal
-  environment; none of that happens when artisan is invoked directly. Running
-  `php` by hand and concluding the worker was broken was the mistake twice —
-  `php` worked every time, the wrapper around it did not.
+- **Test the worker by running the script, never with `php artisan
+  queue:drain`.** They are not the same test. The script is what resolves the app
+  root, picks the PHP binary and sees cron's minimal environment; none of that
+  happens when artisan is invoked directly. Running `php` by hand and
+  concluding the worker was broken was the mistake twice — `php` worked every
+  time, the wrapper around it did not. Use the path `deploy.sh` prints; it is the
+  application root by default, not `$HOME`.
 - The script discovers the app root when `APP_ROOT` is unset: a directory under
   `$HOME/domains` holding **both** `artisan` and `.env`, which is true of the
   app root in Layout A and Layout B and of nothing else. There is **no default
   path** — the old literal placeholder `yourdomain.tld` is why a wrong worker
   exited 0 having done nothing. Zero or several matches is an error, logged and
   exited non-zero.
-- **`~/queue-worker.sh` is the one file in this repo with a live copy outside
-  version control**, so `git pull` never updates it. `/queue-worker.sh` is in
-  `.gitignore` for that reason, and **`deploy.sh` copies it immediately after
-  `git pull`** and reports whether the previous copy was stale. It went stale
-  three times before that was automated, every time silently — the old script
-  defaulted `APP_ROOT` to a placeholder and exited non-zero, so crawls simply
-  sat in `queued`. **The diagnostic tell:** an error mentioning `yourdomain.tld`
-  means a pre-`1bb99f2` copy is still live; the current script says *"no app root
-  under `$HOME/domains`"*. Do not hand-edit the live copy — fix the repo and
-  re-run the deploy.
+- **The installed worker is a copy, so `git pull` never updates it.**
+  **`deploy.sh` installs it
+  immediately after `git pull`** and **prints the exact cron command**, derived
+  from the path it actually installed, so the file and the cron entry cannot
+  drift apart unnoticed. It also reports whether the previous copy was stale —
+  before overwriting it, because afterwards there is no way to tell. It went
+  stale three times before this was automated, every time silently: the old
+  script defaulted `APP_ROOT` to a placeholder and exited non-zero, so crawls
+  simply sat in `queued`. **The diagnostic tell:** an error mentioning
+  `yourdomain.tld` means a pre-`1bb99f2` copy is still live; the current script
+  says *"no app root under `$HOME/domains`"*. Do not hand-edit the installed copy
+  — fix the repo and re-run the deploy.
+- **The worker is installed inside the document root**, at the application root,
+  because hPanel's file manager returns 403 for anything outside `public_html`.
+  That is safe because cron executes over the **filesystem**, which `.htaccess`
+  does not govern, while both `.htaccess` copies refuse `*.sh` so it is not
+  readable over HTTP. **Do not "fix" the deny rule by removing `\.sh`** — that is
+  what makes the arrangement safe. `curl -sI .../queue-worker.sh` expecting
+  403/404 is in `deploy.sh`'s closing checks and is load-bearing while it sits
+  there. `bash deploy/deploy.sh --worker-dest=...` moves it out of the web root.
+- `.gitignore` lists the worker at every position it can land, because
+  `deploy.sh`'s dirty-tree guard keys on tracked-ness and a stray copy blocks
+  every subsequent deploy **naming a file the operator never touched**. Which
+  rule covers which position was measured with `git check-ignore -v`, and
+  `public_html/queue-worker.sh` is covered by `/public_html` rather than by its
+  own entry — that entry is deliberate redundancy, not the current protection.
+  `DeployArtifactsAreIgnoredTest` asks git rather than pattern-matching, so it
+  cannot pass while the real behaviour differs.
 - **Two logs, deliberately, answering different questions:**
   `~/queue-worker.log` says whether cron fired and which PHP it resolved;
   `storage/logs/laravel.log` (prefix `queue:drain`) says whether the drain found
