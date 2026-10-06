@@ -20,19 +20,56 @@
             what constrained what an admin could usefully supply.
 
             They live in one wrapper so the pair stays together and so the page's
-            own spacing cannot insert a gap between them. It deliberately does
-            NOT carry the clip that absorbs .tm-full-bleed's scrollbar overshoot:
-            clipping here would cut the blocks back to the container width, which
-            is the opposite of the point. That clip is on body in app.css.
+            own spacing cannot insert a gap between them.
+
+            THE WRAPPER PULLS THE GUTTERS BACK WITH NEGATIVE MARGINS, and the two
+            blocks underneath carry NO width class at all. This replaced a first
+            attempt that used .tm-full-bleed -- `width: 100vw` plus
+            `margin-inline: calc(50% - 50vw)` -- and that is the version which
+            "did not look smooth".
+
+            Why it looked wrong, and it is worth writing down because the
+            arithmetic is subtle:
+
+            100vw includes the vertical scrollbar, so the block is wider than the
+            area it can occupy. The page's own body had to carry `overflow-x:
+            clip` to swallow the ~15px overshoot, which clipped the RIGHT edge.
+            But `margin-inline: calc(50% - 50vw)` centres the block on 50vw, so
+            the overshoot was split across both sides and only one was clipped.
+            The result was a band that was off-centre by roughly half a
+            scrollbar and visibly not reaching the edges -- the photos looked
+            cropped short on one side, and the hero's dark background showed a
+            sliver where the image was cut. Not a styling nit; a misaligned band.
+
+            The negative margins cannot have that problem: they cancel exactly the
+            padding the container already applied (`px-5 sm:px-8 lg:px-12`, the
+            same values the layout uses), so the blocks sit flush to the content
+            edges and go no further. No viewport units, no scrollbar arithmetic,
+            no overshoot to clip, and `.tm-full-bleed` is now unused.
+
+            The wrapper must also carry NO overflow rule. An overflow-clip here
+            looked harmless and was part of the same problem: the wrapper is inside
+            max-w-[1600px], so clipping at it cuts the blocks back to the
+            container width and you get a band that is neither full-bleed nor
+            inset. `the_wrapper_around_the_two_blocks_does_not_clip_them` walks
+            every ancestor up to <main> and fails on any overflow utility.
+
+            Consequence, unchanged from before and still the accepted trade: the
+            blocks are now ~1504px on a 1600px viewport rather than the full
+            1900px+ of the viewport, which is *less* upscaling of an uploaded
+            photo than the 100vw version did, but it stops short of the screen
+            edges on a wide monitor.
 
             Source order matches visual order deliberately. The hero carries the
             page's <h1>, so putting the carousel first in the DOM would hand a
             screen reader and the tab order the photo strip before the title.
         --}}
-        <div class="overflow-x-clip">
-
-        <section class="tm-full-bleed relative overflow-hidden bg-volcanic-teal text-white">
-            @if ($destination->image_url)
+        {{-- Must match the layout's <main> padding exactly: px-5 sm:px-8
+             lg:px-12. Changing one and not the other leaves a seam on one side
+             and an overhang on the other. --}}
+        <div class="-mx-5 sm:-mx-8 lg:-mx-12">
+            <section class="relative overflow-hidden bg-volcanic-teal text-white">
+                @if ($destination->image_url)
                 <img
                     src="{{ $destination->image_url }}"
                     alt="{{ $destination->name }}"
@@ -80,36 +117,39 @@
         --}}
         @if ($destination->images->count() > 1)
             {{--
-                Edge to edge, below the hero and the same width as it.
+                Flush below the hero, and the same width as it, both of which come
+                from the wrapper's negative margins rather than from a width class
+                here. See the note on the wrapper above for why this is not
+                .tm-full-bleed.
 
-                Deliberately uncapped, and that is a decision with a known cost,
-                so it is written down rather than left to be "tidied" either way.
-                This block is the width of the viewport, which passes 1900px on a
-                wide monitor, while admin photos are stored verbatim by
+                No max-width, and that is a decision with a known cost, so it is
+                written down rather than left to be "tidied" either way. This block
+                is as wide as the container's content box -- roughly 1504px on a
+                1600px viewport -- while admin photos are stored verbatim by
                 DestinationController::storeUploadedImage() with no resize and are
                 typically 1080-1170px phone shots. So the browser scales each photo
-                up by as much as 1.8x on a large display and it renders soft.
+                up by roughly 1.3-1.4x and it renders soft.
 
                 The alternative was max-w-5xl (1024px) on both this and the hero,
                 which was sharp and also consistent -- but the owner judged a
-                narrower media pair the wrong look for the page, twice, and asked
-                for the carousel to match the hero instead. Their call, taken.
+                narrower media pair the wrong look for the page, twice. Their
+                call, taken.
 
                 object-cover is correct and must stay: it crops without
                 distorting. object-fill would stretch the aspect ratio and
                 object-contain would letterbox a ~3.9:1 strip.
 
                 The real fix is to resize the uploads so there are enough pixels
-                for a viewport-wide box, which also makes srcset possible. There is no GD
-                and no Imagick here -- checked on the CLI and under XAMPP -- so
-                that needs an extension enabled on the host plus a backfill of the
-                existing photos. Until then this stays soft on wide screens.
+                for the box, which also makes srcset possible. There is no GD and
+                no Imagick here -- checked on the CLI and under XAMPP -- so that
+                needs an extension enabled on the host plus a backfill of the
+                existing photos.
             --}}
             <section
                 data-gallery
                 aria-roledescription="carousel"
                 aria-label="Photos of {{ $destination->name }}"
-                class="tm-full-bleed relative overflow-hidden bg-island-white"
+                class="relative overflow-hidden bg-island-white"
             >
                 <ul
                     data-gallery-track

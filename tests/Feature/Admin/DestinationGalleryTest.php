@@ -532,19 +532,12 @@ class DestinationGalleryTest extends TestCase
         $hero = $classesAt('//main//section[.//h1]');
 
         /*
-         * Both are now full-bleed rather than merely uncapped. The ask was for
-         * the entire width of the screen, because the narrow container was what
-         * constrained an admin's choices, so "has no max-w class" is no longer
-         * the interesting property -- being in the escape utility is.
+         * Neither block carries a width class: both get their width from the
+         * wrapper's negative margins, which is what replaced the 100vw approach.
+         * So the property worth pinning is that neither is constrained in its own
+         * right, and that they agree.
          */
         foreach (['carousel' => $carousel, 'hero' => $hero] as $name => $list) {
-            $this->assertContains(
-                'tm-full-bleed',
-                $list,
-                'the '.$name.' is no longer full-bleed, so it sits inside the '
-                .'max-w-[1600px] container with margins down each side'
-            );
-
             $this->assertSame(
                 [],
                 preg_grep('/^max-w-/', $list),
@@ -552,13 +545,21 @@ class DestinationGalleryTest extends TestCase
                 .'reverted twice; if a cap is wanted, raise it rather than '
                 .'reintroducing it here -- see the note on this test.'
             );
+
+            $this->assertNotContains(
+                'tm-full-bleed',
+                $list,
+                'the '.$name.' is using .tm-full-bleed again. It was '
+                .'width:100vw + margin-inline:calc(50% - 50vw), which lands '
+                .'roughly half a scrollbar off-centre. Use the wrapper.'
+            );
         }
 
         // Also compared against each other, because the real requirement is that
         // they match.
         $this->assertSame(
-            preg_grep('/^tm-full-bleed$/', $carousel),
-            preg_grep('/^tm-full-bleed$/', $hero),
+            preg_grep('/^max-w-/', $carousel),
+            preg_grep('/^max-w-/', $hero),
             'the carousel and the hero must resolve to the same width, or one of '
             .'them reads as a mistake against the other'
         );
@@ -642,34 +643,154 @@ class DestinationGalleryTest extends TestCase
     }
 
     /**
-     * .tm-full-bleed must still exist, and so must the clip that absorbs the
-     * scrollbar overshoot its 100vw causes.
+     * No viewport-unit full-bleed, and no body clip to hide its overshoot.
      *
-     * A class in the markup with no rule behind it is silent: the blocks simply
-     * stop reaching the viewport edges and nothing in the HTML explains why. The
-     * body rule is pinned for the same reason -- drop it and a classic vertical
-     * scrollbar puts a horizontal scrollbar on every destination page.
+     * This is a guard against re-introducing the approach that shipped and had to
+     * be taken back out. `.tm-full-bleed` was `width: 100vw` plus
+     * `margin-inline: calc(50% - 50vw)`, and it produced a band that was off-centre
+     * by roughly half a scrollbar: 100vw includes the vertical scrollbar, the
+     * excess got split across both edges by the 50vw centring, and body's
+     * `overflow-x: clip` only took one of them. One edge visibly short, and the
+     * hero's background showing through where the image was cut. It read as
+     * "not smooth" and it was a misalignment, not a preference.
+     *
+     * The blocks now pull the container's own padding back with negative margins
+     * and carry no width class, so there is no arithmetic to get wrong. Both
+     * halves of the old mechanism are asserted absent, because either one alone
+     * reintroduces the problem: a body clip without a 100vw block is pointless,
+     * and a 100vw block without it would push a horizontal scrollbar onto every
+     * destination page.
      */
     #[Test]
-    public function the_full_bleed_utility_and_its_clip_both_exist(): void
+    public function the_viewport_unit_full_bleed_is_not_reintroduced(): void
     {
         $stylesheet = (string) file_get_contents(resource_path('css/app.css'));
 
-        $this->assertMatchesRegularExpression(
-            '/\.tm-full-bleed\s*\{[^}]*width:\s*100vw[^}]*margin-inline:\s*calc\(\s*50%\s*-\s*50vw\s*\)/s',
-            $stylesheet,
-            'tm-full-bleed no longer escapes the container, so the blocks are capped '
-            .'by max-w-[1600px] again while the markup still reads as full-bleed'
+        // assertSame(0, ...) rather than assertFalse: preg_match returns int 0
+        // on no match, and assertFalse is strict, so it fails on a correct
+        // absence. Matches only an actual rule, so the comment recording why
+        // this was removed does not trip it.
+        $this->assertSame(
+            0,
+            preg_match('/^\s*\.tm-full-bleed\s*\{[^}]*\}/ms', $stylesheet),
+            '.tm-full-bleed is back. It was width:100vw + margin-inline:calc(50% - 50vw), '
+            .'which is off-centre by half a scrollbar because 100vw includes the '
+            .'scrollbar. Use negative margins against the container padding instead.'
         );
 
-        $this->assertMatchesRegularExpression(
-            '/body\s*\{[^}]*overflow-x:\s*clip/s',
-            $stylesheet,
-            'body no longer clips the 100vw overshoot, so a classic vertical '
-            .'scrollbar produces a horizontal scrollbar on the page. It must stay '
-            .'clip and never become hidden: hidden creates a scroll container and '
-            .'would break the itinerary editor\'s sticky save bar.'
+        $this->assertSame(
+            0,
+            preg_match('/\bbody\s*\{[^}]*overflow-x/s', $stylesheet),
+            'body has an overflow-x rule again. It only existed to swallow the '
+            .'100vw overshoot from .tm-full-bleed. Note it must never be `hidden` '
+            .'if it ever returns: hidden creates a scroll container and would '
+            .'break the itinerary editor\'s sticky save bar.'
         );
+
+        // The mechanism that replaced it: negative margins matching the layout's
+        // own padding. Asserted because a mismatch between the two sets of values
+        // leaves a seam on one side and an overhang on the other -- which is the
+        // same class of bug, quieter.
+        $layout = (string) file_get_contents(resource_path('views/layouts/app.blade.php'));
+
+        foreach ([
+            ['px-5', '-mx-5'],
+            ['sm:px-8', 'sm:-mx-8'],
+            ['lg:px-12', 'lg:-mx-12'],
+        ] as [$padding, $margin]) {
+            $this->assertStringContainsString(
+                $padding,
+                $layout,
+                'the layout no longer uses '.$padding.' on <main>, so the '
+                .'destination page\'s '.$margin.' no longer cancels anything and '
+                .'the hero will overhang on one side'
+            );
+        }
+
+        $page = (string) file_get_contents(
+            resource_path('views/destinations/show.blade.php')
+        );
+
+        foreach (['-mx-5', 'sm:-mx-8', 'lg:-mx-12'] as $margin) {
+            $this->assertStringContainsString(
+                $margin,
+                $page,
+                'the destination page no longer uses '.$margin.', so the hero and '
+                .'carousel are inset by the container padding again'
+            );
+        }
+    }
+
+    /**
+     * The wrapper around the two blocks must not clip them.
+     *
+     * This one shipped broken. The wrapper was given `overflow-x-clip`, which
+     * reads as harmless next to the 100vw blocks -- but the wrapper sits INSIDE
+     * max-w-[1600px], so clipping at it cuts the blocks back to the container
+     * width. The result was a band that was neither full-bleed nor inset, which
+     * is exactly what "it doesn't look smooth" turned out to be.
+     *
+     * The overshoot clip belongs on body, which is outside the container. Any
+     * overflow rule on an ancestor *inside* the container defeats full-bleed, so
+     * this asserts the wrapper carries no overflow utility at all rather than
+     * asserting it carries the right one -- there is no right one to carry.
+     */
+    #[Test]
+    public function the_wrapper_around_the_two_blocks_does_not_clip_them(): void
+    {
+        $destination = $this->destination([
+            'image_url' => 'https://images.example.com/hero.jpg',
+        ]);
+
+        foreach (range(1, 2) as $index) {
+            $destination->images()->create([
+                'path' => 'https://images.example.com/'.$index.'.jpg',
+                'sort_order' => $index - 1,
+            ]);
+        }
+
+        $html = $this->get(route('destinations.show', $destination))
+            ->assertOk()
+            ->getContent();
+
+        $document = new DOMDocument();
+
+        @$document->loadHTML($html);
+
+        libxml_clear_errors();
+
+        $xpath = new DOMXPath($document);
+
+        $carousel = $xpath->query('//*[@data-gallery]')->item(0);
+
+        $this->assertNotNull($carousel, 'the carousel is missing from the page');
+
+        // Every ancestor up to <main>. The container starts at main, so anything
+        // between main and the block that clips will cut it back.
+        for ($node = $carousel->parentNode; $node instanceof DOMElement; $node = $node->parentNode) {
+            $classes = preg_split(
+                '/\s+/',
+                trim($node->getAttribute('class')),
+                -1,
+                PREG_SPLIT_NO_EMPTY
+            );
+
+            $clipping = preg_grep('/^overflow(-x)?-(hidden|clip|auto|scroll)$/', $classes);
+
+            $this->assertSame(
+                [],
+                $clipping,
+                'a <'.$node->nodeName.'> between <main> and the carousel clips '
+                .'overflow ('.implode(' ', $clipping).'). That ancestor is inside '
+                .'max-w-[1600px], so it cuts the full-bleed blocks back to the '
+                .'container width and they read as neither full-bleed nor inset. '
+                .'The overshoot clip belongs on body, outside the container.'
+            );
+
+            if (strtolower($node->nodeName) === 'main') {
+                break;
+            }
+        }
     }
 
     /**

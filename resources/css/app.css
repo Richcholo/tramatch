@@ -66,23 +66,6 @@
         min-height: 100vh;
         background-color: var(--color-palawan-sand);
         color: var(--color-benguet-charcoal);
-
-        /*
-         * Absorbs the overshoot from .tm-full-bleed's 100vw, which measures the
-         * viewport including the vertical scrollbar and is therefore ~15px too
-         * wide whenever that scrollbar is a classic one.
-         *
-         * `clip`, deliberately, and NOT `hidden`. `hidden` creates a scroll
-         * container, which would make `position: sticky` resolve against body
-         * instead of the viewport -- silently breaking the itinerary editor's
-         * sticky save bar and the discover deck's sticky header. `clip` clips
-         * without establishing a scrollport, so sticky still works.
-         *
-         * The one visible cost: on a wide monitor the rightmost ~15px of a
-         * full-bleed photo is cut. Both blocks are object-cover images filling
-         * their box, so the crop is invisible.
-         */
-        overflow-x: clip;
     }
 
     button,
@@ -474,23 +457,29 @@
     }
 
     /*
-     * Escape a constrained container and span the whole viewport.
+     * `.tm-full-bleed` was here and has been REMOVED. Kept as a note because the
+     * obvious way to span the viewport from inside a padded container is the
+     * approach that shipped and had to be taken back out.
      *
-     * The page container is `mx-auto max-w-[1600px]` with responsive padding, so
-     * the only way to reach the viewport edges from inside it is viewport units.
-     * `margin-inline: calc(50% - 50vw)` is the half-off-centre trick: 50% of the
-     * container plus half the viewport puts the element's left edge at the
-     * viewport's left edge, and the width does the rest.
+     * It was `width: 100vw` + `margin-inline: calc(50% - 50vw)`. That does
+     * escape the container, but 100vw measures the viewport INCLUDING the
+     * vertical scrollbar, so the block is ~15px wider than it can occupy. The
+     * overshoot then has to be clipped (body got `overflow-x: clip`), and because
+     * the block is centred on 50vw the excess is split across BOTH edges while the
+     * clip only took one. The result was a band off-centre by about half a
+     * scrollbar, with one edge visibly short and a sliver of the hero's
+     * background showing where the image was cut. It read as "not smooth" and it
+     * was not a styling preference but a misalignment.
      *
-     * The caveat is 100vw, which measures the viewport INCLUDING the vertical
-     * scrollbar. With a classic scrollbar present the block is ~15px too wide,
-     * which produces a horizontal scrollbar on the page. The companion
-     * `overflow-x: clip` on body absorbs exactly that overshoot.
+     * The destination page now pulls the container's own padding back with
+     * negative margins (`-mx-5 sm:-mx-8 lg:-mx-12`, matching the layout's
+     * `px-5 sm:px-8 lg:px-12`) and the blocks carry no width class at all. Exact
+     * cancellation, no viewport units, no overshoot, nothing to clip.
+     *
+     * Do not reintroduce 100vw here without solving the scrollbar arithmetic. If
+     * a genuine edge-to-edge band is ever wanted, it needs the scrollbar width
+     * accounted for, not clipped away.
      */
-    .tm-full-bleed {
-        width: 100vw;
-        margin-inline: calc(50% - 50vw);
-    }
 
     /*
      * A horizontally scrollable strip that should not show a scrollbar.
