@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Domain\Destinations\DestinationCarousel;
 use App\Models\Destination;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -44,7 +45,30 @@ class DestinationController extends Controller
             ->onEachSide(1)
             ->withQueryString();
 
-        return view('destinations.index', compact('destinations', 'locations'));
+        /*
+         * The shared carousel, centred on the first destination in canonical order.
+         *
+         * Autoplay IS on here. This is the browse surface: someone has not arrived
+         * anywhere yet, so a slow advance is a suggestion to keep looking. It comes
+         * with the mandatory pause control -- a self-starting loop longer than five
+         * seconds without one fails WCAG 2.2.2.
+         *
+         * `?slide=<slug>` centres a specific destination so a link can point at
+         * "the fan, showing X" and be bookmarkable.
+         */
+        $carousel = app(DestinationCarousel::class);
+        $activeSlug = $request->filled('slide')
+            ? $request->string('slide')->toString()
+            : null;
+
+        return view('destinations.index', [
+            'destinations' => $destinations,
+            'locations' => $locations,
+            'carouselSlides' => $carousel->slides($activeSlug),
+            'carouselActiveIndex' => $carousel->activeIndex($activeSlug),
+            'carouselNeighbours' => $carousel->neighbours($activeSlug),
+            'carouselAutoplay' => true,
+        ]);
     }
 
     public function show(Destination $destination): View
@@ -59,7 +83,27 @@ class DestinationController extends Controller
                 ->latest(),
         ]);
 
+        /*
+         * The shared carousel, with THIS destination centred.
+         *
+         * `activeIndex` is derived from the route, which is what makes a hard page
+         * load land in exactly the same visual state as an in-page advance -- so
+         * deep links, Back/Forward and a shared link all replay correctly. The
+         * order comes from the same presenter the index uses, so the fan here is
+         * the index fan with the index shifted and the two cannot drift.
+         *
+         * Autoplay is off here. This is a destination someone has arrived at, not
+         * a surface they are browsing, and a timer that keeps swapping the
+         * backdrop out from under someone reading the description is worse than no
+         * timer.
+         */
+        $carousel = app(DestinationCarousel::class);
+
         return view('destinations.show', [
+            'carouselSlides' => $carousel->slides($destination->slug),
+            'carouselActiveIndex' => $carousel->activeIndex($destination->slug),
+            'carouselNeighbours' => $carousel->neighbours($destination->slug),
+            'carouselAutoplay' => false,
             'destination' => $destination,
             'openState' => $this->openState($destination),
             'hoursLabel' => $this->hoursLabel($destination),

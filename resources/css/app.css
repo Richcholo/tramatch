@@ -482,48 +482,65 @@
      */
 
     /*
-     * The destination hero stage: five photo cards on a shallow 3D arc.
+     * The destinations stage: one shared fanned carousel for the index and every
+     * destination page.
      *
-     * Two decisions here are load-bearing and were both wrong the first time.
+     * =========================================================================
+     * THE OFFSET IS THE WHOLE MECHANISM. Read this before changing anything.
+     * =========================================================================
      *
-     * CARDS ARE SIZED BY HEIGHT, NOT WIDTH. The card is `aspect-[3/5]`, and the
-     * slot sets a height as a percentage of the fan while the width follows from
-     * the ratio. Sizing by width instead -- which is what this did first, at 23%
-     * of the stage -- means a narrow container renders a card far taller than the
-     * fan and it silently overflows, while a wide one renders a card so tall it
-     * dwarfs the page. Height-first makes overflow impossible at any width.
+     * `data-offset` is SIGNED and RELATIVE TO THE ACTIVE PANEL: 0 is active, -1 is
+     * the panel to its left, +1 to its right. Every geometric property below --
+     * position, size, rotation, stacking order, opacity -- is derived from it in
+     * CSS, and the ONLY thing the script does is change the active index, which
+     * makes the browser rewrite this attribute on every panel. The CSS transition
+     * then interpolates.
      *
-     * THE FAN IS CAPPED AND ABSOLUTELY POSITIONED. `max-width` stops the cards
-     * ballooning on the ~1500px container, and each slot is placed with an
-     * explicit `left` percentage rather than by flexbox. Flexbox with a `gap` was
-     * the original: the gap is fixed while the cards are not, so the fan stretched
-     * edge to edge with wide holes between cards, and the title laid across it
-     * read as a page-wide banner rather than an overlay. The reference packs the
-     * cards close, and `left` percentages reproduce that directly.
+     * THAT IS WHY ADVANCING MOVES THE FAN AT ALL. The first version got this
+     * backwards: `data-stage-offset` was written once by the Blade and never
+     * again, so the five panels stayed exactly where the server put them and
+     * "advancing" only changed which card was highlighted. It looked frozen, and
+     * no error anywhere -- the state was updating, just not the geometry. If you
+     * ever find yourself writing a panel's offset from PHP, you have reintroduced
+     * that bug.
      *
-     * The per-side rotation sign has to differ between the left and right halves,
-     * which is the third reason the numbers live here and not in inline `style`
-     * attributes: an inline transform would collide with the utilities on the
-     * same element, and `the_stage_geometry_exists_in_the_stylesheet` could not
-     * assert them.
+     * The alternative -- a five-element window re-rendered per slide -- cannot
+     * animate at all: the panels would be new elements, so every advance would
+     * reload images and there would be nothing for a transition to interpolate.
+     * Hence "re-index, not a re-layout": all slides are in the DOM and only their
+     * offsets move.
      *
-     * Proportions measured off the reference capture (592x409 stage). The centre
-     * card is 135x230px = 1:1.7. The DEPTH FALLOFF is the reference's own
+     * =========================================================================
+     * SIZING
+     * =========================================================================
+     *
+     * Panels are sized by HEIGHT as a percentage of the fan, with the width
+     * following from the panel's own `aspect-[3/5]`. Sizing by width instead makes
+     * the panel's height a function of the viewport width, which renders it taller
+     * than the fan on a narrow container and taller than the page on the wide one.
+     * Height-first makes overflow impossible at any width.
+     *
+     * The fan is capped at 62rem so the panels do not balloon on the ~1500px
+     * container, and each panel is placed with an explicit `left` percentage rather
+     * than by flexbox. A flexbox row with a gap was the original: the gap is fixed
+     * while the panels are not, so the fan stretched edge to edge with wide holes
+     * between cards.
+     *
+     * Proportions measured off the reference capture (592x409 stage): the centre
+     * panel is 135x230px = 1:1.7. The depth falloff is the reference's own
      * transform list -- scale(1 / 0.78 / 0.57) -- applied to height, so the
-     * heights run 84 / 66 / 48 percent. That falloff is what the first version
-     * got wrong: at 84 / 74 / 64 the outer cards were 0.89 and 0.77 of the
-     * centre's width, which reads as five near-identical photos in a row rather
-     * than as one photo with four receding behind it.
+     * heights run 84 / 66 / 48 percent.
      *
-     * The `left` percentages are chosen so every card fits INSIDE the fan with a
-     * small gap, rather than to match a measured centre. At 7% and 93% the far
-     * cards overhung the fan by 11px a side and were clipped by the stage, which
-     * showed as a hard vertical cut through the outer photographs. Solved by
-     * arithmetic, not by eye: with the fan at 992px and the far card 120px wide,
-     * the outermost centre has to sit at least 6% in, and 14%/86% leaves a
-     * 17px gap to the near pair.
+     * The `left` percentages are solved rather than eyeballed. With the fan at
+     * 992px and the outer panel 120px wide, a centre at 7% overhangs the fan by
+     * 11px and the stage clips it as a hard vertical cut through the photograph.
+     * 14% / 86% leaves every panel inside with an 11-16px gap.
+     *
+     * Per-panel `z-index` and `opacity` also come from the offset, not from a
+     * script-applied class. Toggling a class meant the script had to know the
+     * depth rules, which is how it came to disagree with the stylesheet.
      */
-    .tm-stage-fan {
+    .tm-fan {
         position: relative;
         width: 100%;
         max-width: 62rem;
@@ -533,92 +550,115 @@
     }
 
     @media (width >= 40rem) {
-        .tm-stage-fan {
+        .tm-fan {
             height: 20rem;
         }
     }
 
     @media (width >= 64rem) {
-        .tm-stage-fan {
+        .tm-fan {
             height: 26rem;
         }
     }
 
-    .tm-stage-slot {
+    .tm-fan-panel {
         position: absolute;
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
         transform-origin: center center;
         transition:
-            transform 480ms var(--ease-out),
-            opacity 320ms ease-out;
+            left 620ms var(--ease-out),
+            height 620ms var(--ease-out),
+            transform 620ms var(--ease-out),
+            opacity 300ms linear;
         will-change: transform;
     }
 
-    /* Mobile first: the centre card dominates, the near pair shows as slivers,
-       and the far pair is out entirely -- the reference drops it under ~900px. */
-    [data-stage-offset='0'] {
-        height: 84%;
-    }
-
-    [data-stage-offset='1'] {
-        height: 66%;
-    }
-
-    [data-stage-offset='1'][data-stage-side='left'] {
-        left: 26%;
-    }
-
-    [data-stage-offset='1'][data-stage-side='right'] {
-        left: 74%;
-    }
-
     /*
-     * Hidden, NOT display:none. That distinction is what stage.js relies on to
-     * keep its arrows honest: it measures which slots have real layout and skips
-     * the rest, and a display:none slot reports zero width just the same. Kept at
-     * opacity 0 so the arc does not visibly collapse and re-expand on resize.
+     * Beyond the reach of the fan. Present in the DOM so it can slide in, but out
+     * of sight, untabbable and unclickable.
+     *
+     * `data-far` rather than a bare |offset| > 2 selector because CSS has no
+     * absolute-value comparison, and because the script knows the offset already.
+     * `visibility: hidden` as well as `opacity: 0` so these are genuinely removed
+     * from the accessibility tree and from hit testing.
      */
-    [data-stage-offset='2'] {
-        height: 48%;
+    [data-far] {
         opacity: 0;
+        visibility: hidden;
         pointer-events: none;
     }
 
+    /* --- the active panel, flat-on and nearest --- */
+    [data-offset='0'] {
+        left: 50%;
+        height: 84%;
+        z-index: 30;
+        opacity: 1;
+    }
+
+    /* --- the near pair --- */
+    [data-offset='-1'],
+    [data-offset='1'] {
+        height: 66%;
+        z-index: 20;
+        opacity: 0.82;
+    }
+
+    [data-offset='-1'] {
+        left: 30%;
+    }
+
+    [data-offset='1'] {
+        left: 70%;
+    }
+
+    /*
+     * --- the far pair ---
+     *
+     * The rotation sign mirrors so the fan opens away from the centre. On the
+     * left a negative rotateY pushes the outer (left) edge back; on the right a
+     * positive one pushes the outer (right) edge back. Both panels therefore
+     * angle away from the viewer at the edges, which is the shallow "V" of the
+     * reference.
+     */
+    [data-offset='-2'] {
+        left: 14%;
+        height: 48%;
+        z-index: 10;
+        opacity: 0.6;
+    }
+
+    [data-offset='2'] {
+        left: 86%;
+        height: 48%;
+        z-index: 10;
+        opacity: 0.6;
+    }
+
+    /*
+     * Mobile first: the active panel dominates, the near pair shows as slivers and
+     * the far pair is out entirely -- the reference drops it on narrow screens.
+     *
+     * The far pair keeps its offset-driven position rather than being removed, so
+     * advancing still produces a cascade; it is just invisible and untabbable
+     * until 64rem.
+     */
     @media (width >= 64rem) {
-        [data-stage-offset='0'] {
-            height: 84%;
-        }
-
-        [data-stage-offset='1'] {
-            height: 66%;
-            transform: translate(-50%, -50%) translateY(4%) rotateY(7deg);
-        }
-
-        [data-stage-offset='1'][data-stage-side='left'] {
-            left: 30%;
+        [data-offset='-1'] {
             transform: translate(-50%, -50%) translateY(4%) rotateY(-7deg);
         }
 
-        [data-stage-offset='1'][data-stage-side='right'] {
-            left: 70%;
+        [data-offset='1'] {
             transform: translate(-50%, -50%) translateY(4%) rotateY(7deg);
         }
 
-        [data-stage-offset='2'] {
-            height: 48%;
-            opacity: 1;
-            transform: translate(-50%, -50%) translateY(8%) rotateY(11deg);
-        }
-
-        [data-stage-offset='2'][data-stage-side='left'] {
-            left: 14%;
+        [data-offset='-2'] {
             transform: translate(-50%, -50%) translateY(8%) rotateY(-11deg);
         }
 
-        [data-stage-offset='2'][data-stage-side='right'] {
-            left: 86%;
+        [data-offset='2'] {
             transform: translate(-50%, -50%) translateY(8%) rotateY(11deg);
         }
     }
@@ -626,17 +666,17 @@
     /*
      * The entrance wash.
      *
-     * The reference flashes white between slides to mask the swap. This app is
-     * server-rendered and the controls are ordinary links, so there is no swap to
-     * mask; what is left is a short lift on load so the stage does not just
+     * The reference flashes white between slides to mask a client-side route swap.
+     * This app is server-rendered and the panels are links, so there is no swap to
+     * mask; what is left is a short lift on load so the stage does not simply
      * appear. Deliberately ONE wash for the whole stage, not per-slide.
      *
      * `forwards` is what makes it safe: without it the animation reverts to the
      * element's own opacity (1) only after it finishes, and a reduced-motion
      * override that skips the animation entirely would leave the panel sitting
-     * over the title at whatever opacity the base rule sets.
+     * over the title.
      */
-    @keyframes tm-stage-wash {
+    @keyframes tm-wash {
         0% {
             opacity: 0.4;
         }
@@ -646,41 +686,27 @@
         }
     }
 
-    [data-stage-wash] {
-        animation: tm-stage-wash 600ms var(--ease-out) forwards;
+    [data-wash] {
+        animation: tm-wash 600ms var(--ease-out) forwards;
     }
 
     @media (prefers-reduced-motion: reduce) {
         /*
-         * The cards stop moving entirely and the wash is skipped rather than
-         * shortened. Shortening a white flash is not a reduced-motion
-         * accommodation -- it is still a flash -- and the fan's whole purpose is
-         * the depth, which is carried by the transforms. The arc survives as a
-         * pure drop, which is the same composition with no motion in it.
+         * No arc and no slide -- panels cross-fade in place instead. Shortening
+         * the 620ms transform would still be motion; the reference's arc is
+         * carried entirely by the transforms, so they are removed rather than
+         * accelerated. What survives is the state change itself.
          */
-        .tm-stage-slot {
-            transition: opacity 200ms linear;
+        .tm-fan-panel {
+            transition: opacity 150ms linear;
             transform: translate(-50%, -50%);
         }
 
-        @media (width >= 64rem) {
-            [data-stage-offset='1'],
-            [data-stage-offset='2'] {
-                transform: translate(-50%, -50%) translateY(6%);
-            }
-
-            [data-stage-offset='1'][data-stage-side='left'],
-            [data-stage-offset='2'][data-stage-side='left'] {
-                transform: translate(-50%, -50%) translateY(6%);
-            }
-        }
-
-        [data-stage-wash] {
+        [data-wash] {
             animation: none;
             opacity: 0;
         }
     }
-
     .tm-no-scrollbar {
         scrollbar-width: none;
     }

@@ -17,7 +17,32 @@
         </div>
     </x-slot>
 
-    <div class="space-y-8">
+    {{--
+        The shared destinations carousel, full-bleed.
+
+        Same component, same presenter and same canonical order as the page at
+        `/destinations/{slug}`; only the active slide differs. That shared
+        presenter is the seam -- see DestinationCarousel.
+
+        The caption is an h2 here, not an h1: the header slot above already carries
+        "Destinations" as this page's heading, and the caption names the slide
+        currently centred, which is subordinate to it.
+
+        The negative margins cancel <main>'s padding (px-5 sm:px-8 lg:px-12) and
+        MUST match it exactly. No `100vw` -- see the note in destinations/show.
+    --}}
+    <div class="-mx-5 sm:-mx-8 lg:-mx-12">
+        @include('components.destinations.hero-carousel', [
+            'slides' => $carouselSlides,
+            'activeIndex' => $carouselActiveIndex,
+            'neighbours' => $carouselNeighbours,
+            'autoplay' => $carouselAutoplay,
+            'interval' => 3600,
+            'headingTag' => 'h2',
+        ])
+    </div>
+
+    <div class="mt-10 space-y-8">
         <section class="rounded-[1.5rem] border border-boracay-light bg-palawan-sand">
             <form
                 method="GET"

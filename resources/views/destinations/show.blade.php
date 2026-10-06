@@ -1,7 +1,3 @@
-@push('scripts')
-    @vite(['resources/js/stage.js'])
-@endpush
-
 <x-app-layout>
     <x-slot name="header">
         <a
@@ -13,32 +9,37 @@
     </x-slot>
 
     {{--
-        The stage sits OUTSIDE the space-y-10 wrapper and before it, because it is
-        full-bleed: it reaches the viewport edges with no container padding and no
-        rounded corners. The wrapper below holds the detail sections, which stay
-        inset as cards.
+        The shared destinations carousel, full-bleed.
 
-        The negative margins cancel <main>'s own padding -- px-5 sm:px-8 lg:px-12
-        -- and MUST match those values exactly. A mismatch leaves a seam on one
-        side and an overhang on the other.
+        Full-bleed because the stage reaches the viewport edges with no container
+        padding and no rounded corners. The negative margins cancel <main>'s own
+        padding -- px-5 sm:px-8 lg:px-12 -- and MUST match those values exactly. A
+        mismatch leaves a seam on one side and an overhang on the other.
 
         Note what is NOT here, after several attempts: no `100vw`. It measures the
         viewport INCLUDING the vertical scrollbar, so a block sized with it lands
         about half a scrollbar off-centre unless something clips the overshoot.
         Cancelling the known padding has no such arithmetic. See AGENTS.md.
+
+        Same component, same presenter and same order as `/destinations`; only the
+        active slide differs. That is what keeps the two pages from drifting.
     --}}
     <div class="-mx-5 sm:-mx-8 lg:-mx-12">
-        @include('destinations.stage', ['destination' => $destination])
+        @include('components.destinations.hero-carousel', [
+            'slides' => $carouselSlides,
+            'activeIndex' => $carouselActiveIndex,
+            'neighbours' => $carouselNeighbours,
+            'autoplay' => $carouselAutoplay,
+            'interval' => 3600,
+        ])
     </div>
 
     {{--
-        Everything below the stage: the destination's own facts, as inset cards.
+        Everything below the stage: this destination's own facts, as inset cards.
 
-        The stage above now owns the photo carousel, so there is no second one
-        here. The per-destination photos that used to render in a strip under the
-        hero are the stage's own cards -- stage.blade.php builds its fan from the
-        hero plus the same `images` relation, so the admin uploads are still the
-        thing being shown and still nothing new has to be entered.
+        The stage above is a fan of DESTINATIONS now, so the per-destination
+        photos an admin uploaded are no longer shown there -- they get their own
+        gallery below, which is where they belonged all along.
     --}}
     <div class="mt-10 space-y-10">
 
@@ -57,6 +58,45 @@
                         {{ $destination->description }}
                     </p>
                 </div>
+
+                {{--
+                    This destination's own extra photos.
+
+                    The stage above is a fan of DESTINATIONS, so these are no longer
+                    shown there. They still need a home: an admin can upload up to
+                    three per destination, and dropping them from the public page
+                    would quietly undo that feature.
+
+                    Plain images, no carousel. A second carousel on the same page
+                    would be a second set of controls to keep in step with the first
+                    and would fight the fan for attention.
+
+                    Alt is empty: each figure is captioned by its own `figcaption`,
+                    so naming the photo in `alt` would announce the caption twice.
+                --}}
+                @if ($destination->images->isNotEmpty())
+                    <div>
+                        <p class="text-xs font-bold uppercase tracking-[0.28em] text-boracay-dark">
+                            02 / Photographs
+                        </p>
+
+                        <div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                            @foreach ($destination->images as $image)
+                                <figure class="overflow-hidden rounded-[1.5rem] bg-island-white ring-1 ring-boracay-light">
+                                    <img
+                                        src="{{ $image->path }}"
+                                        alt=""
+                                        width="640"
+                                        height="480"
+                                        loading="lazy"
+                                        decoding="async"
+                                        class="aspect-[4/3] w-full object-cover"
+                                    >
+                                </figure>
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
 
                 <div class="grid gap-4 sm:grid-cols-3">
                     <div class="rounded-[1.5rem] bg-island-white p-5 ring-1 ring-boracay-light">

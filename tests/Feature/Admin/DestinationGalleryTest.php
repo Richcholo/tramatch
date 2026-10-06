@@ -16,15 +16,16 @@ use Tests\TestCase;
  * Extra destination photos: the admin upload and the cap.
  *
  * This is the WRITE side only -- what an admin can upload, how many, and whose
- * files may be deleted. What the public page DOES with those photos is the hero
- * stage, and that lives in DestinationStageTest: it used to be asserted here too,
- * until the scroll-snap carousel was replaced by the fanned stage, and the markup
- * these tests pinned no longer existed.
+ * files may be deleted. What the public page DOES with those photos is the
+ * "02 / Photographs" gallery in destinations/show, and the assertions for that
+ * used to live here too, through two successive replacements of the hero: first
+ * the scroll-snap strip, then the per-destination photo fan. The write-side tests
+ * are the ones that have stayed meaningful throughout.
  *
  * The thumbnail deliberately stays on `destinations.image_url`. It is what the
- * listing cards, the swipe deck and the map popup all render, and the CSV seeds
- * it for all 65 rows, so moving it would mean a data migration and six view
- * changes to achieve nothing. The gallery is additive.
+ * listing cards, the swipe deck, the map popup and the hero carousel panel all
+ * render, and the CSV seeds it for all 65 rows, so moving it would mean a data
+ * migration and six view changes to achieve nothing. The gallery is additive.
  */
 class DestinationGalleryTest extends TestCase
 {

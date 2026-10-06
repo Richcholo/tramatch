@@ -306,6 +306,72 @@ only when a navigation takes longer than 350 ms, so a click-through on a fast
 connection proves it does **not** appear, not that it works. Throttle the network
 before judging it.
 
+### The destinations carousel
+
+`App\Domain\Destinations\DestinationCarousel` is the single presenter behind the
+fanned hero on **both** `/destinations` and `/destinations/{slug}`. There is no
+carousel table and no second component; the fan on a destination page is the index
+fan with the active index shifted. Two routes, one order, one markup.
+
+- **`data-offset` is the whole mechanism, and it is signed and relative to the
+  active panel.** Position, size, rotation, z-index and opacity are all derived
+  from it in `app.css`. The script changes one integer (`index`); every panel
+  recomputes its own offset (`offsetOf(i) => i - index`), Alpine rebinds the
+  attribute, and the CSS transition interpolates.
+- **This was inverted once and the carousel shipped frozen.** The first version
+  wrote each panel's offset from PHP into a static `data-stage-offset` and never
+  touched it again, so advancing changed which card was highlighted and never
+  where the cards were. State updated; layout did not; no test failed. The Blade
+  writes the offset as the *starting* state only (so the page is right without JS),
+  and the client binding is what makes the fan move. `the_fan_actually_moves`
+  asserts all four conditions — binding present, computed from the index, geometry
+  keyed on `[data-offset]`, and a transition on it — because dropping any one
+  reproduces the freeze.
+- **All slides stay in the DOM.** A five-element window re-rendered per slide
+  cannot animate at all: the panels would be new elements, no image would be in the
+  compositor, and there'd be nothing to transition. Offsets beyond ±2 stay in the
+  DOM and are pushed off-stage with `data-far` (`visibility: hidden`,
+  `pointer-events: none`) so they can slide in and stay out of the a11y tree.
+- **Order is `sort_order`, then `name`.** The secondary sort is not decoration:
+  `sort_order` defaults to 0 for every existing row, so without `name` two
+  requests could disagree on the order and the two fans would not match.
+- **`is_active` is the publish switch; `is_featured` is only curation.** An
+  archived destination 404s *and* leaves both fans. An un-featured one keeps its
+  page — it is merely not in the fan. Do not merge the two into one flag.
+- **The carousel cache is busted on `saved` and `deleted`** via
+  `Destination::booted()`. Without it an archived destination stays clickable in
+  both fans for up to ten minutes and leads to a 404. There are no Observers in this
+  project, so this lives on the model rather than in a new directory plus a
+  registration.
+- **`is_featured` and `sort_order` are not in the admin form yet.** They are
+  `$fillable` and cast, so tinker works, but there is no UI. Both default to
+  including everything, so nothing is hidden until an owner sets them.
+- **`hero-carousel.js` is an Alpine component registered in `app.js`, not a
+  separate Vite entry.** Registering it *after* `Alpine.start()` leaves
+  `x-data="heroCarousel()"` unevaluated: the panels render and the script never
+  attaches, which looks exactly like the frozen carousel and reports nothing.
+  A standalone entry is also what produced a 0.00 kB bundle once already — an
+  unused export gets tree-shaken.
+- **Autoplay runs on `/destinations` and not on a destination page.** The index is
+  a browse surface; a destination page is somewhere someone has arrived. Where it
+  does run it ships the pause control, because a self-starting loop over five
+  seconds without one fails WCAG 2.2.2. `every_field_the_template_reads_off_the
+  _script_exists_on_it` exists because the caption once bound
+  `activeSlide().regionLabel` while the script returned `{ region }`, and the chip
+  went blank the moment Alpine took over.
+- **The chevrons are links and the dots are buttons.** Chevrons navigate to a real
+  destination, so they work without JS and are middle-clickable; they are omitted
+  at each end rather than disabled, because there is no wrap-around and a
+  permanently disabled control is a dead one. The dots move the fan in place.
+- **The caption's heading tag is a parameter.** It is the page `h1` on a
+  destination page and an `h2` on the index, which already has one in its header
+  slot.
+
+**Not covered by any test:** the choreography, the swipe threshold, the autoplay
+timing and the reduced-motion path. There is no browser automation in this repo, so
+those rest on a click-through. Re-click after touching `hero-carousel.js`, the
+`[data-offset]` rules, or the panel markup.
+
 ### Destination-source crawling
 
 `destination_sources` → `destination_source_snapshots` (raw HTML on the `local`
