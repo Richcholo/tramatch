@@ -231,10 +231,16 @@ export default function destinationStage() {
         syncBackdrop() {
             const slide = this.active();
 
-            if (!slide || !slide.imageUrl || this.backdrops.length < 2) {
+            if (!slide || !slide.imageUrl || this.backdrops.length < 1) {
                 return;
             }
 
+            /*
+             * `shownBackdrop` is null when the stage OPENS on a destination with no
+             * photograph, because there was nothing to cross-fade from. The incoming
+             * layer is then whichever exists and it fades in from nothing, which is
+             * the right outcome rather than a missing backdrop.
+             */
             const incoming = this.backdrops.find((layer) => layer !== this.shownBackdrop);
 
             if (incoming.getAttribute('src') === slide.imageUrl) {

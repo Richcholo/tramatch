@@ -57,7 +57,7 @@ not make `pint --test` a pass/fail gate.
   `DB_CONNECTION=sqlite`, array cache/session, sync queue) and needs
   `pdo_sqlite` enabled in `php.ini`. Never point it at MySQL to work around a
   driver problem — `RefreshDatabase` would drop the development database.
-- The suite is currently **351 passing**. It is also the only thing that
+- The suite is currently **352 passing**. It is also the only thing that
   migrates from scratch, so it is the only check that a fresh clone can
   migrate — your dev database cannot detect a broken migration chain,
   because every migration in it has already run.
@@ -352,11 +352,37 @@ from the nav bar down.
   existing row, so without `orderBy('name')` two requests in the same page load
   could disagree about the order — and the caption would then name one
   destination over another's photograph.
-- **A DESTINATION WITH NO PHOTOGRAPH CONTRIBUTES NOTHING** — no panel, no
-  placeholder, no gradient card. The stage promises every panel is a real
-  photograph and a flat colour block is not one. Leaving them out also removes
-  them from the chevron order, so an arrow can never lead to a page whose stage
-  would have to describe some other destination.
+- **PHOTOGRAPHS REACH THIS APP THROUGH EXACTLY ONE DOOR: AN ADMIN UPLOAD.**
+  The CSV has no image column (32 columns, none of them an image), the seeder only
+  ever *clears* `image_url` for a new row and never sets it, and
+  `database/data/luzon-locations-clean.csv` is the source of truth for the
+  catalogue. **So a catalogue with no photographs is the NORMAL state, not a
+  broken one**, and the stage has to be designed for that rather than treated as
+  the exceptional case. This was learned the hard way: the stage shipped
+  rendering an empty slab on every page, because every one of the 65 destinations
+  had a NULL `image_url` and an empty `destination_images`.
+- **EVERY FEATURED DESTINATION CONTRIBUTES AT LEAST ONE SLIDE, and this decision
+  has been got wrong TWICE in opposite directions.** The first version skipped
+  destinations with no photograph — no panel, no placeholder. That was defensible
+  when the stage was one block on a page that still had a hero, fees and hours
+  below it. It became indefensible when the stage became **the page's opening**,
+  because a destination with no photograph then rendered a screen with nothing in
+  it. It also had a quieter cost: `is_featured` is meant to be CURATION, and a
+  photograph-less destination was being excluded by a *photograph* rather than by
+  a decision, so curating 65 rows and watching some vanish for want of an upload
+  is the opposite of what the flag says it does.
+  So a destination with no photograph gets **one slide with an empty `imageUrl`**,
+  and `stage-panel-inner` renders that as a **TYPOGRAPHIC PLATE** — province,
+  name and municipality set in type on a lifted ground.
+  **The plate must never imitate a photograph**: no `<img>`, no empty `src`
+  (which browsers render as a broken-image glyph), no flat colour pretending to be
+  a photo behind a scrim. The fan's rule that every panel is a real photograph
+  governs the panels that *are* photographs.
+  `every_featured_destination_appears_in_the_stage_at_least_once` is the
+  invariant, and `a_destination_with_no_photograph_gets_a_typographic_panel` is
+  the plate.
+- **`is_featured` IS THE ONLY CURATION SWITCH.** Active + featured is the stage's
+  membership test, and nothing else. Do not reintroduce a photograph test.
 - **THE ACTIVE INDEX COMES FROM THE URL.** `show()` passes the destination's
   slug, which resolves to that destination's **first** photograph. That is what
   makes a hard page load land in the same visual state as an in-page advance, so

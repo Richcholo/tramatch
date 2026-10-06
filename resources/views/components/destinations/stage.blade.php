@@ -61,17 +61,18 @@
 <div class="tm-stage-wrap">
     @if ($count === 0)
         {{--
-            No destinations to show. An honest empty state rather than an empty
-            arc -- five panels of nothing is a broken-looking stage, and the page
-            heading above this is rendered either way, so the page still has its
-            h1 when the stage has no photographs.
+            No featured destinations AT ALL. With every destination contributing at
+            least one slide, this now only happens when nothing is active and
+            nothing is featured -- so the message says that, rather than the old
+            "Nothing to show yet", which used to also be what a catalogue with no
+            photographs rendered and read as a broken stage.
         --}}
         <section
             data-stage
             aria-label="Destinations"
             class="tm-stage"
         >
-            <p class="tm-stage__empty">Nothing to show yet.</p>
+            <p class="tm-stage__empty">No destinations are published yet.</p>
         </section>
     @else
         <section
@@ -109,7 +110,15 @@
                 panels and carries no information the caption does not.
             --}}
             <div data-stage-backdrops aria-hidden="true" class="tm-stage__backdrops">
-                <img data-stage-backdrop class="tm-stage__backdrop is-shown" src="{{ $stageSlides[$stageActiveIndex]->imageUrl }}" alt="" decoding="async" fetchpriority="low">
+                {{--
+                    Guarded: with no photograph to cross-fade TO there is nothing to
+                    show, and an `<img src="">` renders a broken-image glyph behind
+                    every panel. The stage's own vignette carries the ground instead.
+                --}}
+                @if ($stageSlides[$stageActiveIndex]->hasImage())
+                    <img data-stage-backdrop class="tm-stage__backdrop is-shown" src="{{ $stageSlides[$stageActiveIndex]->imageUrl }}" alt="" decoding="async" fetchpriority="low">
+                @endif
+
                 <img data-stage-backdrop class="tm-stage__backdrop" alt="" decoding="async">
             </div>
 

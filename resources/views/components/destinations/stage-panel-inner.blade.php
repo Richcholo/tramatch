@@ -42,6 +42,26 @@
         The window is wider than the reach on purpose: a panel that only got its
         `src` at the moment it became visible would decode from nothing and flash.
     --}}
+    {{--
+        A DESTINATION WITH NO PHOTOGRAPH GETS A TYPOGRAPHIC PLATE, not a
+        photograph and not an omission.
+
+        Photographs reach this app through exactly one door: an admin file upload.
+        The CSV has no image column and the seeder only ever CLEARS `image_url` for
+        a new row, so a fresh install has none at all -- and a catalogue with no
+        photographs is the normal state, not the broken one.
+
+        This plate therefore has to carry the page on its own, and it must never
+        pretend to be a photograph. It is set in type on the teal ground with the
+        destination's own name, place and standfirst, so it reads as an editorial
+        title card. There is deliberately no `<img>`, no empty `src` (which a
+        browser renders as a broken-image glyph), and no flat colour pretending to
+        be a photo behind a scrim.
+
+        `DestinationCarousel::build()` guarantees every destination reaches this
+        branch rather than being skipped, which is why the page is never empty.
+--}}
+@if ($slide->hasImage())
     <img
         data-src="{{ $slide->imageUrl }}"
         @if ($inPreloadWindow) src="{{ $slide->imageUrl }}" @endif
@@ -57,6 +77,18 @@
         @endif
         decoding="async"
     >
+@else
+    {{-- A lighter plate, so it reads as paper in the theatre rather than as a
+         hole in it, and so the active panel's gold hairline has something to sit
+         against. --}}
+    <span class="tm-fan-card__type">
+        <span class="tm-fan-card__type-kicker">{{ $slide->province }}</span>
+
+        <span class="tm-fan-card__type-name">{{ $slide->name }}</span>
+
+        <span class="tm-fan-card__type-place">{{ $slide->municipality }}</span>
+    </span>
+@endif
 
     {{--
         The bottom-up scrim. A SIBLING of the image rather than a modifier on it,

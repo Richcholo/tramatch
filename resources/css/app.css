@@ -1400,9 +1400,61 @@
         display: none;
     }
 
+    /*
+     * THE TYPOGRAPHIC PLATE: what a panel shows when its destination has no
+     * photograph at all.
+     *
+     * Photographs reach this app only through an admin upload, so a catalogue
+     * without any is the NORMAL state -- which makes this the first thing most
+     * visitors will see, not an edge case. It has to carry the panel on its own.
+     *
+     * It is set in type on a lifted ground so it reads as a title card in the
+     * theatre rather than as a broken photograph. Nothing here imitates a photo:
+     * no image, no empty `src` (which a browser renders as a broken-image glyph),
+     * and no flat colour pretending to be one behind a scrim.
+     */
+    .tm-fan-card__type {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        gap: 8px;
+        padding: calc(20 * var(--u));
+        background: linear-gradient(160deg, rgb(0 79 82 / 0.5), rgb(11 37 43 / 0.92));
+    }
+
+    .tm-fan-card__type-kicker {
+        color: var(--color-philippine-gold);
+        font-size: clamp(0.5rem, calc(10 * var(--u)), 0.625rem);
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        line-height: 1.2;
+        text-transform: uppercase;
+    }
+
+    .tm-fan-card__type-name {
+        color: var(--color-island-white);
+        font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
+        font-size: clamp(1.25rem, calc(26 * var(--u)), 1.75rem);
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        line-height: 1.1;
+        text-wrap: balance;
+    }
+
+    .tm-fan-card__type-place {
+        color: var(--color-boracay-light);
+        font-size: clamp(0.5rem, calc(10 * var(--u)), 0.6875rem);
+        font-weight: 600;
+        letter-spacing: 0.14em;
+        line-height: 1.3;
+        text-transform: uppercase;
+    }
+
     .tm-stage__empty {
         padding: calc(60 * var(--u));
-        color: var(--color-island-white);
+        color: rgb(253 251 247 / 0.7);
         text-align: center;
     }
 

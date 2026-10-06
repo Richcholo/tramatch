@@ -111,17 +111,36 @@ class DestinationCarousel
         $order = [];
 
         foreach ($destinations as $destination) {
-            /*
-             * A destination with no photograph at all contributes nothing -- not
-             * even a placeholder card. The stage promises every panel is a real
-             * photograph, and a flat colour block is not one. Leaving it out also
-             * removes it from the neighbour order, so a chevron can never lead to a
-             * page whose stage would have to describe some other destination.
-             */
-            $photographs = $this->photographsFor($destination);
+            $photographs = $destination->stagePhotographs();
 
-            if ($photographs === []) {
-                continue;
+            /*
+             * EVERY DESTINATION CONTRIBUTES AT LEAST ONE SLIDE, and this is the
+             * second time this decision has been got wrong in opposite directions.
+             *
+             * The first version skipped destinations with no photograph at all --
+             * no panel, no placeholder. That was defensible when the stage was one
+             * block on a page that still had a hero, fees and hours below it. It is
+             * indefensible NOW, because the stage IS the page's opening: a
+             * destination with no photograph rendered a screen with nothing in it.
+             *
+             * And the skip had a second, quieter cost. `is_featured` is meant to be
+             * CURATION -- an owner choosing what appears in the stage -- and a
+             * photograph-less destination was excluded by a photograph, not by a
+             * decision. Curating 65 rows and watching some of them vanish because
+             * nobody had uploaded a file yet is the opposite of what the flag says
+             * it does.
+             *
+             * So a destination with no photograph gets ONE slide with an empty
+             * `imageUrl`, and `stage-panel-inner` renders that as a TYPOGRAPHIC
+             * PLATE -- name, place and standfirst set in type on a teal ground.
+             * It is deliberately not dressed as a photograph: it never pretends to
+             * be one, so it cannot read as a broken image, and the fan's rule that
+             * every panel is a real photograph is not quietly broken either.
+             */
+            $slides[] = CarouselSlide::fromDestination($destination, $photographs[0] ?? '')->toArray();
+
+            foreach (array_slice($photographs, 1) as $photograph) {
+                $slides[] = CarouselSlide::fromDestination($destination, $photograph)->toArray();
             }
 
             $order[] = [
@@ -129,43 +148,9 @@ class DestinationCarousel
                 'name' => $destination->name,
                 'url' => route('destinations.show', $destination),
             ];
-
-            foreach ($photographs as $photograph) {
-                $slides[] = CarouselSlide::fromDestination($destination, $photograph)->toArray();
-            }
         }
 
         return ['slides' => $slides, 'destinations' => $order];
-    }
-
-    /**
-     * A destination's photographs, hero first, then uploads in their own order.
-     *
-     * Hero first because that is the photograph a traveller arrives on, so it is
-     * the one the stage must open on. Uploads after it, in the `sort_order` an
-     * admin gave them.
-     *
-     * @return array<int, string>
-     */
-    private function photographsFor(Destination $destination): array
-    {
-        $photographs = [];
-
-        $hero = trim((string) ($destination->image_url ?? ''));
-
-        if ($hero !== '') {
-            $photographs[] = $hero;
-        }
-
-        foreach ($destination->images as $image) {
-            $path = trim((string) $image->path);
-
-            if ($path !== '') {
-                $photographs[] = $path;
-            }
-        }
-
-        return array_values(array_unique($photographs));
     }
 
     /**

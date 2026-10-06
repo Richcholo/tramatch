@@ -496,46 +496,126 @@ class DestinationGalleryTest extends TestCase
     }
 
     /**
-     * A destination with no photograph contributes NO panel -- not a placeholder,
-     * not a gradient card.
+/**
+     * A destination with no photograph gets a TYPOGRAPHIC PANEL, not nothing.
      *
-     * The stage promises every panel is a real photograph, and a flat colour
-     * block is not one. Leaving photoless destinations out also removes them from
-     * the chevron order, so an arrow can never lead to a page whose stage would
-     * have to describe some other destination.
+     * Photographs reach this app through exactly one door: an admin file upload.
+     * The CSV has no image column and the seeder only ever CLEARS `image_url` for a
+     * new row, so a catalogue with no photographs is the NORMAL state, not the
+     * broken one. The earlier version of the stage skipped such a destination
+     * entirely -- no panel, no placeholder -- which was defensible when the stage
+     * was one block on a page that still had a hero and fees below it, and
+     * indefensible once the stage became the page's opening. It also meant
+     * `is_featured`, a curation flag, silently excluded destinations for want of an
+     * uploaded file.
      *
-     * Asserted by COUNTING PANELS rather than by looking for a URL, because the
-     * stage on this page legitimately holds the other destination's panel. What
-     * must not appear is a panel belonging to the photoless one.
+     * So the destination still contributes a slide, and the panel carries its own
+     * name and place in type -- deliberately not dressed as a photograph, so it
+     * cannot read as a broken image.
      */
     #[Test]
-    public function a_destination_with_no_photograph_contributes_no_stage_panel(): void
+    public function a_destination_with_no_photograph_gets_a_typographic_panel(): void
     {
         $this->destination(['image_url' => 'https://images.example.com/hero.jpg']);
 
         $photoless = $this->destination([
             'name' => 'Photoless Place',
             'slug' => 'photoless-place',
+            'municipality' => 'Somewhere',
+            'province' => 'Elsewhere',
             'image_url' => null,
         ]);
 
-        $dom = $this->dom($this->get(route('destinations.show', $photoless))->assertOk()->getContent());
+        $dom = $this->dom(
+            (string) $this->get(route('destinations.show', $photoless))->assertOk()->getContent()
+        );
 
-        $panels = $dom->query('//*[@data-stage-panel]');
+        $panels = $dom->query('//*[@data-stage-panel][@data-stage-name="Photoless Place"]');
 
         $this->assertSame(
             1,
             $panels->length,
-            'expected exactly one panel -- the destination that has a photograph -- on a '
-            .'page for a destination that has none'
+            'a destination with no photograph is missing from the stage entirely, so its page '
+            .'opens on nothing'
         );
 
+        $markup = (string) $panels->item(0)->ownerDocument->saveHTML($panels->item(0));
+
+        $this->assertStringContainsString('tm-fan-card__type', $markup);
+        $this->assertStringContainsString('Photoless Place', $markup);
+        $this->assertStringContainsString('Somewhere', $markup);
+
+        /*
+         * NO IMAGE AT ALL, and specifically no empty `src`: `<img src="">` is what a
+         * browser renders as a broken-image glyph, which is the one thing this
+         * plate must not do.
+         */
         $this->assertSame(
             0,
-            $dom->query('//*[@data-stage-panel][@data-stage-name="Photoless Place"]')->length,
-            'a destination with no photograph was given a panel anyway, which is a flat '
-            .'teal block wearing the composition of a photograph'
+            $panels->item(0)->getElementsByTagName('img')->length,
+            'the typographic plate rendered an <img>. A plate with no photograph must not '
+            .'pretend to have one'
         );
+
+        $this->assertStringNotContainsString('src=""', $markup);
+    }
+
+    /**
+     * Every featured destination appears in the stage at least once.
+     *
+     * The invariant behind the plate above: whether a destination is in the stage
+     * is decided by `is_active` and `is_featured` and by nothing else -- not by
+     * whether anyone has uploaded a photograph for it. A curation flag that
+     * silently drops rows is not curation.
+     */
+    #[Test]
+    public function every_featured_destination_appears_in_the_stage_at_least_once(): void
+    {
+        $this->destination([
+            'name' => 'With Photo',
+            'slug' => 'with-photo',
+            'sort_order' => 1,
+            'image_url' => 'https://images.example.com/hero.jpg',
+        ]);
+
+        $this->destination(['name' => 'No Photo', 'slug' => 'no-photo', 'sort_order' => 2, 'image_url' => null]);
+        $this->destination(['name' => 'Also None', 'slug' => 'also-none', 'sort_order' => 3, 'image_url' => '']);
+
+        $this->destination([
+            'name' => 'Archived',
+            'slug' => 'archived',
+            'sort_order' => 4,
+            'image_url' => null,
+            'is_active' => false,
+        ]);
+
+        $this->destination([
+            'name' => 'Unfeatured',
+            'slug' => 'unfeatured',
+            'sort_order' => 5,
+            'image_url' => null,
+            'is_featured' => false,
+        ]);
+
+        $slugs = app(\App\Domain\Destinations\DestinationCarousel::class)
+            ->slides('no-photo')
+            ->map->slug
+            ->unique()
+            ->all();
+
+        foreach (['with-photo', 'no-photo', 'also-none'] as $slug) {
+            $this->assertContains(
+                $slug,
+                $slugs,
+                $slug.' is active and featured but missing from the stage. A destination\'s '
+                .'presence is decided by is_active and is_featured, not by whether a '
+                .'photograph has been uploaded for it.'
+            );
+        }
+
+        foreach (['archived', 'unfeatured'] as $slug) {
+            $this->assertNotContains($slug, $slugs, $slug.' is not publishable and should not be in the stage');
+        }
     }
 
     private function dom(string $html): DOMXPath
