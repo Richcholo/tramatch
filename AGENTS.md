@@ -339,19 +339,44 @@ from the nav bar down.
   drift, and `DestinationCarousel::slides()` takes a **required** slug rather
   than a nullable one — the nullable default was flexibility nothing used.
 
-- **A SLIDE IS A PHOTOGRAPH, NOT A DESTINATION.** Canonical order is
-  `sort_order`, then `name`; each destination then contributes its photographs in
-  a fixed sequence — its hero photograph (`destinations.image_url`) first, then
-  its uploads (`destination_images`) in `sort_order`. This is the decision the
-  whole stage rests on, and it is why the destination page's hero block and its
-  scroll-snap photo strip were both deleted: their photographs are panels now,
-  and an admin's uploads stay reachable from the public page instead of living in
-  a strip a redesign could quietly orphan.
-  `slides_are_grouped_by_destination_with_the_hero_photograph_first` pins it.
-- **THE SECONDARY SORT IS NOT DECORATION.** `sort_order` defaults to 0 for every
-  existing row, so without `orderBy('name')` two requests in the same page load
-  could disagree about the order — and the caption would then name one
-  destination over another's photograph.
+- **A SLIDE IS A PHOTOGRAPH, NOT A DESTINATION.** Within one destination the order
+  is fixed: its hero photograph (`destinations.image_url`) first, then its uploads
+  (`destination_images`) in `sort_order`. This is why the destination page's hero
+  block and its scroll-snap photo strip were both deleted: their photographs are
+  panels now, and an admin's uploads stay reachable from the public page instead
+  of living in a strip a redesign could quietly orphan.
+  `a_destinations_own_photographs_run_hero_first_then_in_sort_order` pins the order.
+- **THE STAGE HOLDS ONE DESTINATION. IT USED TO HOLD ALL 65, AND THAT WAS WRONG.**
+  It fanned across every featured destination with the one you arrived at in the
+  middle, and the chevrons walked to the others. That reads as the richer idea and
+  it is the failure the caption's one-slide rule *cannot* defend against, because
+  the wrong thing on screen is a different **destination** — not a second slide.
+  Arriving at Fort Santiago showed a photograph of Aguinaldo Shrine under Fort
+  Santiago's caption and backdrop. Two places at once, both rendering correctly,
+  which is the worst kind of wrong: nobody can describe it precisely enough to
+  report.
+  `DestinationCarousel::slides($slug)` now filters the cached payload down to one
+  slug. **The payload is still the whole catalogue** — filtering an in-memory
+  array of scalars is free and a query per page render is not.
+  `the_stage_holds_this_destinations_photographs_and_nobody_elses` pins it.
+- **THE FAN OPENS ONE-SIDED, AND THAT IS CORRECT.** Offsets restart at zero, so
+  the hero photograph is active and everything else is to the **right**. There is
+  nothing on the left because there is no earlier photograph of this place. A fan
+  that wrapped, or that centred the middle photograph and opened on an upload
+  instead of the hero, would be symmetrical and would be lying about which picture
+  you arrived at. Three photographs give: hero centred, second right, third
+  further right — the ordinary "current and what follows" arrangement.
+  `the_hero_photograph_is_active_and_the_offsets_restart_at_zero` asserts that no
+  offset is ever **negative**, because a negative one would mean another
+  destination's photograph had crept in.
+- **THE SECONDARY DESTINATION SORT (`sort_order`, then `name`) IS NO LONGER
+  OBSERVABLE** on this route, and that is fine: it orders the cached payload, and
+  the payload is filtered to one slug before a slide is returned. It still matters,
+  because two requests in the same page load must agree on the payload they are
+  both filtering. **Do not "fix" a test for its absence** — assert a destination's
+  own photographs instead, as `every_featured_destination_gets_a_stage_at_least_once`
+  now does by asking each destination for its own stage and requiring all of them
+  to be non-empty.
 - **PHOTOGRAPHS REACH THIS APP THROUGH EXACTLY ONE DOOR: AN ADMIN UPLOAD.**
   The CSV has no image column (32 columns, none of them an image), the seeder only
   ever *clears* `image_url` for a new row and never sets it, and
@@ -477,6 +502,47 @@ attribute on every panel, and the CSS transition interpolates.
 - **The Blade-written offset is the STARTING STATE ONLY.** It is what makes the
   page correct with JavaScript disabled. Never write a second offset from PHP —
   that is the frozen-stage bug.
+- **THE PAYLOAD ISLAND MUST BE A DESCENDANT OF THE ELEMENT THAT READS IT.**
+
+  THE BUG THIS EXISTS FOR. `readPayload()` reads the island with
+  `this.$el.querySelector('[data-stage-data]')`, and `$el` is the
+  `<section x-data="destinationStage">`. The island used to be rendered as a
+  SIBLING of that section, one line further down the same Blade file, which
+  reads as tidier and is outside the subtree the script searches. The query
+  returned null, `.textContent` threw, and the `catch` returned `slides: []`.
+
+  The failure is SILENT and TOTAL, and it is worth writing down in full
+  because every symptom looks like a different bug:
+
+  - `count` is 0, so `autoplayable()` is false and autoplay never starts;
+  - `index` clamps to 0, so `offsetOf()` returns `i - 0` and the fan
+    re-indexes itself onto whatever the FIRST panel in the DOM is -- a
+    photograph of a completely different destination;
+  - `go()` clamps every target to 0 and returns early because the target
+    already equals the index, so the dots and the chevrons all do nothing;
+  - the offsets have been rewritten to 0, 1, 2 ... and then never change,
+    so nothing animates;
+  - and the caption, the backdrop and the server-rendered offsets all still
+    describe the destination that was actually asked for.
+
+  So the page showed one destination's photographs under another
+  destination's backdrop, with every control inert and no motion, and
+  nothing anywhere reported an error. Every HTTP-level test passed
+  throughout, because the server-rendered markup was genuinely correct.
+
+  Fixed by putting the island INSIDE the section, and defended twice over:
+  - `data-stage-start` on every panel records the server's offset in an
+    attribute the script NEVER writes, so an unreadable payload leaves the
+    stage as rendered instead of scrambling it;
+  - `go()` refuses to move and `autoplayable()` refuses to start when the
+    payload is unusable, because a DEGRADED stage and a WRONG stage look
+    identical from outside and only one of them shows the wrong photograph.
+
+  `the_payload_island_is_a_descendant_of_the_element_that_reads_it` and
+  `an_unreadable_payload_freezes_the_fan_where_the_server_put_it` assert both
+  halves of this, and both were falsified by moving the island back out of the
+  section and by reintroducing a duplicate `offsetOf` definition underneath
+  the real one (in an object literal the last definition silently wins).
 - **All slides stay in the DOM**; offsets past the reach are pushed off-stage with
   `data-far` (`visibility: hidden`, `pointer-events: none`). A re-rendered
   five-element window cannot animate: the panels would be new elements with
@@ -598,16 +664,57 @@ it**, which is why it asserts the invariant now.
 
 #### Controls
 
-- **CHEVRONS WALK DESTINATIONS; DOTS WALK PHOTOGRAPHS.** Both, deliberately. The
-  chevrons are **links**, so they work without JavaScript and are
-  middle-clickable, and they are **omitted at each end** rather than disabled —
-  no wrap-around, and a permanently disabled control is a dead one.
-  `neighbours()` skips a destination's remaining photographs.
+- **CHEVRONS, DOTS, ARROW KEYS AND DRAG ALL DO THE SAME THING.** They all move
+  the fan through this destination's photographs. The chevrons used to be **links
+  to the neighbouring destination**, which was correct while the stage fanned
+  across the catalogue and is wrong now that it does not: a control that navigates
+  off the page you are reading, shaped exactly like the controls that move the
+  pictures in front of you, is a control that lies about what it does. There is no
+  wrap-around, and no `neighbours()` any more.
+- **THE CHEVRONS ARE RENDERED AT BOTH ENDS AND `disabled`d — NOT OMITTED.** This
+  is the opposite of what they used to do, and the reason is the drag: omission was
+  right for a link whose target does not exist, and wrong for a button that
+  disables. A keyboard user's focus can be sitting on a control that is about to
+  stop existing, and the stage visibly rearranges itself every time it reaches an
+  end. They keep their position and carry `disabled` plus `aria-hidden` from the
+  script. `inert` is not used: not universal enough to rely on alone.
+  `the_chevrons_move_the_fan_and_stay_mounted_at_both_ends` pins both halves, and
+  `a_one_photograph_destination_has_no_chevrons_and_no_pager` pins the other case —
+  a destination whose owner has uploaded nothing has **no** chevrons, which is the
+  normal state, not a missing feature.
+- **THE FAN IS DRAGGABLE**, and four pieces of it are load-bearing, each failing
+  silently on its own:
+  - **`touch-action: pan-y`** on `.tm-fan`. Without it a swipe on a phone is a coin
+    toss between scrolling the page and moving the carousel, and the browser
+    delays every `pointermove` until it has decided.
+  - **`setPointerCapture` ON THE FAN**, not on the panel the press started on. The
+    panels are narrower than the fan, so a drag travelling more than a panel's
+    width leaves that element — and without capture the gesture dies halfway and
+    the fan snaps back under a finger that is still moving.
+  - **A CAPTURE-PHASE CLICK INTERCEPTOR ON THE STAGE.** By the time a click event
+    exists there is no drag left to cancel: the browser has already synthesised it
+    from the same pointer sequence. Every panel is an `<a>`, so without this every
+    drag that ends over a card navigates away. It must be *capture* phase and on an
+    **ancestor** of the anchor; `stopPropagation` there means the anchor never sees
+    it.
+  - **THE TRANSITION IS SUSPENDED WHILE DRAGGING** (`.tm-fan.is-dragging`) so the
+    fan tracks the pointer instead of lagging behind it, and restored on release
+    so a cancelled drag eases home rather than jumping.
+
+  `--tm-drag-x` is the only thing the script writes; it feeds a transitioned
+  `transform`, and the transition applies to the **resolved** value, so a cancel is
+  just setting it back to `0px`. No `@property` registration and no frame juggling.
+  A **6px dead zone** keeps a tap from counting as a gesture, and a **distance**
+  threshold (15% of the fan, floor 48px) commits an advance rather than a velocity
+  — a flick has one pointer event and a drag has thirty, and they must not disagree
+  about the same physical distance.
+  `the_fan_is_draggable_and_the_gesture_has_the_parts_that_make_it_usable` pins all
+  four.
 - **THE PAGER SITS ON THE TEAL**, not on the paper: its dots are Island White and
   Island White on Palawan Sand is invisible, so the slab extends to include the
-  control strip. The dots show a **window** the size of the fan's reach — a
-  destination set is 65 destinations of up to four photographs, and 200-odd dots
-  is a texture, not a pager.
+  control strip. The dots show a **window** the size of the fan's reach — the point
+  is that a destination has a handful of photographs, and a dot per photograph in
+  the whole catalogue is a texture, not a pager.
 - **AUTOPLAY IS ON AND THE PAUSE CONTROL IS MANDATORY.** This reverses an earlier
   decision on this page, which had shipped the stage with neither ("a timer that
   keeps shifting the fan under someone reading it is worse than no timer"); it was
@@ -660,13 +767,17 @@ same place, is a cross-fade rather than a hard swap.
 
 #### The cache
 
-`destinations.stage.v1` holds **arrays of scalars**, not objects, and holds slides
-and the destination order in one payload. The cache driver is the database,
-entries are serialised, and they **survive a deploy**: an object graph outlives
-the class that built it, unserialises to `__PHP_Incomplete_Class`, and behind a
-strict return type takes the page down instead of costing one rebuild.
+`destinations.stage.v2` holds **arrays of scalars**, not objects, and holds the
+**whole catalogue's** slides — a page only needs one destination's, and filtering
+an in-memory array is free where a query per render is not. The cache driver is
+the database, entries are serialised, and they **survive a deploy**: an object
+graph outlives the class that built it, unserialises to `__PHP_Incomplete_Class`,
+and behind a strict return type takes the page down instead of costing one rebuild.
 `CarouselSlide::fromCache()` returns null for anything unexpected, which the
-caller treats as a **miss**. Bump the key when changing the payload's shape.
+caller treats as a **miss**. Bump the key when changing the payload's shape — it
+went to **v2** when the stage stopped fanning across every destination and the
+`destinations` order list went with it, so a live `v1` entry is a miss rather than
+a silently wrong page.
 
 It is busted from **two** models, because they are two tables: `Destination` and
 `DestinationImage` (a photograph IS a slide). Without the second, an admin
@@ -1277,6 +1388,47 @@ free, and prefer a guarded `up()` over a timestamp swap whenever a column may
 already exist somewhere.
 
 ## Frontend gotchas
+
+- **A DUPLICATE METHOD IN AN ALPINE COMPONENT IS NOT AN ERROR — THE LAST
+  ONE WINS.** `destinationStage()` returns an OBJECT LITERAL, and a
+  duplicate key in an object literal is not a syntax error, not a warning
+  and not a lint failure in most configurations: the **last** definition
+  silently takes the property and the earlier one is discarded.
+
+  It happened here, and it disabled a safety net while every test still
+  passed. A text replacement anchored on `offsetOf()`'s **docblock**
+  rather than on its whole body left the original method underneath the
+  new one — so the `unreadable` fallback was present, commented at
+  length, asserted by name, and never once executed.
+
+  The lesson has two halves:
+
+  - **Anchor a replacement on the whole method, never on its docblock.**
+    A docblock is duplicated content by design, so matching it identifies
+    a region rather than a unit.
+  - **Assert the count, per method name.**
+    `no_method_in_the_stage_is_defined_twice` does exactly that, and
+    `the_fan_actually_moves` asserts the **LAST** statement of
+    `offsetOf()`'s body rather than its first — which is the only thing
+    that distinguishes the real method from a dead copy sitting under it.
+
+  A duplicate here is the most dangerous possible edit outcome: the file
+  reads correctly, the feature reads as implemented, the tests pass, and
+  the browser runs the version nobody meant.
+- **A NEGATIVE MARGIN THAT CANCELS A PADDING NEEDS ITS PARTNER AT THE
+  SAME BREAKPOINT, AND THE PAIR SHOULD BE READ FROM THE LAYOUT, NOT
+  HARD-CODED.** `.tm-page` cancels `main`'s own padding with negative
+  margins — the only way a background can run under padding without a
+  wrapper. The arithmetic has to be exact at **every** breakpoint, and
+  it was not: `main` goes to `lg:px-12` while the page only reached back
+  to `lg:-mx-8`, leaving a 1rem band of the page's own background down
+  each side at the widest sizes. A white edge on a dark page, small, and
+  only on a big screen, which is exactly why it gets accepted as a
+  rendering quirk.
+  `the_dark_surface_cancels_the_layout_padding_at_every_breakpoint`
+  reads `main`'s own classes out of `layouts/app.blade.php` and checks
+  each pair, so adding `xl:px-16` to the layout without a matching
+  `xl:-mx-16` here fails that test instead of shipping.
 
 - **Never nest a `<form>` inside another `<form>`.** The HTML parser discards the
   inner form's start tag, then the first inner `</form>` closes the *outer* form,
