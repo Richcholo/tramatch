@@ -84,15 +84,19 @@
     @class([
         'relative isolate overflow-hidden bg-volcanic-teal',
         // With no photo at all there is no fan to give the stage its height, so
-        // the title needs one of its own. Without this the h1 sits over an empty
+        // the stage needs one of its own. Without this the h1 sits over an empty
         // band with nothing behind it.
-        'min-h-[26rem]' => $photoCount === 0,
+        'min-h-[24rem]' => $photoCount === 0,
     ])
 >
     {{-- The ambient backdrop. Every photo gets a layer, and only the active one
          is unhidden, so the wash transitions with the slide. `hidden` rather than
          opacity 0, so the inactive ones are genuinely out of the a11y tree and
-         out of the compositor. --}}
+         out of the compositor.
+
+         Scaled up 125% because `blur-3xl` samples past the element edge and a
+         1:1 image leaves a transparent rim -- which showed as a hard edge inside
+         the stage. --}}
     @foreach ($stagePhotos as $photo)
         <img
             data-stage-backdrop
@@ -100,7 +104,7 @@
             alt=""
             aria-hidden="true"
             @if (! $loop->first) hidden @endif
-            class="absolute inset-0 h-full w-full scale-110 object-cover opacity-40 blur-3xl"
+            class="absolute inset-0 h-full w-full scale-125 object-cover opacity-70 blur-3xl"
         >
     @endforeach
 
@@ -111,22 +115,45 @@
         <div aria-hidden="true" class="absolute inset-0 bg-gradient-to-br from-boracay via-cyan-500 to-volcanic-teal"></div>
     @endif
 
-    <div class="absolute inset-0 bg-volcanic-teal/70"></div>
+    {{--
+        The scrim over the backdrop. A GRADIENT, not a flat fill.
+
+        This was `bg-volcanic-teal/70` across the whole stage, which flattened
+        the backdrop to near-solid dark teal and threw away the blurred photo
+        entirely -- the reference's backdrop is a legible, heavily blurred image of
+        the place, and it is most of what makes the stage feel photographic
+        rather than like a coloured box.
+
+        The gradient darkens the middle band where the title sits and lightens
+        toward the top and bottom, so the copy stays legible over arbitrary
+        photography without dimming the whole frame to nothing.
+    --}}
+    <div aria-hidden="true" class="absolute inset-0 bg-gradient-to-b from-volcanic-teal/75 via-volcanic-teal/55 to-volcanic-teal/85"></div>
 
     {{-- The fan. Perspective lives here so all five cards share one vanishing
-         point; the cards only rotate and scale within it. Clipped at the bottom by
-         the stage, so no card shows a bottom edge.
+         point; the cards only rotate within it.
 
          Skipped entirely when there is no photo. Guarding the LOOP, not just the
          modulo, and that is not belt-and-braces: `($slot + 2) % 0` is a fatal
          DivisionByZero in PHP 8, and a destination with neither a hero nor an
          upload is an ordinary row rather than an edge case. --}}
+    {{--
+        The fan and the title share one relatively-positioned wrapper, because the
+        title is centred on the FAN, not on the stage. The stage itself is a flex
+        column so the dots sit under the fan rather than at the bottom of whatever
+        height the cards happened to take.
+
+        `min-h` on this inner wrapper is what a destination with no photo relies on
+        to give the title somewhere to sit -- with no fan it has no height of its
+        own, and the h1 would centre on a zero-height box at the very top.
+    --}}
+    <div
+        class="relative flex flex-col pt-16 sm:pt-20 lg:pt-24"
+        @class(['min-h-[16rem]' => $photoCount === 0])
+    >
+    <div class="relative">
     @if ($photoCount > 0)
-        <div
-            data-stage-fan
-            style="perspective: 1200px"
-            class="relative flex items-center justify-center gap-2 overflow-hidden px-3 pt-14 sm:gap-4 sm:pt-16 lg:min-h-[34rem] lg:gap-6 lg:pt-20"
-        >
+        <div data-stage-fan class="tm-stage-fan">
         @for ($slot = -2; $slot <= 2; $slot++)
             @php
                 /*
@@ -142,8 +169,8 @@
                  *
                  * The modulo means two photos alternate A, B, A, B around the
                  * centre. Duplicates stay legible because the off-centre cards are
-                 * rotated, scaled, dimmed and pushed down, so the eye reads five
-                 * distinct planes before it reads content.
+                 * shorter, rotated and dimmed, so the eye reads five distinct
+                 * planes before it reads content.
                  */
                 $offset = abs($slot);
                 $isActive = $slot === 0;
@@ -156,16 +183,28 @@
                 data-stage-side="{{ $slot < 0 ? 'left' : 'right' }}"
                 data-stage-photo="{{ $photoIndex }}"
                 @class([
-                    'tm-stage-slot relative shrink-0',
+                    'tm-stage-slot',
                     'z-30' => $isActive,
-                    'z-20 opacity-70 saturate-[0.7]' => ! $isActive,
+                    // A LIGHT dim only. This was `bg-volcanic-teal/55` over the
+                    // image plus `opacity-70 saturate-[0.7]` on the slot, and the
+                    // reference shows the outer cards at close to full strength --
+                    // they are separated by size, rotation and drop, not by being
+                    // blacked out. Dimming them that hard made the fan read as one
+                    // photo with shadows.
+                    'z-20 opacity-90' => ! $isActive,
                 ])
             >
-                {{-- aspect-[2/5] on EVERY card at every size. This is the
-                     reference's "uniform aspect ratio confirms it is not a scale
-                     distortion" note: the far cards are smaller because they are
-                     further away, not because they were squashed. --}}
-                <div class="relative aspect-[2/5] overflow-hidden rounded-[1.25rem] shadow-2xl ring-1 ring-white/15 lg:rounded-[1.5rem]">
+                {{--
+                    aspect-[3/5], NOT 2/5. Measured off the reference capture: the
+                    centre card is 135x230px, which is 1:1.7. The 2/5 shipped
+                    first made every card 1:2.4 -- so tall the fan stopped reading as
+                    a row of photos and started reading as five vertical slivers.
+
+                    One ratio on all five, so the fan is perspective rather than a
+                    scale distortion: the outer cards are smaller because they are
+                    further away, not because they were squashed.
+                --}}
+                <div class="relative h-full aspect-[3/5] overflow-hidden rounded-lg shadow-xl ring-1 ring-white/15 lg:rounded-xl">
                     <img
                         src="{{ $stagePhotos[$photoIndex] }}"
                         alt=""
@@ -173,16 +212,23 @@
                         loading="{{ $isActive ? 'eager' : 'lazy' }}"
                     >
 
-                    {{-- The scrim, a sibling of the <img> rather than a
-                         modifier on it, so it covers the rounded corners and the
-                         card reads as one plate. --}}
+                    {{-- The scrim, a sibling of the <img> rather than a modifier on
+                         it, so it covers the rounded corners and the card reads as
+                         one plate. Lighter than the old 55% -- see above. --}}
                     @unless ($isActive)
-                        <div class="pointer-events-none absolute inset-0 bg-volcanic-teal/55"></div>
+                        <div class="pointer-events-none absolute inset-0 bg-volcanic-teal/25"></div>
                     @endunless
 
-                    @if ($isActive && $photoCount > 1)
-                        <span class="absolute left-1/2 top-3 -translate-x-1/2 whitespace-nowrap rounded-full bg-volcanic-teal/75 px-3 py-1 text-[0.6rem] font-bold uppercase tracking-[0.2em] text-boracay-light backdrop-blur">
-                            Photo 1 of {{ $photoCount }}
+                    {{--
+                        The active card's chip. The reference labels the active card
+                        with its REGION ("Central America"), not with its position in
+                        the sequence -- it was previously "Photo 1 of 4", which is
+                        what the dots below already say, and repeating it here put a
+                        counter in the middle of a photograph.
+                    --}}
+                    @if ($isActive)
+                        <span class="absolute left-1/2 top-3 -translate-x-1/2 whitespace-nowrap rounded-full bg-volcanic-teal/70 px-3 py-1 text-[0.6rem] font-bold uppercase tracking-[0.2em] text-boracay-light backdrop-blur">
+                            {{ $destination->province }}
                         </span>
                     @endif
                 </div>
@@ -191,19 +237,89 @@
         </div>
     @endif
 
-    {{-- Chevrons, vertically on the title's midline at the stage edges. Real
-         buttons with accessible names, so a screen reader announces an action
-         rather than a glyph.
+    {{--
+        The title block. A STAGE-LEVEL overlay, deliberately not a child of any
+        card, so copy can cross card edges without a card's overflow clipping it.
+        z-40 against the fan's z-30 guarantees a card can never occlude it.
+        `pointer-events-none` so the cards stay hoverable through the text area.
 
-         Gated on two photos or more, for the same reason the dots are: a chevron
-         that cannot change anything is a dead control, and stage.js would leave it
-         rendered-but-inert rather than absent. One photo is not a carousel. --}}
+        SIZE IS THE WHOLE FIX HERE. This was `text-4xl sm:text-6xl lg:text-7xl
+        xl:text-8xl` with no width constraint, which put an ~90px headline across
+        a 1500px stage -- it read as a page-wide banner laid over the fan rather
+        than as a caption on the photograph, and it was the single loudest thing
+        wrong with the layout. The reference's title is about 5% of the stage
+        height and ~33% of its width: small, and constrained.
+
+        Measured off the reference: cap height 20px in a 409px stage, so ~21px of
+        cap in our 26rem fan. Playfair's cap runs around 0.7 of its font size, so
+        that is roughly a 30px font -- `text-3xl`, not `text-8xl`. The clamp keeps
+        it proportional between the 16rem mobile fan and the 26rem desktop one.
+
+        `max-w-3xl` is the other half. Without it a long name wraps across the full
+        stage width and the effect is lost even at a smaller font size.
+    --}}
+    <div class="pointer-events-none absolute inset-0 z-40 flex items-center justify-center px-6 text-center">
+        <div class="max-w-3xl">
+            <p class="text-[0.65rem] font-bold uppercase tracking-[0.32em] text-boracay-light sm:text-xs">
+                {{ $destination->municipality }},
+                {{ $destination->province }}
+            </p>
+
+            <h1 class="mt-3 font-display text-[clamp(1.75rem,4.2vw,3rem)] font-semibold uppercase leading-[1.05] tracking-[-0.02em] text-white">
+                {{ $destination->name }}
+            </h1>
+
+            {{-- The reference's short accent rule, flush-left with the text block
+                 rather than centred under it. Centring it reads as a divider; the
+                 reference uses it as a mark. --}}
+            <span aria-hidden="true" class="mt-4 block h-0.5 w-8 bg-white/60"></span>
+
+            {{--
+                NO DESCRIPTION HERE, deliberately.
+
+                The stage carried `Str::limit($destination->description, 90)` and
+                section 01 below renders the same field in full, so the opening
+                sentence appeared twice within one screenful -- once over the
+                photograph and again a few hundred pixels down. It read as a
+                mistake rather than as emphasis.
+
+                The reference carries a short tagline, but we have no tagline field
+                and inventing one means writing copy per destination that nothing
+                else on the page agrees with. The description belongs once, in the
+                prose block that is actually for reading.
+            --}}
+
+            <div class="mt-4 flex flex-wrap justify-center gap-2">
+                @foreach ($destination->tags as $tag)
+                    <span class="rounded-full bg-white/15 px-2.5 py-0.5 text-[0.7rem] font-semibold text-white backdrop-blur">
+                        {{ $tag->name }}
+                    </span>
+                @endforeach
+            </div>
+        </div>
+    </div>
+
+    {{-- Chevrons, on the fan's midline at the stage edges.
+
+         INSIDE the fan wrapper, which is what makes `top-1/2` land on the fan's
+         centre rather than the stage's. The wrapper carries the stage's top padding
+         for the nav gap, so centring on the stage put the arrows visibly above the
+         cards.
+
+         BARE, not a filled circle. The reference draws plain arrows with no plate
+         behind them; the earlier `rounded-full bg-volcanic-teal/70 backdrop-blur`
+         put two dark discs on the fan that competed with the photographs for
+         attention. They keep a 44px hit area -- a transparent padding box rather
+         than a visible circle.
+
+         Gated on two photos or more, for the same reason the dots are: a control
+         that cannot change anything is a dead control. --}}
     @if ($photoCount > 1)
         <button
             type="button"
             data-stage-prev
             aria-label="Previous photo"
-            class="absolute left-1 top-1/2 z-40 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-volcanic-teal/70 text-2xl leading-none text-white/80 backdrop-blur transition hover:bg-volcanic-teal hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-philippine-gold disabled:cursor-not-allowed disabled:opacity-30 sm:left-4"
+            class="absolute left-0 top-1/2 z-40 flex h-11 w-11 -translate-y-1/2 items-center justify-center text-3xl leading-none text-white/70 transition hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-philippine-gold disabled:pointer-events-none disabled:opacity-25"
         >
             <span aria-hidden="true">&lsaquo;</span>
         </button>
@@ -212,44 +328,18 @@
             type="button"
             data-stage-next
             aria-label="Next photo"
-            class="absolute right-1 top-1/2 z-40 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-volcanic-teal/70 text-2xl leading-none text-white/80 backdrop-blur transition hover:bg-volcanic-teal hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-philippine-gold disabled:cursor-not-allowed disabled:opacity-30 sm:right-4"
+            class="absolute right-0 top-1/2 z-40 flex h-11 w-11 -translate-y-1/2 items-center justify-center text-3xl leading-none text-white/70 transition hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-philippine-gold disabled:pointer-events-none disabled:opacity-25"
         >
             <span aria-hidden="true">&rsaquo;</span>
         </button>
     @endif
-
-    {{-- The title block. A STAGE-LEVEL overlay, deliberately not a child of any
-         card. z-40 against the fan's z-30 is what guarantees a card can never
-         occlude the copy. `pointer-events-none` so the cards stay hoverable
-         through the text area. --}}
-    <div class="pointer-events-none absolute inset-x-0 top-1/2 z-40 -translate-y-1/2 px-6 text-center">
-        <p class="text-xs font-bold uppercase tracking-[0.3em] text-boracay-light">
-            {{ $destination->municipality }},
-            {{ $destination->province }}
-        </p>
-
-        <h1 class="mt-4 font-display text-4xl font-semibold uppercase leading-[0.92] tracking-[-0.03em] text-white sm:text-6xl lg:text-7xl xl:text-8xl">
-            {{ $destination->name }}
-        </h1>
-
-        <p class="mx-auto mt-5 max-w-xl text-sm leading-6 text-white/70 sm:text-base sm:leading-7">
-            {{ \Illuminate\Support\Str::limit($destination->description, 130) }}
-        </p>
-
-        <div class="mt-5 flex flex-wrap justify-center gap-2">
-            @foreach ($destination->tags as $tag)
-                <span class="rounded-full bg-white/15 px-3 py-1 text-xs font-semibold text-white backdrop-blur">
-                    {{ $tag->name }}
-                </span>
-            @endforeach
-        </div>
     </div>
 
     {{-- One dot per photo. The reference showed a single lit dot and could not
          resolve whether the inactive ones were hidden; a lit/inactive pair per
          photo is the honest reading of "you are on photo n of m". --}}
     @if ($photoCount > 1)
-        <div class="relative z-40 flex justify-center gap-2 pb-8 pt-4" role="group" aria-label="Choose a photo">
+        <div class="relative z-40 -mt-2 flex justify-center gap-2 pb-10" role="group" aria-label="Choose a photo">
             @foreach ($stagePhotos as $index => $photo)
                 <button
                     type="button"
@@ -265,11 +355,16 @@
             @endforeach
         </div>
     @endif
+    </div>
 
     {{-- The entrance wash. The reference flashes white between slides; without a
          client-side route swap there is nothing to mask, so this is a short lift
          on load instead. `animation-fill-mode: forwards` plus the reduced-motion
-         override in app.css means it never leaves the title stuck at opacity 0. --}}
+         override in app.css means it never leaves the title stuck at opacity 0.
+
+         Deliberately a SIBLING of the flow wrapper rather than a child, so
+         `inset-0` covers the whole stage -- including the area above the fan that
+         the wrapper's nav padding adds -- rather than stopping short of it. --}}
     <div data-stage-wash aria-hidden="true" class="pointer-events-none absolute inset-0 z-30 bg-white"></div>
 
     <p data-stage-status class="sr-only" role="status" aria-live="polite"></p>

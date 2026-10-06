@@ -71,6 +71,50 @@ function initStage() {
          */
         let active = 2;
 
+        /**
+         * The slots that currently have real layout, as [first, last] indices.
+         *
+         * Below 64rem the far pair is hidden with `opacity: 0`, exactly as the
+         * reference does on narrow screens -- NOT `display: none`, which would make
+         * the arc visibly collapse and re-expand on resize. The side effect is that
+         * those two slots are still in the DOM and still measure non-zero, so
+         * walking slot 0 to slot 4 blindly would step onto an invisible card and
+         * the fan would appear frozen on a phone.
+         *
+         * Measured rather than read off a media query, so the script has no copy
+         * of the breakpoint to keep in step with the stylesheet. Recomputed on
+         * every paint because it changes when the viewport does.
+         */
+        const visibleBounds = () => {
+            let first = -1;
+            let last = -1;
+
+            slots.forEach((slot, index) => {
+                if (slot.getBoundingClientRect().width > 0) {
+                    if (first === -1) {
+                        first = index;
+                    }
+
+                    last = index;
+                }
+            });
+
+            return first === -1 ? [active, active] : [first, last];
+        };
+
+        /**
+         * Bring `active` back inside the visible range.
+         *
+         * Needed because a resize can hide the slot the fan was left on -- rotate a
+         * phone to landscape on the far pair and the active card is now the one the
+         * reference hides. Without this the stage shows no active card at all.
+         */
+        const clampActive = () => {
+            const [first, last] = visibleBounds();
+
+            active = Math.min(Math.max(active, first), last);
+        };
+
         /** The photo the currently active slot is showing. */
         const activePhoto = () => {
             const slot = slots[active];
@@ -84,32 +128,54 @@ function initStage() {
          * Used by the dots. A dot means "show me photo N", and with fewer photos
          * than slots several slots show the same one, so the dot has to resolve to
          * a slot rather than assuming slot N is photo N.
+         *
+         * Searched from the centre outwards so the chosen slot is the one a viewer
+         * would expect to be active -- the centre-most card showing that photo --
+         * rather than whichever duplicate happens to come first in the DOM.
          */
         const slotForPhoto = (photo) => {
-            const match = slots.findIndex(
-                (slot) => Number(slot.dataset.stagePhoto || 0) === photo
+            const centre = slots.findIndex(
+                (slot) => slot.dataset.stageOffset === '0'
             );
 
-            return match === -1 ? 0 : match;
+            const order = slots
+                .map((slot, index) => index)
+                .sort((a, b) =>
+                    Math.abs(a - centre) - Math.abs(b - centre)
+                );
+
+            const match = order.find(
+                (index) =>
+                    Number(slots[index].dataset.stagePhoto || 0) === photo
+            );
+
+            return match === undefined ? centre : match;
         };
 
         /**
          * Paint a slot as active or inactive.
          *
-         * Active slots get the elevated z-index, full opacity and full saturation,
-         * which is what makes the middle card read as the subject. Inactive ones
-         * are dimmed here rather than by CSS so the state is inspectable and
-         * testable from the DOM.
+         * Active slots get the elevated z-index and full opacity, which is what
+         * makes the middle card read as the subject. Inactive ones are dimmed here
+         * rather than by CSS so the state is inspectable from the DOM.
+         *
+         * The dim is `opacity-90`, matching the class the Blade renders. It used to
+         * be `opacity-70 saturate-[0.7]` here AND a `bg-volcanic-teal/55` plate over
+         * the image, which compounded into near-black outer cards -- the reference
+         * separates the outer cards by size, rotation and drop, not by blacking them
+         * out. A mismatch here is silent: JS would re-add the heavy dim on the first
+         * paint and the server-rendered HTML would look right until it ran.
          */
         const paintSlot = (slot, isActive) => {
             slot.classList.toggle('z-30', isActive);
             slot.classList.toggle('z-20', !isActive);
-            slot.classList.toggle('opacity-70', !isActive);
-            slot.classList.toggle('saturate-[0.7]', !isActive);
+            slot.classList.toggle('opacity-90', !isActive);
             slot.setAttribute('aria-current', isActive ? 'true' : 'false');
         };
 
         const paint = () => {
+            clampActive();
+
             slots.forEach((slot, index) => {
                 paintSlot(slot, index === active);
             });
@@ -131,16 +197,19 @@ function initStage() {
             });
 
             /*
-             * Disabled only at the true ends of the FAN, not of the photo list.
+             * Disabled at the ends of the VISIBLE arc, not of the photo list and not
+             * of all five slots.
              *
-             * With two photos and five slots, active can legitimately be 4 -- which
-             * is off the right-hand end of the arc but still shows photo 1. Disabled
-             * there would strand the traveller on a duplicated view of the photo
-             * they can already see. Wrapping is the alternative; this pins the
-             * boundary so neither can regress silently.
+             * Two separate reasons. With two photos and five slots, `active` can
+             * legitimately be 4 -- off the right-hand end of the arc but still
+             * showing a real photo, and disabling there would strand the traveller.
+             * And on a phone the far pair is hidden, so slot 0 and slot 4 are not
+             * where the arc actually begins and ends.
              */
+            const [first, last] = visibleBounds();
+
             if (prev) {
-                prev.disabled = active === 0;
+                prev.disabled = active === first;
             }
 
             if (next) {
@@ -159,7 +228,11 @@ function initStage() {
         };
 
         const goTo = (index) => {
-            const target = clamp(index, 0, slots.length - 1);
+            // Clamp to the VISIBLE arc, not to 0..slots.length-1. On a phone the
+            // outer pair is hidden and slot 4 is unreachable, so clamping to the
+            // full range would let a dot or a swipe land on an invisible card.
+            const [first, last] = visibleBounds();
+            const target = clamp(index, first, last);
 
             if (target === active) {
                 return;
@@ -202,12 +275,12 @@ function initStage() {
 
             if (event.key === 'Home') {
                 event.preventDefault();
-                goTo(0);
+                goTo(visibleBounds()[0]);
             }
 
             if (event.key === 'End') {
                 event.preventDefault();
-                goTo(slots.length - 1);
+                goTo(visibleBounds()[1]);
             }
         });
 

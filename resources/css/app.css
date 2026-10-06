@@ -482,72 +482,144 @@
      */
 
     /*
-     * A horizontally scrollable strip that should not show a scrollbar.
-     *
-     * Separate from .tm-drag-rail rather than reused from it, because that one
-     * also sets cursor: grab, which is wrong for a carousel track: the carousel
-     * is moved by its arrows, its dots, the keyboard and a swipe, and a grab
-     * cursor there promises a drag that nothing implements. The scrollbar is
-     * redundant here for the same reason, so it is hidden rather than kept as a
-     * second, unstyled-looking affordance.
-     *
-     * Both spellings are needed: scrollbar-width covers Firefox and now Chrome,
-     * and the -webkit- pseudo-element covers the rest. Scrolling itself is
-     * untouched, so touch, trackpad and the script's scrollTo() all still work --
-     * this only removes the visible bar.
-     */
-    /*
      * The destination hero stage: five photo cards on a shallow 3D arc.
      *
-     * Geometry is keyed off [data-stage-offset] rather than written as inline
-     * `style` attributes in the Blade, for two reasons. The per-side rotation
-     * sign has to differ between the left and right halves, and an inline
-     * `transform` string would collide with the scale and translate utilities on
-     * the same element. And with the numbers in one place they can be asserted:
-     * `the_stage_carousel_has_five_slots` checks these selectors exist.
+     * Two decisions here are load-bearing and were both wrong the first time.
      *
-     * The numbers come from the reference capture: near pair at 12deg / 0.78 /
-     * +16%, far pair at 22deg / 0.57 / +26%, aspect 1:2.4-ish, and the active card
-     * ~23% of stage width falling to 17.9% and 13.2%.
+     * CARDS ARE SIZED BY HEIGHT, NOT WIDTH. The card is `aspect-[3/5]`, and the
+     * slot sets a height as a percentage of the fan while the width follows from
+     * the ratio. Sizing by width instead -- which is what this did first, at 23%
+     * of the stage -- means a narrow container renders a card far taller than the
+     * fan and it silently overflows, while a wide one renders a card so tall it
+     * dwarfs the page. Height-first makes overflow impossible at any width.
+     *
+     * THE FAN IS CAPPED AND ABSOLUTELY POSITIONED. `max-width` stops the cards
+     * ballooning on the ~1500px container, and each slot is placed with an
+     * explicit `left` percentage rather than by flexbox. Flexbox with a `gap` was
+     * the original: the gap is fixed while the cards are not, so the fan stretched
+     * edge to edge with wide holes between cards, and the title laid across it
+     * read as a page-wide banner rather than an overlay. The reference packs the
+     * cards close, and `left` percentages reproduce that directly.
+     *
+     * The per-side rotation sign has to differ between the left and right halves,
+     * which is the third reason the numbers live here and not in inline `style`
+     * attributes: an inline transform would collide with the utilities on the
+     * same element, and `the_stage_geometry_exists_in_the_stylesheet` could not
+     * assert them.
+     *
+     * Proportions measured off the reference capture (592x409 stage). The centre
+     * card is 135x230px = 1:1.7. The DEPTH FALLOFF is the reference's own
+     * transform list -- scale(1 / 0.78 / 0.57) -- applied to height, so the
+     * heights run 84 / 66 / 48 percent. That falloff is what the first version
+     * got wrong: at 84 / 74 / 64 the outer cards were 0.89 and 0.77 of the
+     * centre's width, which reads as five near-identical photos in a row rather
+     * than as one photo with four receding behind it.
+     *
+     * The `left` percentages are chosen so every card fits INSIDE the fan with a
+     * small gap, rather than to match a measured centre. At 7% and 93% the far
+     * cards overhung the fan by 11px a side and were clipped by the stage, which
+     * showed as a hard vertical cut through the outer photographs. Solved by
+     * arithmetic, not by eye: with the fan at 992px and the far card 120px wide,
+     * the outermost centre has to sit at least 6% in, and 14%/86% leaves a
+     * 17px gap to the near pair.
      */
-    .tm-stage-slot {
-        width: 62%;
-        transition:
-            transform 500ms var(--ease-out),
-            opacity 400ms ease-out;
-        transform-origin: center center;
-        will-change: transform;
+    .tm-stage-fan {
+        position: relative;
+        width: 100%;
+        max-width: 62rem;
+        height: 16rem;
+        margin-inline: auto;
+        perspective: 1100px;
     }
 
     @media (width >= 40rem) {
-        .tm-stage-slot {
-            width: 34%;
+        .tm-stage-fan {
+            height: 20rem;
         }
     }
 
     @media (width >= 64rem) {
-        .tm-stage-slot {
-            width: 23%;
+        .tm-stage-fan {
+            height: 26rem;
+        }
+    }
+
+    .tm-stage-slot {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        transform-origin: center center;
+        transition:
+            transform 480ms var(--ease-out),
+            opacity 320ms ease-out;
+        will-change: transform;
+    }
+
+    /* Mobile first: the centre card dominates, the near pair shows as slivers,
+       and the far pair is out entirely -- the reference drops it under ~900px. */
+    [data-stage-offset='0'] {
+        height: 84%;
+    }
+
+    [data-stage-offset='1'] {
+        height: 66%;
+    }
+
+    [data-stage-offset='1'][data-stage-side='left'] {
+        left: 26%;
+    }
+
+    [data-stage-offset='1'][data-stage-side='right'] {
+        left: 74%;
+    }
+
+    /*
+     * Hidden, NOT display:none. That distinction is what stage.js relies on to
+     * keep its arrows honest: it measures which slots have real layout and skips
+     * the rest, and a display:none slot reports zero width just the same. Kept at
+     * opacity 0 so the arc does not visibly collapse and re-expand on resize.
+     */
+    [data-stage-offset='2'] {
+        height: 48%;
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    @media (width >= 64rem) {
+        [data-stage-offset='0'] {
+            height: 84%;
         }
 
         [data-stage-offset='1'] {
-            width: 17.9%;
-            transform: translateY(16%) scale(0.78) rotateY(12deg);
+            height: 66%;
+            transform: translate(-50%, -50%) translateY(4%) rotateY(7deg);
+        }
+
+        [data-stage-offset='1'][data-stage-side='left'] {
+            left: 30%;
+            transform: translate(-50%, -50%) translateY(4%) rotateY(-7deg);
+        }
+
+        [data-stage-offset='1'][data-stage-side='right'] {
+            left: 70%;
+            transform: translate(-50%, -50%) translateY(4%) rotateY(7deg);
         }
 
         [data-stage-offset='2'] {
-            width: 13.2%;
-            transform: translateY(26%) scale(0.57) rotateY(22deg);
-        }
-
-        /* Mirrored so the fan opens away from the centre rather than both
-           halves tilting the same way. */
-        [data-stage-offset='1'][data-stage-side='left'] {
-            transform: translateY(16%) scale(0.78) rotateY(-12deg);
+            height: 48%;
+            opacity: 1;
+            transform: translate(-50%, -50%) translateY(8%) rotateY(11deg);
         }
 
         [data-stage-offset='2'][data-stage-side='left'] {
-            transform: translateY(26%) scale(0.57) rotateY(-22deg);
+            left: 14%;
+            transform: translate(-50%, -50%) translateY(8%) rotateY(-11deg);
+        }
+
+        [data-stage-offset='2'][data-stage-side='right'] {
+            left: 86%;
+            transform: translate(-50%, -50%) translateY(8%) rotateY(11deg);
         }
     }
 
@@ -566,7 +638,7 @@
      */
     @keyframes tm-stage-wash {
         0% {
-            opacity: 0.55;
+            opacity: 0.4;
         }
 
         100% {
@@ -575,7 +647,7 @@
     }
 
     [data-stage-wash] {
-        animation: tm-stage-wash 700ms var(--ease-out) forwards;
+        animation: tm-stage-wash 600ms var(--ease-out) forwards;
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -583,19 +655,23 @@
          * The cards stop moving entirely and the wash is skipped rather than
          * shortened. Shortening a white flash is not a reduced-motion
          * accommodation -- it is still a flash -- and the fan's whole purpose is
-         * the depth, which is carried by the transforms.
+         * the depth, which is carried by the transforms. The arc survives as a
+         * pure drop, which is the same composition with no motion in it.
          */
         .tm-stage-slot {
             transition: opacity 200ms linear;
-            transform: none;
+            transform: translate(-50%, -50%);
         }
 
         @media (width >= 64rem) {
             [data-stage-offset='1'],
-            [data-stage-offset='2'],
+            [data-stage-offset='2'] {
+                transform: translate(-50%, -50%) translateY(6%);
+            }
+
             [data-stage-offset='1'][data-stage-side='left'],
             [data-stage-offset='2'][data-stage-side='left'] {
-                transform: translateY(6%);
+                transform: translate(-50%, -50%) translateY(6%);
             }
         }
 

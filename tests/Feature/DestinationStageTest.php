@@ -346,6 +346,10 @@ $built = public_path(
 
         $this->assertNotNull($activeSlot, 'the active slot is missing');
 
+        $heading = $xpath->query('//*[@data-destination-stage]//h1')->item(0);
+
+        $this->assertNotNull($heading, 'the stage must carry the page heading');
+
         $activeClasses = preg_split(
             '/\s+/',
             trim($activeSlot->getAttribute('class')),
@@ -355,19 +359,50 @@ $built = public_path(
 
         $this->assertContains('z-30', $activeClasses);
 
-        // The title's own wrapper. Found by walking up from the h1 to the element
-        // that carries the stacking order, which is the one that is NOT a card.
-        $titleBlock = $xpath->query(
-            '//*[@data-destination-stage]//h1/parent::div'
-        )->item(0);
+        /*
+         * The element that actually carries the stacking order. Found by walking
+         * UP from the h1 to the nearest ancestor with a z-index, rather than
+         * taking `parent::div`.
+         *
+         * `parent::div` was right when the title was a flat block and is wrong now
+         * that it is `max-w-3xl` inside a positioned overlay -- the h1's parent is
+         * the width constraint, which carries no z-index at all. Asserting on it
+         * reported a missing z-40 for a layout that was in fact correctly stacked,
+         * which is the wrong kind of test failure: it sends you to fix something
+         * that is not broken.
+         */
+        $titleBlock = null;
+        $titleClasses = [];
 
-        $this->assertNotNull($titleBlock, 'the title block wrapper is missing');
+        for ($node = $heading; $node instanceof DOMElement; $node = $node->parentNode) {
+            $classes = preg_split(
+                '/\s+/',
+                trim($node->getAttribute('class')),
+                -1,
+                PREG_SPLIT_NO_EMPTY
+            );
 
-        $titleClasses = preg_split(
-            '/\s+/',
-            trim($titleBlock->getAttribute('class')),
-            -1,
-            PREG_SPLIT_NO_EMPTY
+            // Per class, NOT `/^z-(\d+)$/` against the joined string. Anchored
+            // against the join it can never match anything but a single-class
+            // attribute, so the walk ran off the top of the tree and reported
+            // "no ancestor sets a z-index" for a correctly stacked layout.
+            $found = array_filter(
+                $classes,
+                fn ($class) => (bool) preg_match('/^z-(\d+)$/', $class)
+            );
+
+            if ($found !== []) {
+                $titleBlock = $node;
+                $titleClasses = $classes;
+
+                break;
+            }
+        }
+
+        $this->assertNotNull(
+            $titleBlock,
+            'no ancestor of the h1 sets a z-index, so the title has no stacking '
+            .'order and a card can be painted over it'
         );
 
         $this->assertContains('z-40', $titleClasses);
@@ -692,12 +727,19 @@ $built = public_path(
     }
 
     /**
-     * The stage geometry exists in the stylesheet.
+     * The stage geometry exists in the stylesheet, and is sized by height.
      *
      * A class in the markup with no rule behind it is silent: the fan renders as
      * five cards in a flat row and nothing says why. The offset-keyed rules are
      * what make it an arc, and they cannot be written as Tailwind utilities because
      * the per-side rotation sign differs between the left and right halves.
+     *
+     * HEIGHT, NOT WIDTH, is the assertion that matters. The cards were first sized
+     * at `width: 23%` with the width following from `aspect-[2/5]`, which makes
+     * the card's height a function of the viewport width: on a narrow container it
+     * rendered taller than the fan and silently overflowed, and on the ~1500px
+     * container it rendered taller than the whole page. Asserting a `width:` on the
+     * slot is asserting the bug back into place.
      */
     #[Test]
     public function the_stage_geometry_exists_in_the_stylesheet(): void
@@ -705,40 +747,95 @@ $built = public_path(
         $stylesheet = (string) file_get_contents(resource_path('css/app.css'));
 
         /*
-         * Each of the three widths asserted SEPARATELY, and the base one matched
-         * outside any media query.
+         * The base rule, matched OUTSIDE any media query.
          *
-         * A single `/\.tm-stage-slot\s*\{[^}]*width:/` passed with the base width
-         * deleted, because the `sm:` breakpoint still had one and the regex did not
-         * care which rule it matched. Deleting the base width is exactly what
-         * collapses the fan on a phone -- the largest screen in the test matrix
-         * still looked right, so nothing noticed. Hence three separate checks, and
-         * a base check that cannot be satisfied by a breakpoint.
+         * A single `/\.tm-stage-slot\s*\{[^}]*width:/` passed with the base value
+         * deleted, because a breakpoint still had one and the regex did not care
+         * which rule it matched. Hence a check that a breakpoint cannot satisfy.
          */
         $baseRule = $this->ruleOutsideAnyMediaQuery($stylesheet, '.tm-stage-slot');
 
         $this->assertStringContainsString(
-            'width: 62%',
+            'position: absolute',
             $baseRule,
-            'the base .tm-stage-slot rule has no width, so the cards size to their '
-            .'images and the fan collapses on a phone. The breakpoint widths do not '
-            .'cover this: they only apply from 40rem up.'
+            'the slots must be absolutely positioned. Laid out by flexbox they sit '
+            .'in a row separated by whatever gap is set, which is how this shipped '
+            .'once: the fan stretched edge to edge with wide holes between cards.'
         );
 
-        $this->assertStringContainsString('width: 34%', $stylesheet, 'the sm: card width is missing');
+        $this->assertMatchesRegularExpression(
+            '/\.tm-stage-slot\s*\{[^}]*position:\s*absolute/s',
+            $stylesheet,
+            'the slots must be absolutely positioned. Laid out by flexbox they sit '
+            .'in a row separated by whatever gap is set, which is how this shipped '
+            .'once: the fan stretched edge to edge with wide holes between cards.'
+        );
 
-        $this->assertStringContainsString('width: 23%', $stylesheet, 'the lg: card width is missing');
+        /*
+         * Every offset is sized by a HEIGHT percentage, and all three differ.
+         *
+         * Height rather than width is the load-bearing part. Sizing by width makes
+         * the card's height a function of the viewport width -- it rendered taller
+         * than the fan on a narrow container and taller than the page on the wide
+         * one. Distinct heights per offset are what make the arc an arc.
+         */
+        $heights = [];
+
+        preg_match_all("/\[data-stage-offset='([0-2])'\][^{]*\{\s*height:\s*(\d+)%/s", $stylesheet, $heights, PREG_SET_ORDER);
+
+        $this->assertGreaterThanOrEqual(
+            3,
+            count($heights),
+            'the three slot offsets each need a height, or the cards size off the '
+            .'viewport width and overflow the fan'
+        );
+
+        $byOffset = [];
+
+        foreach ($heights as $match) {
+            // The desktop block restates all three, so the LAST occurrence of each
+            // offset is the one that actually wins the cascade.
+            $byOffset[$match[1]] = (int) $match[2];
+        }
+
+        $this->assertGreaterThan(
+            $byOffset['1'],
+            $byOffset['0'],
+            'the centre card must be the tallest, or the fan reads as a flat row'
+        );
+
+        $this->assertGreaterThan(
+            $byOffset['2'],
+            $byOffset['1'],
+            'the far cards must be shorter than the near ones, or there is no depth'
+        );
+
+        // And no width anywhere on the slots -- the bug this replaced.
+        $this->assertDoesNotMatchRegularExpression(
+            '/\[data-stage-offset=[\'"][0-2][\'"]\][^{]*\{\s*width:/s',
+            $stylesheet,
+            'a slot is sized by width. That makes its height a function of the '
+            .'viewport width, which is the overflow this layout was reworked to fix.'
+        );
+
+        // The fan is capped, or the cards balloon on the wide container.
+        $this->assertMatchesRegularExpression(
+            '/\.tm-stage-fan\s*\{[^}]*max-width:\s*\d/s',
+            $stylesheet,
+            'the fan has no max-width, so the cards scale with the page width and '
+            .'dwarf the stage'
+        );
 
         // Both pairs, and both sides. A missing left-hand rule tilts the whole fan
         // one way, which reads as a rendering bug rather than a design choice.
         foreach ([
-            '1' => '12deg',
-            '2' => '22deg',
+            '1' => '7deg',
+            '2' => '11deg',
         ] as $offset => $degrees) {
             $this->assertMatchesRegularExpression(
-                "/\[data-stage-offset='$offset'\]\s*\{[^}]*rotateY\($degrees\)/s",
+                "/\[data-stage-offset='$offset'\]\[data-stage-side='right'\]\s*\{[^}]*rotateY\($degrees\)/s",
                 $stylesheet,
-                "the offset-$offset cards are missing their $degrees rotation"
+                "the offset-$offset cards on the right are missing their $degrees rotation"
             );
 
             $this->assertMatchesRegularExpression(
@@ -755,6 +852,193 @@ $built = public_path(
             '/@media \(prefers-reduced-motion: reduce\)\s*\{[^}]*tm-stage-slot/s',
             $stylesheet,
             'there is no reduced-motion rule for the stage cards'
+        );
+    }
+
+    /**
+     * The title is sized and constrained, so it reads as a caption and not a banner.
+     *
+     * This is the loudest thing that was wrong with the first version of the
+     * layout. The heading was `text-4xl sm:text-6xl lg:text-7xl xl:text-8xl` with
+     * no width constraint, which put an ~90px headline across a 1500px stage -- it
+     * spanned from the far card to the far card and read as a page-wide banner laid
+     * over the photographs instead of a caption on them.
+     *
+     * Measured off the reference capture: cap height 20px in a 409px stage, so
+     * roughly 5% of the stage height. The stage here is `lg:min-h` 26rem = 416px,
+     * so ~21px of cap. Anything at `text-6xl` or above blows straight past that.
+     *
+     * Asserted on the rendered markup rather than the stylesheet, because the
+     * regression was a Tailwind class on the h1 itself.
+     */
+    #[Test]
+    public function the_title_is_small_and_width_constrained(): void
+    {
+        $destination = $this->destination();
+        $this->photos($destination, 2);
+
+        $xpath = $this->xpath($this->html($destination));
+
+        $heading = $xpath->query('//*[@data-destination-stage]//h1')->item(0);
+
+        $this->assertNotNull($heading, 'the stage must carry the page heading');
+
+        $classes = preg_split(
+            '/\s+/',
+            trim($heading->getAttribute('class')),
+            -1,
+            PREG_SPLIT_NO_EMPTY
+        );
+
+        // No fixed step at or above 6xl. The reference's headline is about a fifth
+        // of that; a `text-8xl` is what produced the banner.
+        foreach ($classes as $class) {
+            if (preg_match('/^text-(\d+)xl$/', $class, $match)) {
+                $this->assertLessThanOrEqual(
+                    4,
+                    (int) $match[1],
+                    "the h1 carries {$class}. At 6xl or above it spans the whole "
+                    .'stage and reads as a banner laid over the fan rather than a '
+                    .'caption on it. Use the clamp() size instead.'
+                );
+            }
+        }
+
+        // Unanchored: the class list is joined, so `^` would only ever match the first
+        // entry (`mt-3`) and pass for the wrong reason.
+        $this->assertMatchesRegularExpression(
+            '/(?:^|\s)text-\[clamp\(/',
+            implode(' ', $classes),
+            'the h1 must use a clamp() font size so it scales with the fan between '
+            .'the 16rem mobile and 26rem desktop stages'
+        );
+
+        // And the width constraint, which is the other half of the fix. A small
+        // font with no constraint still wraps a long name across the whole stage.
+        $wrapper = null;
+
+        for ($node = $heading; $node instanceof DOMElement; $node = $node->parentNode) {
+            $nodeClasses = preg_split(
+                '/\s+/',
+                trim($node->getAttribute('class')),
+                -1,
+                PREG_SPLIT_NO_EMPTY
+            );
+
+            if (in_array('max-w-3xl', $nodeClasses, true)) {
+                $wrapper = $nodeClasses;
+
+                break;
+            }
+        }
+
+        $this->assertNotNull(
+            $wrapper,
+            'no ancestor of the h1 sets a width constraint, so a long destination '
+            .'name wraps across the full stage width'
+        );
+    }
+
+    /**
+     * The stage does not repeat the description that section 01 renders in full.
+     *
+     * The stage carried `Str::limit($destination->description, 90)` while the "01 /
+     * The place" section a few hundred pixels below prints the same field
+     * untruncated, so the opening sentence appeared twice in one screenful. That
+     * reads as a mistake, not as emphasis, and no screenshot of a settled page
+     * makes it obvious why it is there.
+     *
+     * Asserted as a COUNT of paragraphs in the title overlay rather than by
+     * matching the description text, so a reworded or shortened tagline still
+     * trips it. The location chip is the one paragraph that belongs there.
+     */
+    #[Test]
+    public function the_stage_does_not_repeat_the_description(): void
+    {
+        $destination = $this->destination();
+        $this->photos($destination, 2);
+
+        $xpath = $this->xpath($this->html($destination));
+
+        $heading = $xpath->query('//*[@data-destination-stage]//h1')->item(0);
+
+        $this->assertNotNull($heading);
+
+        // The <p> that carries the province/municipality chip, and any prose after
+        // the heading, both inside the overlay that holds the title.
+        $overlay = null;
+
+        for ($node = $heading->parentNode; $node instanceof DOMElement; $node = $node->parentNode) {
+            if (str_contains($node->getAttribute('class'), 'pointer-events-none')) {
+                $overlay = $node;
+
+                break;
+            }
+        }
+
+        $this->assertNotNull($overlay, 'the title overlay wrapper is missing');
+
+        /*
+         * Exactly one <p> in the overlay: the location chip. Counted, not matched
+         * against the description text.
+         *
+         * Matching the text looked stronger and was weaker -- it only fires on the
+         * exact words it was written against, so a reworded or shortened tagline
+         * sails straight through, and a falsification using a placeholder string
+         * passed when the paragraph was plainly there. A count catches any prose
+         * at all, which is the actual rule.
+         */
+        $paragraphs = $xpath->query('.//p', $overlay);
+
+        $this->assertSame(
+            1,
+            $paragraphs->length,
+            'the title overlay carries '.$paragraphs->length.' paragraphs. Only the '
+            .'location chip belongs here -- the stage must not repeat the '
+            .'description, which section 01 renders in full directly below it, so '
+            .'the same sentence would otherwise appear twice in one screenful.'
+        );
+
+        // And the one that remains is the chip, not prose.
+        $this->assertStringContainsString(
+            'Cavite',
+            $paragraphs->item(0)->textContent,
+            'the overlay paragraph should be the municipality/province chip'
+        );
+    }
+
+    /**
+     * The far pair is hidden below the desktop breakpoint, and stage.js skips it.
+     *
+     * The reference drops the outer pair on narrow screens. It is hidden with
+     * `opacity: 0` rather than `display: none` so the arc does not visibly collapse
+     * and re-expand on resize -- but that means the slots are still in the DOM with
+     * real geometry, so a script that simply walked slot 0 to slot 4 would step
+     * onto an invisible card and the fan would appear frozen on a phone.
+     *
+     * That is why stage.js measures which slots actually have layout rather than
+     * assuming all five are usable, and it is asserted here so the two cannot drift.
+     */
+    #[Test]
+    public function the_far_pair_is_hidden_on_narrow_screens_and_the_script_skips_it(): void
+    {
+        $stylesheet = (string) file_get_contents(resource_path('css/app.css'));
+
+        $this->assertMatchesRegularExpression(
+            "/\[data-stage-offset='2'\]\s*\{[^}]*opacity:\s*0/s",
+            $stylesheet,
+            "the far pair must be hidden below 64rem; the reference drops it on "
+            .'narrow screens'
+        );
+
+        $script = (string) file_get_contents(resource_path('js/stage.js'));
+
+        $this->assertStringContainsString(
+            'getBoundingClientRect().width > 0',
+            $script,
+            'stage.js must detect which slots have real layout. The far pair is '
+            .'hidden with opacity rather than display:none, so it still measures '
+            .'non-zero and stepping onto it shows nothing at all.'
         );
     }
 }
