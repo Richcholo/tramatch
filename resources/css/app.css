@@ -496,6 +496,115 @@
      * untouched, so touch, trackpad and the script's scrollTo() all still work --
      * this only removes the visible bar.
      */
+    /*
+     * The destination hero stage: five photo cards on a shallow 3D arc.
+     *
+     * Geometry is keyed off [data-stage-offset] rather than written as inline
+     * `style` attributes in the Blade, for two reasons. The per-side rotation
+     * sign has to differ between the left and right halves, and an inline
+     * `transform` string would collide with the scale and translate utilities on
+     * the same element. And with the numbers in one place they can be asserted:
+     * `the_stage_carousel_has_five_slots` checks these selectors exist.
+     *
+     * The numbers come from the reference capture: near pair at 12deg / 0.78 /
+     * +16%, far pair at 22deg / 0.57 / +26%, aspect 1:2.4-ish, and the active card
+     * ~23% of stage width falling to 17.9% and 13.2%.
+     */
+    .tm-stage-slot {
+        width: 62%;
+        transition:
+            transform 500ms var(--ease-out),
+            opacity 400ms ease-out;
+        transform-origin: center center;
+        will-change: transform;
+    }
+
+    @media (width >= 40rem) {
+        .tm-stage-slot {
+            width: 34%;
+        }
+    }
+
+    @media (width >= 64rem) {
+        .tm-stage-slot {
+            width: 23%;
+        }
+
+        [data-stage-offset='1'] {
+            width: 17.9%;
+            transform: translateY(16%) scale(0.78) rotateY(12deg);
+        }
+
+        [data-stage-offset='2'] {
+            width: 13.2%;
+            transform: translateY(26%) scale(0.57) rotateY(22deg);
+        }
+
+        /* Mirrored so the fan opens away from the centre rather than both
+           halves tilting the same way. */
+        [data-stage-offset='1'][data-stage-side='left'] {
+            transform: translateY(16%) scale(0.78) rotateY(-12deg);
+        }
+
+        [data-stage-offset='2'][data-stage-side='left'] {
+            transform: translateY(26%) scale(0.57) rotateY(-22deg);
+        }
+    }
+
+    /*
+     * The entrance wash.
+     *
+     * The reference flashes white between slides to mask the swap. This app is
+     * server-rendered and the controls are ordinary links, so there is no swap to
+     * mask; what is left is a short lift on load so the stage does not just
+     * appear. Deliberately ONE wash for the whole stage, not per-slide.
+     *
+     * `forwards` is what makes it safe: without it the animation reverts to the
+     * element's own opacity (1) only after it finishes, and a reduced-motion
+     * override that skips the animation entirely would leave the panel sitting
+     * over the title at whatever opacity the base rule sets.
+     */
+    @keyframes tm-stage-wash {
+        0% {
+            opacity: 0.55;
+        }
+
+        100% {
+            opacity: 0;
+        }
+    }
+
+    [data-stage-wash] {
+        animation: tm-stage-wash 700ms var(--ease-out) forwards;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        /*
+         * The cards stop moving entirely and the wash is skipped rather than
+         * shortened. Shortening a white flash is not a reduced-motion
+         * accommodation -- it is still a flash -- and the fan's whole purpose is
+         * the depth, which is carried by the transforms.
+         */
+        .tm-stage-slot {
+            transition: opacity 200ms linear;
+            transform: none;
+        }
+
+        @media (width >= 64rem) {
+            [data-stage-offset='1'],
+            [data-stage-offset='2'],
+            [data-stage-offset='1'][data-stage-side='left'],
+            [data-stage-offset='2'][data-stage-side='left'] {
+                transform: translateY(6%);
+            }
+        }
+
+        [data-stage-wash] {
+            animation: none;
+            opacity: 0;
+        }
+    }
+
     .tm-no-scrollbar {
         scrollbar-width: none;
     }

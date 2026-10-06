@@ -1,3 +1,7 @@
+@push('scripts')
+    @vite(['resources/js/stage.js'])
+@endpush
+
 <x-app-layout>
     <x-slot name="header">
         <a
@@ -8,86 +12,35 @@
         </a>
     </x-slot>
 
-    <div class="space-y-10">
-        {{--
-            The hero.
+    {{--
+        The stage sits OUTSIDE the space-y-10 wrapper and before it, because it is
+        full-bleed: it reaches the viewport edges with no container padding and no
+        rounded corners. The wrapper below holds the detail sections, which stay
+        inset as cards.
 
-            An inset card again, inside the max-w-[1600px] container, with its
-            rounded corners back. Three layouts were tried for the hero and the
-            carousel: carousel above hero as inset cards; both full-bleed via
-            width:100vw, which came out off-centre by half a scrollbar; and both
-            full-bleed via negative margins, which was aligned but too wide for
-            the page. This is the original inset treatment, and the carousel now
-            lives down in the content beside the location map rather than beside
-            the hero at all.
+        The negative margins cancel <main>'s own padding -- px-5 sm:px-8 lg:px-12
+        -- and MUST match those values exactly. A mismatch leaves a seam on one
+        side and an overhang on the other.
 
-            No viewport units here and nothing to clip. The one thing worth not
-            re-adding is a width class: anything that widens this block has to
-            account for the container's padding, and a `100vw` in particular is
-            off-centre because it includes the vertical scrollbar.
-        --}}
-        <section class="relative overflow-hidden rounded-[2rem] bg-volcanic-teal text-white shadow-xl">
-                @if ($destination->image_url)
-                <img
-                    src="{{ $destination->image_url }}"
-                    alt="{{ $destination->name }}"
-                    class="absolute inset-0 h-full w-full object-cover opacity-55"
-                >
-            @else
-                <div class="absolute inset-0 bg-gradient-to-br from-boracay via-cyan-500 to-volcanic-teal"></div>
-            @endif
+        Note what is NOT here, after several attempts: no `100vw`. It measures the
+        viewport INCLUDING the vertical scrollbar, so a block sized with it lands
+        about half a scrollbar off-centre unless something clips the overshoot.
+        Cancelling the known padding has no such arithmetic. See AGENTS.md.
+    --}}
+    <div class="-mx-5 sm:-mx-8 lg:-mx-12">
+        @include('destinations.stage', ['destination' => $destination])
+    </div>
 
-            <div class="absolute inset-0 bg-gradient-to-t from-volcanic-teal via-volcanic-teal/55 to-transparent"></div>
+    {{--
+        Everything below the stage: the destination's own facts, as inset cards.
 
-            <div class="relative flex min-h-[32rem] flex-col justify-end p-8 sm:p-12">
-                <div class="max-w-4xl">
-                    <p class="text-xs font-bold uppercase tracking-[0.3em] text-boracay-light">
-                        {{ $destination->municipality }},
-                        {{ $destination->province }}
-                    </p>
-
-                    <h1 class="mt-5 font-display text-5xl font-semibold leading-[0.95] tracking-[-0.05em] text-white sm:text-7xl">
-                        {{ $destination->name }}
-                    </h1>
-
-                    <div class="mt-6 flex flex-wrap gap-2">
-                        @foreach ($destination->tags as $tag)
-                            <span class="rounded-full bg-white/15 px-3 py-1 text-xs font-semibold text-white backdrop-blur">
-                                {{ $tag->name }}
-                            </span>
-                        @endforeach
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        {{-- Directly under the hero, and as wide as the container allows. It has
-             been in three places: here, full-bleed across the page with the hero
-             (two attempts, both abandoned -- see AGENTS.md), and in a narrow
-             column beside the location map.
-
-             Back here because the map column left half the page empty on a wide
-             screen, and the map was the wrong neighbour anyway: it put the photos
-             at 40% of the container, far smaller than they need to be.
-
-             Full container width, NOT full-bleed, and the difference is the whole
-             point. Going edge to edge needs `100vw`, which measures the viewport
-             including the vertical scrollbar and lands off-centre by half a
-             scrollbar -- that is what made the earlier attempts look broken. The
-             container's content box is ~1504px and needs no such arithmetic. If
-             this ever wants to truly touch the screen edges, the scrollbar width
-             has to be accounted for rather than clipped away.
-
-             Consequence, stated plainly: at ~1504px against a typical 1080-1170px
-             upload this box upscales ~1.3-1.4x, so the photos render soft on a
-             wide screen. That is the trade for "as large as possible", and it is
-             the one the earlier capped versions avoided. The real fix is resizing
-             uploads, which needs GD or Imagick -- absent from both the CLI and
-             XAMPP.
-
-             Kept as a partial rather than inlined, so the markup and the
-             gallery.js hooks stay in one file. --}}
-        @include('destinations.partials.carousel', ['destination' => $destination])
+        The stage above now owns the photo carousel, so there is no second one
+        here. The per-destination photos that used to render in a strip under the
+        hero are the stage's own cards -- stage.blade.php builds its fan from the
+        hero plus the same `images` relation, so the admin uploads are still the
+        thing being shown and still nothing new has to be entered.
+    --}}
+    <div class="mt-10 space-y-10">
 
         <div class="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
             <section class="space-y-8">

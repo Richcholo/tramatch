@@ -11,6 +11,7 @@ export default defineConfig({
                 'resources/js/home.js',
                 'resources/js/page-transitions.js',
                 'resources/js/itinerary-editor.js',
+                'resources/js/stage.js',
             ],
             refresh: true,
         }),

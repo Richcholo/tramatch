@@ -20,7 +20,7 @@
     "src": "node_modules/leaflet/dist/images/marker-shadow.png"
   },
   "resources/css/app.css": {
-    "file": "assets/app-BFXLYDIR.css",
+    "file": "assets/app-DX-p2zPv.css",
     "name": "app",
     "names": [
       "app.css"
@@ -29,7 +29,7 @@
     "isEntry": true
   },
   "resources/js/app.js": {
-    "file": "assets/app-B2gJAyi1.js",
+    "file": "assets/app-DVG3nuSn.js",
     "name": "app",
     "src": "resources/js/app.js",
     "isEntry": true,
@@ -64,6 +64,12 @@
     "file": "assets/page-transitions-BM4CnED_.js",
     "name": "page-transitions",
     "src": "resources/js/page-transitions.js",
+    "isEntry": true
+  },
+  "resources/js/stage.js": {
+    "file": "assets/stage-DIsqmvbj.js",
+    "name": "stage",
+    "src": "resources/js/stage.js",
     "isEntry": true
   }
 }
