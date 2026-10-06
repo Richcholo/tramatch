@@ -57,7 +57,7 @@ not make `pint --test` a pass/fail gate.
   `DB_CONNECTION=sqlite`, array cache/session, sync queue) and needs
   `pdo_sqlite` enabled in `php.ini`. Never point it at MySQL to work around a
   driver problem — `RefreshDatabase` would drop the development database.
-- The suite is currently **350 passing**. It is also the only thing that
+- The suite is currently **351 passing**. It is also the only thing that
   migrates from scratch, so it is the only check that a fresh clone can
   migrate — your dev database cannot detect a broken migration chain,
   because every migration in it has already run.
@@ -1166,6 +1166,38 @@ rewritten as a composite unique — which silently orphaned
 `destination_sources_source_url_unique`. It only surfaced once the test suite
 could run (`no such index`), so run `php artisan test` after touching any
 migration.
+
+**DELETING A MIGRATION LEAVES A TRAP ON THE SERVER, AND IT BIT ON THIS REPO
+ONCE.** `add_carousel_fields_to_destinations_table` was added for the first fan
+of the destinations stage, ran on the production server, and was then deleted
+when that work was reverted. When the stage was rebuilt the migration came back
+under a **different filename** — so the server had both columns physically
+present, a `migrations` row for a file no longer on disk, and Laravel reading the
+new name as unrecorded. The deploy died on:
+
+```
+SQLSTATE[42S21]: Column already exists: 1060 Duplicate column name 'sort_order'
+```
+
+**The guards, not the filename, are the fix.** `up()` checks
+`Schema::hasColumn()` per column, so a fresh database gets both and a server
+that already has them moves on and records the migration. `down()` is guarded for
+the same reason: an unguarded inverse of a guarded step fails on exactly the
+environments where the guard mattered.
+`the_stage_migration_is_safe_where_the_columns_already_exist` is that server as a
+test, and it was **falsified by deleting the guards** — which is the only way to
+know it tests the fix rather than the comment.
+
+**Do not "fix" this by renaming the file back to the deleted migration's
+timestamp.** That also unblocks this server and touches no data, but it silently
+depends on which name a given server happened to record, so a server that did
+*not* run the old one would skip a migration it never ran and end up without
+`is_featured` at all. `hasColumn()` is correct in every case.
+
+**The general lesson: a migration removed from disk is not undone.** Check
+`select migration from migrations` on the server before assuming a timestamp is
+free, and prefer a guarded `up()` over a timestamp swap whenever a column may
+already exist somewhere.
 
 ## Frontend gotchas
 

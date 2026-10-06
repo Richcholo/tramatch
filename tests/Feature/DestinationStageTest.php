@@ -11,9 +11,12 @@ use App\Models\TravelProfile;
 use App\Models\User;
 use DOMDocument;
 use DOMXPath;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -363,6 +366,72 @@ class DestinationStageTest extends TestCase
 
     /**
 /**
+ * THE STAGE MIGRATION IS SAFE WHERE THE COLUMNS ALREADY EXIST.
+ *
+ * THE PRODUCTION SCENARIO, AS A TEST. These two columns were added, and then the
+ * migration was DELETED, when the first fan of this stage was built and reverted.
+ * The server had already run the deleted migration, so it has both columns
+ * physically present and a `migrations` row for a file no longer on disk. The
+ * re-added migration has a DIFFERENT FILENAME, so Laravel sees an unrecorded
+ * migration and `migrate` dies with:
+ *
+ *     SQLSTATE[42S21]: Column already exists: 1060 Duplicate column name 'sort_order'
+ *
+ * Reproduced here by adding the columns the way that old server has them and then
+ * forgetting to record the migration -- which is exactly the state a server is in
+ * when a migration file that ran is removed from disk and a new one takes its
+ * place.
+ */
+#[Test]
+    public function the_stage_migration_is_safe_where_the_columns_already_exist(): void
+    {
+        /*
+         * THE SERVER'S STATE, reached by deleting the record rather than by adding
+         * the columns: `RefreshDatabase` has already migrated from scratch, so both
+         * columns are present, and a missing `migrations` row is exactly what a
+         * server is left with when a migration that ran is removed from disk and a
+         * differently named one takes its place.
+         */
+        $this->assertTrue(Schema::hasColumn('destinations', 'sort_order'));
+        $this->assertTrue(Schema::hasColumn('destinations', 'is_featured'));
+
+        DB::table('migrations')
+            ->where('migration', 'like', '%add_carousel_fields_to_destinations_table')
+            ->delete();
+
+        /*
+         * WITHOUT THE `hasColumn` GUARDS THIS IS WHERE IT DIES:
+         *
+         *     SQLSTATE[42S21]: Column already exists: 1060 Duplicate column name 'sort_order'
+         *
+         * Which is how this migration shipped, and how the server is currently
+         * stuck. The guards are the fix, and this test is the only thing in the
+         * repo that would notice their removal.
+         */
+        $this->artisan('migrate', ['--force' => true])->assertSuccessful();
+
+        $this->assertTrue(Schema::hasColumn('destinations', 'sort_order'));
+        $this->assertTrue(Schema::hasColumn('destinations', 'is_featured'));
+
+        $this->assertSame(
+            1,
+            DB::table('migrations')
+                ->where('migration', 'like', '%add_carousel_fields_to_destinations_table')
+                ->count(),
+            'the migration did not record itself, so it would be retried on every deploy'
+        );
+
+        /*
+         * And the columns must still WORK, not merely exist. An `is_featured` that
+         * came out NULL rather than true would silently drop every destination out
+         * of the stage with no error anywhere.
+         */
+        $this->destination();
+
+        $this->assertCount(1, $this->stage()->all());
+    }
+
+    /**
      * THE STAGE IS ON THE DESTINATION PAGE AND NOWHERE ELSE.
      *
      * Asserted in BOTH directions, because the obvious way to "share the stage"
