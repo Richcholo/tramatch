@@ -10,6 +10,63 @@
 
     <div class="space-y-10">
         {{--
+            The two full-bleed media blocks, hero first and the carousel beneath
+            it, stacked flush with no gap between them.
+
+            They used to sit in the opposite order -- carousel above hero -- and
+            both were inset cards with rounded corners inside a max-w-[1600px]
+            container. The request was for the main photo first and for both to
+            run the full width of the screen, because the narrow container was
+            what constrained what an admin could usefully supply.
+
+            They live in one wrapper so the pair stays together and so the page's
+            own spacing cannot insert a gap between them. It deliberately does
+            NOT carry the clip that absorbs .tm-full-bleed's scrollbar overshoot:
+            clipping here would cut the blocks back to the container width, which
+            is the opposite of the point. That clip is on body in app.css.
+
+            Source order matches visual order deliberately. The hero carries the
+            page's <h1>, so putting the carousel first in the DOM would hand a
+            screen reader and the tab order the photo strip before the title.
+        --}}
+        <div class="overflow-x-clip">
+
+        <section class="tm-full-bleed relative overflow-hidden bg-volcanic-teal text-white">
+            @if ($destination->image_url)
+                <img
+                    src="{{ $destination->image_url }}"
+                    alt="{{ $destination->name }}"
+                    class="absolute inset-0 h-full w-full object-cover opacity-55"
+                >
+            @else
+                <div class="absolute inset-0 bg-gradient-to-br from-boracay via-cyan-500 to-volcanic-teal"></div>
+            @endif
+
+            <div class="absolute inset-0 bg-gradient-to-t from-volcanic-teal via-volcanic-teal/55 to-transparent"></div>
+
+            <div class="relative flex min-h-[32rem] flex-col justify-end p-8 sm:p-12">
+                <div class="max-w-4xl">
+                    <p class="text-xs font-bold uppercase tracking-[0.3em] text-boracay-light">
+                        {{ $destination->municipality }},
+                        {{ $destination->province }}
+                    </p>
+
+                    <h1 class="mt-5 font-display text-5xl font-semibold leading-[0.95] tracking-[-0.05em] text-white sm:text-7xl">
+                        {{ $destination->name }}
+                    </h1>
+
+                    <div class="mt-6 flex flex-wrap gap-2">
+                        @foreach ($destination->tags as $tag)
+                            <span class="rounded-full bg-white/15 px-3 py-1 text-xs font-semibold text-white backdrop-blur">
+                                {{ $tag->name }}
+                            </span>
+                        @endforeach
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        {{--
             The carousel.
 
             Rendered as a plain row of images that JavaScript then upgrades, so a
@@ -23,15 +80,15 @@
         --}}
         @if ($destination->images->count() > 1)
             {{--
-                Full width, matching the hero below.
+                Edge to edge, below the hero and the same width as it.
 
                 Deliberately uncapped, and that is a decision with a known cost,
                 so it is written down rather than left to be "tidied" either way.
-                The page container runs to 1600px, so this block is ~1504px wide,
-                while admin photos are stored verbatim by
+                This block is the width of the viewport, which passes 1900px on a
+                wide monitor, while admin photos are stored verbatim by
                 DestinationController::storeUploadedImage() with no resize and are
                 typically 1080-1170px phone shots. So the browser scales each photo
-                up by roughly 1.3-1.4x and it renders soft.
+                up by as much as 1.8x on a large display and it renders soft.
 
                 The alternative was max-w-5xl (1024px) on both this and the hero,
                 which was sharp and also consistent -- but the owner judged a
@@ -43,7 +100,7 @@
                 object-contain would letterbox a ~3.9:1 strip.
 
                 The real fix is to resize the uploads so there are enough pixels
-                for a 1504px box, which also makes srcset possible. There is no GD
+                for a viewport-wide box, which also makes srcset possible. There is no GD
                 and no Imagick here -- checked on the CLI and under XAMPP -- so
                 that needs an extension enabled on the host plus a backfill of the
                 existing photos. Until then this stays soft on wide screens.
@@ -52,7 +109,7 @@
                 data-gallery
                 aria-roledescription="carousel"
                 aria-label="Photos of {{ $destination->name }}"
-                class="relative overflow-hidden rounded-[2rem] bg-island-white shadow-sm ring-1 ring-boracay-light"
+                class="tm-full-bleed relative overflow-hidden bg-island-white"
             >
                 <ul
                     data-gallery-track
@@ -92,41 +149,7 @@
                 <div data-gallery-controls class="absolute inset-x-0 bottom-2.5 flex items-center justify-center gap-2 p-4"></div>
             </section>
         @endif
-
-        <section class="relative overflow-hidden rounded-[2rem] bg-volcanic-teal text-white shadow-xl">
-            @if ($destination->image_url)
-                <img
-                    src="{{ $destination->image_url }}"
-                    alt="{{ $destination->name }}"
-                    class="absolute inset-0 h-full w-full object-cover opacity-55"
-                >
-            @else
-                <div class="absolute inset-0 bg-gradient-to-br from-boracay via-cyan-500 to-volcanic-teal"></div>
-            @endif
-
-            <div class="absolute inset-0 bg-gradient-to-t from-volcanic-teal via-volcanic-teal/55 to-transparent"></div>
-
-            <div class="relative flex min-h-[32rem] flex-col justify-end p-8 sm:p-12">
-                <div class="max-w-4xl">
-                    <p class="text-xs font-bold uppercase tracking-[0.3em] text-boracay-light">
-                        {{ $destination->municipality }},
-                        {{ $destination->province }}
-                    </p>
-
-                    <h1 class="mt-5 font-display text-5xl font-semibold leading-[0.95] tracking-[-0.05em] text-white sm:text-7xl">
-                        {{ $destination->name }}
-                    </h1>
-
-                    <div class="mt-6 flex flex-wrap gap-2">
-                        @foreach ($destination->tags as $tag)
-                            <span class="rounded-full bg-white/15 px-3 py-1 text-xs font-semibold text-white backdrop-blur">
-                                {{ $tag->name }}
-                            </span>
-                        @endforeach
-                    </div>
-                </div>
-            </div>
-        </section>
+        </div>
 
         <div class="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
             <section class="space-y-8">

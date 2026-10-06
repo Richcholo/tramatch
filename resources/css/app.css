@@ -66,6 +66,23 @@
         min-height: 100vh;
         background-color: var(--color-palawan-sand);
         color: var(--color-benguet-charcoal);
+
+        /*
+         * Absorbs the overshoot from .tm-full-bleed's 100vw, which measures the
+         * viewport including the vertical scrollbar and is therefore ~15px too
+         * wide whenever that scrollbar is a classic one.
+         *
+         * `clip`, deliberately, and NOT `hidden`. `hidden` creates a scroll
+         * container, which would make `position: sticky` resolve against body
+         * instead of the viewport -- silently breaking the itinerary editor's
+         * sticky save bar and the discover deck's sticky header. `clip` clips
+         * without establishing a scrollport, so sticky still works.
+         *
+         * The one visible cost: on a wide monitor the rightmost ~15px of a
+         * full-bleed photo is cut. Both blocks are object-cover images filling
+         * their box, so the crop is invisible.
+         */
+        overflow-x: clip;
     }
 
     button,
@@ -454,6 +471,25 @@
         border-radius: 50% 50% 0 0;
         background: rgb(11 37 43 / 35%);
         transform: rotate(-8deg);
+    }
+
+    /*
+     * Escape a constrained container and span the whole viewport.
+     *
+     * The page container is `mx-auto max-w-[1600px]` with responsive padding, so
+     * the only way to reach the viewport edges from inside it is viewport units.
+     * `margin-inline: calc(50% - 50vw)` is the half-off-centre trick: 50% of the
+     * container plus half the viewport puts the element's left edge at the
+     * viewport's left edge, and the width does the rest.
+     *
+     * The caveat is 100vw, which measures the viewport INCLUDING the vertical
+     * scrollbar. With a classic scrollbar present the block is ~15px too wide,
+     * which produces a horizontal scrollbar on the page. The companion
+     * `overflow-x: clip` on body absorbs exactly that overshoot.
+     */
+    .tm-full-bleed {
+        width: 100vw;
+        margin-inline: calc(50% - 50vw);
     }
 
     /*

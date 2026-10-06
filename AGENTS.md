@@ -57,7 +57,7 @@ not make `pint --test` a pass/fail gate.
   `DB_CONNECTION=sqlite`, array cache/session, sync queue) and needs
   `pdo_sqlite` enabled in `php.ini`. Never point it at MySQL to work around a
   driver problem — `RefreshDatabase` would drop the development database.
-- The suite is currently **323 passing**. It is also the only thing that
+- The suite is currently **326 passing**. It is also the only thing that
   migrates from scratch, so it is the only check that a fresh clone can
   migrate — your dev database cannot detect a broken migration chain,
   because every migration in it has already run.
@@ -955,6 +955,41 @@ migration.
   the accepted cost in its own docblock, and still pins `object-cover` on both
   images. Its failure message on the cap assertion points at that note so the
   next person does not read it as a bug.
+- **The destination page's hero and carousel are full-bleed, hero first.** They
+  used to be inset cards with `rounded-[2rem]` inside the `max-w-[1600px]`
+  container, and the carousel came *before* the hero. Both were changed: the main
+  photo first, the carousel beneath it stacked flush, and both running the entire
+  width of the screen because the narrow container was the thing constraining
+  what an admin could usefully supply.
+  `.tm-full-bleed` is `width: 100vw` plus `margin-inline: calc(50% - 50vw)` — the
+  only way to escape a padded, width-capped container is viewport units.
+  **The two blocks must keep their DOM order matching their visual order.** The
+  hero carries the page's `<h1>`, so a carousel rendered first hands a screen
+  reader and the tab order the photo strip before the destination's name.
+  `the_hero_is_rendered_before_the_carousel` pins it via
+  `compareDocumentPosition`, because no amount of styling asserts order.
+- **`overflow-x: clip` on `body` is what makes `.tm-full-bleed` safe, and it must
+  never become `hidden`.** `100vw` measures the viewport *including* the vertical
+  scrollbar, so the block is ~15px too wide whenever that scrollbar is a classic
+  one, and without the clip the page gains a horizontal scrollbar.
+  `hidden` is the wrong tool and the difference is not cosmetic: **`hidden`
+  creates a scroll container**, which makes `position: sticky` resolve against
+  `body` instead of the viewport — silently breaking the itinerary editor's
+  sticky save bar and the discover deck's sticky header. `clip` clips without
+  establishing a scrollport.
+  The clip is on `body`, **not** on the wrapper div around the two blocks.
+  Clipping at that wrapper would cut them back to the container width, which is
+  precisely what full-bleed exists to avoid; the wrapper only groups the pair and
+  keeps the page's own `space-y-10` from inserting a gap between them.
+  The one visible cost is that on a wide monitor the rightmost ~15px of a
+  full-bleed photo is cut, which is invisible on `object-cover` images.
+  `the_full_bleed_utility_and_its_clip_both_exist` pins the utility, the `100vw`
+  arithmetic and the `clip`.
+- **Full-bleed made the softness worse, not better.** The box is now the width of
+  the viewport — past 1900px on a wide monitor — where it was ~1504px inside the
+  container, so a 1080–1170px upload is upscaled by as much as 1.8×. This is a
+  deliberate trade (width of display was judged more valuable than sharpness)
+  and the real fix is still resizing the uploads, which needs GD or Imagick.
 - **`.tm-no-scrollbar` hides the carousel's scrollbar without stopping it
   scrolling.** Separate from `.tm-drag-rail`, which already hid one, because that
   class also sets `cursor: grab` — wrong for the carousel, which is driven by

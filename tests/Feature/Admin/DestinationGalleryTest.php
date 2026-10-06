@@ -7,6 +7,7 @@ use App\Models\DestinationImage;
 use App\Models\Tag;
 use App\Models\User;
 use DOMDocument;
+use DOMNode;
 use DOMXPath;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -530,23 +531,36 @@ class DestinationGalleryTest extends TestCase
         $carousel = $classesAt('//*[@data-gallery]');
         $hero = $classesAt('//main//section[.//h1]');
 
-        // The real requirement: they match. Compared as resolved width classes,
-        // not against one shared literal, so the guard survives the cap being
-        // added to both or to neither.
+        /*
+         * Both are now full-bleed rather than merely uncapped. The ask was for
+         * the entire width of the screen, because the narrow container was what
+         * constrained an admin's choices, so "has no max-w class" is no longer
+         * the interesting property -- being in the escape utility is.
+         */
+        foreach (['carousel' => $carousel, 'hero' => $hero] as $name => $list) {
+            $this->assertContains(
+                'tm-full-bleed',
+                $list,
+                'the '.$name.' is no longer full-bleed, so it sits inside the '
+                .'max-w-[1600px] container with margins down each side'
+            );
+
+            $this->assertSame(
+                [],
+                preg_grep('/^max-w-/', $list),
+                'the '.$name.' has a max-width again. max-w-5xl was implemented and '
+                .'reverted twice; if a cap is wanted, raise it rather than '
+                .'reintroducing it here -- see the note on this test.'
+            );
+        }
+
+        // Also compared against each other, because the real requirement is that
+        // they match.
         $this->assertSame(
-            preg_grep('/^(max-w-|mx-auto)/', $carousel),
-            preg_grep('/^(max-w-|mx-auto)/', $hero),
+            preg_grep('/^tm-full-bleed$/', $carousel),
+            preg_grep('/^tm-full-bleed$/', $hero),
             'the carousel and the hero must resolve to the same width, or one of '
             .'them reads as a mistake against the other'
-        );
-
-        $this->assertSame(
-            [],
-            preg_grep('/^max-w-/', $carousel),
-            'the carousel has been capped. That was implemented and reverted: the '
-            .'owner asked twice for it to match the full-width hero, accepting that '
-            .'the photos are upscaled and soft. Re-adding a cap is a valid design '
-            .'change but it is not a bug fix -- see the note on this test.'
         );
 
         foreach ([
@@ -569,6 +583,93 @@ class DestinationGalleryTest extends TestCase
                 .'which distorts the aspect ratio'
             );
         }
+    }
+
+    /**
+     * The hero comes first and the carousel sits beneath it.
+     *
+     * They used to be the other way round -- carousel above hero -- and the order
+     * was asked to be flipped. This is the one property here that no amount of
+     * styling asserts: both blocks can be correct, full-bleed and matching, and
+     * still be in the wrong order.
+     *
+     * It matters for more than looks. The hero carries the page's <h1>, so a
+     * carousel rendered first hands a screen reader and the tab order the photo
+     * strip before the destination's name.
+     */
+    #[Test]
+    public function the_hero_is_rendered_before_the_carousel(): void
+    {
+        $destination = $this->destination([
+            'image_url' => 'https://images.example.com/hero.jpg',
+        ]);
+
+        foreach (range(1, 2) as $index) {
+            $destination->images()->create([
+                'path' => 'https://images.example.com/'.$index.'.jpg',
+                'sort_order' => $index - 1,
+            ]);
+        }
+
+        $html = $this->get(route('destinations.show', $destination))
+            ->assertOk()
+            ->getContent();
+
+        $document = new DOMDocument();
+
+        @$document->loadHTML($html);
+
+        libxml_clear_errors();
+
+        $xpath = new DOMXPath($document);
+
+        $carousel = $xpath->query('//*[@data-gallery]')->item(0);
+        $hero = $xpath->query('//main//section[.//h1]')->item(0);
+
+        $this->assertNotNull($carousel, 'the carousel is missing from the page');
+        $this->assertNotNull($hero, 'the hero is missing from the page');
+
+        // Source order, read off the parse order the DOM preserves, rather than
+        // off a class or a flex property -- visual order can differ from DOM
+        // order, and it is the DOM a screen reader and the tab order follow.
+        $this->assertSame(
+            DOMNode::DOCUMENT_POSITION_FOLLOWING,
+            $hero->compareDocumentPosition($carousel)
+                & DOMNode::DOCUMENT_POSITION_FOLLOWING,
+            'the carousel must come after the hero in the DOM, so the <h1> in the '
+            .'hero is reached before the photo strip'
+        );
+    }
+
+    /**
+     * .tm-full-bleed must still exist, and so must the clip that absorbs the
+     * scrollbar overshoot its 100vw causes.
+     *
+     * A class in the markup with no rule behind it is silent: the blocks simply
+     * stop reaching the viewport edges and nothing in the HTML explains why. The
+     * body rule is pinned for the same reason -- drop it and a classic vertical
+     * scrollbar puts a horizontal scrollbar on every destination page.
+     */
+    #[Test]
+    public function the_full_bleed_utility_and_its_clip_both_exist(): void
+    {
+        $stylesheet = (string) file_get_contents(resource_path('css/app.css'));
+
+        $this->assertMatchesRegularExpression(
+            '/\.tm-full-bleed\s*\{[^}]*width:\s*100vw[^}]*margin-inline:\s*calc\(\s*50%\s*-\s*50vw\s*\)/s',
+            $stylesheet,
+            'tm-full-bleed no longer escapes the container, so the blocks are capped '
+            .'by max-w-[1600px] again while the markup still reads as full-bleed'
+        );
+
+        $this->assertMatchesRegularExpression(
+            '/body\s*\{[^}]*overflow-x:\s*clip/s',
+            $stylesheet,
+            'body no longer clips the 100vw overshoot, so a classic vertical '
+            .'scrollbar produces a horizontal scrollbar on the page. It must stay '
+            .'clip and never become hidden: hidden creates a scroll container and '
+            .'would break the itinerary editor\'s sticky save bar.'
+        );
     }
 
     /**
