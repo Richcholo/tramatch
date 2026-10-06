@@ -62,23 +62,20 @@ class DestinationController extends Controller
             ->withQueryString();
 
         /*
-         * `?slide=<slug>` centres a specific destination, so a link can point at
-         * "the stage, showing X" and stay bookmarkable. Without it the stage opens
-         * on the first photograph in canonical order.
+         * NO STAGE HERE, and that is a decision rather than an omission.
+         *
+         * The stage is a fanned carousel of photographs that opens on the
+         * destination you have ARRIVED at, with that destination's own photographs
+         * in the fan. Putting it on the listing would mean 65 destinations'
+         * photographs marching past above a grid of 9 of the same destinations, and
+         * the chevrons would be navigating away from a page whose whole purpose is
+         * to let you choose between them.
+         *
+         * `?slide=` therefore does not exist on this route: there is no stage to
+         * centre. It is on the stage's own route, where the URL already names the
+         * active photograph's destination.
          */
-        $stage = $this->stage($request->filled('slide')
-            ? $request->string('slide')->toString()
-            : null);
-
-        return view('destinations.index', [
-            'destinations' => $destinations,
-            'locations' => $locations,
-            'stageSlides' => $stage['slides'],
-            'stageActiveIndex' => $stage['activeIndex'],
-            'stageNeighbours' => $stage['neighbours'],
-            'stageMatchScores' => $stage['matchScores'],
-            'stageInterval' => self::STAGE_INTERVAL_MS,
-        ]);
+        return view('destinations.index', compact('destinations', 'locations'));
     }
 
     public function show(Destination $destination): View
@@ -94,13 +91,11 @@ class DestinationController extends Controller
         ]);
 
         /*
-         * The shared stage, with THIS destination centred.
+         * The stage, with THIS destination centred.
          *
          * `activeIndex` is derived from the route, which is what makes a hard page
          * load land in exactly the same visual state as an in-page advance -- so
-         * deep links, Back/Forward and a shared link all replay correctly. The
-         * order comes from the same presenter the index uses, so the stage here is
-         * the index stage with the index shifted, and the two cannot drift.
+         * deep links, Back/Forward and a shared link all replay correctly.
          */
         $stage = $this->stage($destination->slug);
 
@@ -123,16 +118,16 @@ class DestinationController extends Controller
     }
 
     /**
-     * Everything the destinations stage needs, for either page.
+     * Everything the destinations stage needs, for its one route.
      *
-     * ONE method, because the two routes must not be able to disagree. The fan on
-     * a destination page being the index fan with the index shifted is the whole
-     * continuity feature, and it is only true if both routes resolve through the
-     * same call.
+     * The stage lives on `/destinations/{slug}` ONLY, so this is a single call
+     * rather than a shared seam. It is still one method because the four things it
+     * resolves are four things the component cannot work without, and a view that
+     * reaches for any of them directly is a second source of truth.
      *
      * @return array{slides: \Illuminate\Support\Collection, activeIndex: int, neighbours: array{prev: ?array, next: ?array}, matchScores: array<int, float>}
      */
-    private function stage(?string $slug = null): array
+    private function stage(string $slug): array
     {
         $carousel = app(DestinationCarousel::class);
 

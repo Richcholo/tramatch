@@ -12,6 +12,7 @@ use App\Models\User;
 use DOMDocument;
 use DOMXPath;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -100,6 +101,26 @@ class DestinationStageTest extends TestCase
         return $out;
     }
 
+    /**
+     * The whole stage, as it renders for the first destination in canonical
+     * order.
+     *
+     * `slides()` requires a slug because its only caller is `show`, and there is
+     * exactly one route that renders the stage. Tests about the COLLECTION rather
+     * than about one destination's position go through here, so none of them has
+     * to invent a slug -- and the first destination in canonical order is the one
+     * whose offsets the collection-level assertions are actually about.
+     */
+    private function stage(): Collection
+    {
+        $first = Destination::query()
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->value('slug');
+
+        return app(DestinationCarousel::class)->slides((string) $first);
+    }
+
     // =====================================================================
     // The order. One query, one order, both pages.
     // =====================================================================
@@ -140,7 +161,7 @@ class DestinationStageTest extends TestCase
                 'https://images.example.com/alpha-1.jpg',
                 'https://images.example.com/beta-hero.jpg',
             ],
-            app(DestinationCarousel::class)->slides()->map->imageUrl->all()
+            $this->stage()->map->imageUrl->all()
         );
     }
 
@@ -162,7 +183,7 @@ class DestinationStageTest extends TestCase
 
         $this->assertSame(
             ['Alpha', 'Bravo', 'Zulu'],
-            app(DestinationCarousel::class)->slides()->map->name->all()
+            $this->stage()->map->name->all()
         );
     }
 
@@ -341,61 +362,92 @@ class DestinationStageTest extends TestCase
     }
 
     /**
-     * The stage is a shared component driven by the shared presenter, on BOTH
-     * routes.
+/**
+     * THE STAGE IS ON THE DESTINATION PAGE AND NOWHERE ELSE.
      *
-     * "A continuation of the same journey" is only true if both pages read one
-     * order. The obvious way to share the look later is to render the stage on
-     * the index and let the detail page grow its own ordering, and the only thing
-     * that notices is this.
+     * Asserted in BOTH directions, because the obvious way to "share the stage"
+     * later is to add one line to `destinations/index.blade.php` and the only
+     * thing that would notice is this.
+     *
+     * The reason it is one route and not two: the stage opens on the destination
+     * you have ARRIVED at, with that destination's own photographs in the fan. On
+     * the listing it would march 65 destinations' photographs past above a grid of
+     * 9 of the same destinations, and its chevrons -- which navigate to the next
+     * destination's page -- would be taking you away from the one page whose
+     * whole purpose is to let you choose between them.
      */
     #[Test]
-    public function both_routes_render_the_same_stage_from_the_same_presenter(): void
+    public function the_stage_is_on_the_destination_page_and_nowhere_else(): void
     {
         $this->destination(['name' => 'Alpha', 'slug' => 'alpha', 'sort_order' => 1]);
-
         $second = $this->destination(['name' => 'Bravo', 'slug' => 'bravo', 'sort_order' => 2]);
 
-        foreach ([route('destinations.index'), route('destinations.show', $second)] as $url) {
-            $html = (string) $this->get($url)->assertOk()->getContent();
-            $dom = $this->dom($html);
+        $show = $this->dom(
+            (string) $this->get(route('destinations.show', $second))->assertOk()->getContent()
+        );
 
-            $this->assertSame(1, $dom->query('//*[@data-stage]')->length, $url.' renders no stage');
+        $this->assertSame(1, $show->query('//*[@data-stage]')->length);
+        $this->assertSame(1, $show->query('//*[@data-stage-pager]')->length);
+        $this->assertSame(1, $show->query('//script[@data-stage-data]')->length);
 
-            /*
-             * Two destinations, so there is more than one slide and the pager is
-             * rendered at all -- a one-slide stage correctly has no pager, and
-             * asserting one here would be asserting a bug.
-             */
-            $this->assertGreaterThan(1, $dom->query('//*[@data-stage-panel]')->length);
+        // Two destinations, so there is more than one slide and a pager at all. A
+        // one-slide stage correctly has neither, and asserting one would be
+        // asserting a bug.
+        $this->assertGreaterThan(1, $show->query('//*[@data-stage-panel]')->length);
+
+        $index = $this->dom(
+            (string) $this->get(route('destinations.index'))->assertOk()->getContent()
+        );
+
+        foreach ([
+            '//*[@data-stage]',
+            '//*[@data-stage-panel]',
+            '//*[@data-stage-pager]',
+            '//script[@data-stage-data]',
+        ] as $selector) {
             $this->assertSame(
-                1,
-                $dom->query('//*[@data-stage-pager]')->length,
-                $url.' renders the stage without its pager, so the dots and the pause '
-                .'control belong to one page and not the other'
-            );
-            $this->assertSame(
-                1,
-                $dom->query('//script[@data-stage-data]')->length,
-                $url.' renders the stage without its payload island, so the script has no '
-                .'slides to advance through'
+                0,
+                $index->query($selector)->length,
+                'the stage has appeared on /destinations ('.$selector.'). It belongs to the '
+                .'destination page only.'
             );
         }
+
+        /*
+         * The listing is still a listing. Asserting only the stage's ABSENCE would
+         * pass just as happily on a page that lost its search form and its grid.
+         */
+        $this->assertGreaterThan(
+            0,
+            $index->query('//input[@name="search"]')->length,
+            'the listing has lost its search field'
+        );
+
+        $this->assertGreaterThan(
+            0,
+            $index->query('//article')->length,
+            'the listing has lost its destination cards'
+        );
     }
 
     // =====================================================================
-    // The page composition. A dark slab on a warm paper page.
+    // The page composition. ONE dark surface, edge to edge.
     // =====================================================================
 
     /**
-     * The page surface is sand, the heading is on the sand in the teal it is
-     * named for, and the stage is the loudest and darkest thing below it.
+     * THE WHOLE PAGE IS ONE DARK SURFACE, WITH THE STAGE AS ITS OPENING.
      *
-     * Asserted as DOCUMENT ORDER because order is the composition: a heading
-     * underneath the slab is not a heading on the paper, however it is coloured.
+     * Asserted as DOCUMENT ORDER, because order is the composition: a stage that
+     * is correctly coloured but sitting below the map is still the wrong page.
+     *
+     * The heading is **Island White**, and that is the load-bearing detail. It
+     * was Deep Volcanic Teal, because it was on Palawan Sand. Deep Volcanic Teal
+     * on Deep Volcanic Teal is 1:1 and the heading simply disappeared when the
+     * ground changed -- which is why this page's colour rule had to be re-derived
+     * rather than copied from the stage.
      */
     #[Test]
-    public function the_heading_sits_on_the_sand_and_the_stage_below_it(): void
+    public function the_whole_page_is_one_dark_surface_with_the_stage_as_its_opening(): void
     {
         $html = (string) $this->get(route('destinations.show', $this->destination()))
             ->assertOk()
@@ -403,17 +455,35 @@ class DestinationStageTest extends TestCase
 
         $dom = $this->dom($html);
 
-        $heading = $dom->query('//main//h1')->item(0);
-        $stage = $dom->query('//*[@data-stage]')->item(0);
-
-        $this->assertInstanceOf(\DOMElement::class, $heading);
-        $this->assertInstanceOf(\DOMElement::class, $stage);
-
         $this->assertSame(
             1,
-            $dom->query('//main//h1')->length,
-            'the page has more than one h1. The stage caption is deliberately never one.'
+            $dom->query('//main//*[contains(concat(" ", normalize-space(@class), " "), " tm-page ")]')->length,
+            'the page has no .tm-page ground, so it is still a paper page with a dark panel on it'
         );
+
+        /*
+         * One surface means no sand anywhere inside the page.
+         */
+        $this->assertSame(
+            0,
+            $dom->query('//main//*[contains(@class, "bg-palawan-sand")]')->length,
+            'Palawan Sand still appears on the destination page. The stage became the whole '
+            .'page and the paper went with it.'
+        );
+
+        $opening = $dom->query('//*[contains(concat(" ", normalize-space(@class), " "), " tm-page__opening ")]');
+
+        $this->assertSame(1, $opening->length, 'the page has no opening screen to hold the stage');
+
+        $heading = $dom->query('//main//h1')->item(0);
+        $stage = $dom->query('//*[@data-stage]')->item(0);
+        $facts = $dom->query('//main//p[contains(normalize-space(.), "01 / The place")]')->item(0);
+
+        foreach ([$heading, $stage, $facts] as $node) {
+            $this->assertInstanceOf(\DOMElement::class, $node);
+        }
+
+        $this->assertSame(1, $dom->query('//main//h1')->length, 'the page has more than one h1');
 
         /*
          * `compareDocumentPosition` returns a BITMASK, so it is compared against
@@ -423,85 +493,268 @@ class DestinationStageTest extends TestCase
         $this->assertSame(
             \DOMNode::DOCUMENT_POSITION_FOLLOWING,
             $heading->compareDocumentPosition($stage) & \DOMNode::DOCUMENT_POSITION_FOLLOWING,
-            'the stage is above the page heading. The composition is heading on the paper, '
-            .'then the dark slab underneath it.'
+            'the stage is above the heading'
         );
 
-        $this->assertStringContainsString(
+        $this->assertSame(
+            \DOMNode::DOCUMENT_POSITION_FOLLOWING,
+            $stage->compareDocumentPosition($facts) & \DOMNode::DOCUMENT_POSITION_FOLLOWING,
+            'the facts are above the stage. The stage is the opening, not the footer.'
+        );
+
+        $headingClasses = (string) $heading->getAttribute('class');
+
+        $this->assertStringContainsString('text-island-white', $headingClasses);
+        $this->assertStringNotContainsString(
             'text-volcanic-teal',
-            (string) $heading->getAttribute('class'),
-            'the page heading is not in the teal it is named for.'
+            $headingClasses,
+            'the heading is Deep Volcanic Teal on a Deep Volcanic Teal page, which is 1:1'
         );
 
-        $this->assertStringContainsString(
-            'font-display',
-            (string) $heading->getAttribute('class'),
-            'the page heading is not Playfair Display'
+        $this->assertStringContainsString('font-display', $headingClasses);
+
+        // The stage lives INSIDE the opening screen, not beside it.
+        $this->assertSame(
+            1,
+            $dom->query('.//*[@data-stage]', $opening->item(0))->length,
+            'the stage has drifted out of the opening screen'
         );
 
-        $this->assertMatchesRegularExpression(
-            '/class="[^"]*bg-palawan-sand/',
-            $html,
-            'nothing on the page is Palawan Sand, so the stage is a dark slab on the layout '
-            .'shell rather than on a warm paper page'
-        );
+        $css = $this->css();
 
         $this->assertMatchesRegularExpression(
-            '/\.tm-stage\s*\{[^}]*background-color:\s*var\(--color-volcanic-teal\)/s',
-            $this->css(),
-            'the stage is not the Deep Volcanic Teal slab the composition is built on'
+            '/\.tm-page\s*\{[^}]*background-color:\s*var\(--color-volcanic-teal\)/s',
+            $css,
+            'the page ground is not the Deep Volcanic Teal the composition is built on'
+        );
+
+        /*
+         * `min-height`, never `height`. The stage's height follows from `--u` and
+         * the composition's aspect ratio, so a fixed `height` would crush the fan
+         * on a short viewport instead of letting the opening grow past it. `svh`
+         * rather than `vh` because mobile browser chrome changes the viewport
+         * height while you scroll.
+         */
+        $this->assertMatchesRegularExpression(
+            '/\.tm-page__opening\s*\{[^}]*min-height:\s*calc\(100svh/s',
+            $css,
+            'the opening screen is not full-height'
+        );
+
+        /*
+         * Scoped to `main`, and to non-hover tokens. The layout's mobile nav is
+         * `max-w-[calc(100vw-2.5rem)]` and the page's one filled button hovers to
+         * `hover:bg-island-white`; both are outside what this guard is about, and a
+         * blanket string search would have had to be wrong about them to be useful.
+         */
+        $this->assertSame(
+            0,
+            $dom->query('//main//*[contains(@class, "100vw")]')->length,
+            'a viewport unit is back on the destination page, and it measures the viewport '
+            .'INCLUDING the vertical scrollbar'
         );
     }
 
     /**
-     * The filtered bar under the heading is tracked uppercase sans labels, and it
-     * is not coloured with something that fails on sand.
+     * NO DARK-PALETTE TEXT SURVIVES ON THE TEAL GROUND.
      *
-     * Philippine Gold on Palawan Sand is 1.8:1 and Boracay Turquoise 2.9:1. Both
-     * are brand colours and both are unreadable there, which is exactly why the
-     * rule exists -- they look like they belong and they are not legible.
+     * The page inverted its colour rule when the ground changed. Gold and Boracay
+     * Turquoise were forbidden as small text because they fail on SAND; on teal
+     * they are the accent colours. What must not appear is the DARK palette --
+     * `text-benguet-charcoal` and bare `text-volcanic-teal` on the ground are
+     * both effectively invisible.
+     *
+     * Deep Volcanic Teal as text IS legal in one place, on a filled button:
+     * turquoise fill with teal text is the pairing the palette asks for and it
+     * passes. So the guard is "dark text only on a fill", NOT a blanket ban -- a
+     * blanket ban would forbid the one legal use.
      */
     #[Test]
-    public function the_filtered_bar_uses_no_gold_or_turquoise_on_the_sand(): void
+    public function no_dark_palette_text_survives_on_the_teal_ground(): void
     {
         $destination = $this->destination();
+        $destination->tags()->attach(Tag::create(['name' => 'Waterfalls', 'slug' => 'waterfalls']));
 
-        $destination->tags()->attach(
-            Tag::create(['name' => 'Waterfalls', 'slug' => 'waterfalls'])
+        $html = (string) $this->get(route('destinations.show', $destination))
+            ->assertOk()
+            ->getContent();
+
+        $dom = $this->dom($html);
+
+        /*
+         * Scoped to `main`. The layout's flash banner is `text-benguet-charcoal`
+         * on a pale green panel and is shared by every page in the project; this
+         * guard is about the destination page's own surface, and a global assert
+         * would have to be wrong about the layout to be useful.
+         */
+        $this->assertSame(
+            0,
+            $dom->query('//main//*[contains(@class, "text-benguet-charcoal")]')->length,
+            'Benguet Charcoal text is left on a Deep Volcanic Teal page, where it is about 1.3:1'
         );
+
+        foreach ($dom->query('//main//*[contains(@class, "text-volcanic-teal")]') as $element) {
+            $this->assertMatchesRegularExpression(
+                '/bg-\S/',
+                (string) $element->getAttribute('class'),
+                'Deep Volcanic Teal text on an element with no fill behind it is invisible on '
+                .'this ground. It is only legal on a filled button.'
+            );
+        }
+
+        /*
+         * Token-by-token rather than a substring search, so a legitimate
+         * `hover:bg-island-white` on the one filled button is not mistaken for the
+         * opaque light card this is looking for. A hover state is a filled button
+         * changing fill; a resting `bg-island-white` is a bright rectangle in the
+         * middle of a dark page.
+         */
+        foreach (['bg-palawan-sand', 'bg-island-white'] as $fill) {
+            foreach ($dom->query('//main//*[@class]') as $element) {
+                foreach (preg_split('/\s+/', trim((string) $element->getAttribute('class'))) as $token) {
+                    if ($token === $fill) {
+                        $this->fail(
+                            $fill.' is left on the destination page as a resting fill. An opaque '
+                            .'light card in the middle of a dark page is the flat colour block '
+                            .'the stage forbids.'
+                        );
+                    }
+                }
+            }
+        }
+
+        $this->assertStringContainsString(
+            '.tm-gold-badge--dark',
+            $this->css(),
+            'the dark rating-badge modifier is not in the stylesheet'
+        );
+    }
+
+    /**
+     * THE FILTERED BAR IS TRACKED UPPERCASE LABELS IN A LIGHT COLOUR.
+     *
+     * Identified by its content rather than its position, because the layout's
+     * navigation contains lists too and asserting on "any ul in main" would check
+     * their colours and call it a pass.
+     *
+     * NOT gold, even though gold is legal on this ground and is used for the
+     * accents below: a decorative label is the one place a colour has no job, and
+     * spending the accent there devalues it everywhere else.
+     */
+    #[Test]
+    public function the_filtered_bar_is_tracked_uppercase_labels_in_a_light_colour(): void
+    {
+        $destination = $this->destination();
+        $destination->tags()->attach(Tag::create(['name' => 'Waterfalls', 'slug' => 'waterfalls']));
 
         $dom = $this->dom(
             (string) $this->get(route('destinations.show', $destination))->assertOk()->getContent()
         );
 
-        /*
-         * The bar under the heading, identified by its content rather than by its
-         * position. The layout's navigation and the destination card grid both
-         * contain lists, and asserting on "any ul in main" would check their
-         * colours and call it a pass.
-         */
         $bars = $dom->query('//main//ul[li[contains(normalize-space(.), "Waterfalls")]]');
 
         $this->assertSame(1, $bars->length, 'the destination has a tag but no filtered bar rendered it');
 
         $markup = (string) $bars->item(0)->ownerDocument->saveHTML($bars->item(0));
 
-        $this->assertStringNotContainsString(
-            'text-philippine-gold',
-            $markup,
-            'Philippine Gold is on the filtered bar. On Palawan Sand it is 1.8:1.'
-        );
-
-        $this->assertStringNotContainsString(
-            'text-boracay-light',
-            $markup,
-            'Boracay Light is on the filtered bar. On Palawan Sand it is unreadable.'
-        );
-
         $this->assertStringContainsString('uppercase', $markup);
         $this->assertStringContainsString('tracking-', $markup);
+        $this->assertStringContainsString(
+            'text-boracay-light',
+            $markup,
+            'the filtered bar is not in a light colour, so it is invisible on the teal ground'
+        );
+
+        $this->assertStringNotContainsString('text-philippine-gold', $markup);
     }
 
+    /**
+     * EVERY FACT THE PAGE HAS ALWAYS SHOWN IS STILL HERE.
+     *
+     * Written as a list on purpose. The page was restyled from a paper one to a
+     * dark one, and a restyle is exactly when a section quietly stops rendering:
+     * "assert the description is present" passes just as happily on a page that
+     * lost its fee, its map or its review form. Each entry is one the page has
+     * always carried, so dropping one in a future restyle fails here.
+     */
+    #[Test]
+    public function every_fact_the_page_carries_is_still_here(): void
+    {
+        $destination = $this->destination([
+            'name' => 'Caliraya Lake',
+            'description' => 'A reservoir in the Sierra Madre. The boat leaves at dawn.',
+            'entrance_fee' => 150,
+            'estimated_cost' => 1250,
+            'recommended_minutes' => 120,
+            'opening_time' => '08:00',
+            'closing_time' => '17:00',
+            'daily_hours' => [
+                'monday' => ['open' => '08:00', 'close' => '17:00'],
+                'tuesday' => ['open' => '08:00', 'close' => '17:00'],
+                'wednesday' => ['open' => '08:00', 'close' => '17:00'],
+                'thursday' => ['open' => '08:00', 'close' => '17:00'],
+                'friday' => ['open' => '08:00', 'close' => '17:00'],
+                'saturday' => ['open' => '06:00', 'close' => '17:00'],
+                'sunday' => ['open' => '06:00', 'close' => '17:00'],
+            ],
+            'hours_note' => 'The gate closes early on public holidays.',
+            'hours_source_url' => 'https://example.gov.ph/caliraya',
+            'hours_source_label' => 'Caliraya LGU',
+            'last_verified_at' => now(),
+            'budget_level' => 'mid-range',
+        ]);
+
+        $destination->tags()->attach(Tag::create(['name' => 'Waterfalls', 'slug' => 'waterfalls']));
+
+        $html = (string) $this->get(route('destinations.show', $destination))
+            ->assertOk()
+            ->getContent();
+
+        foreach ([
+            'the name' => 'Caliraya Lake',
+            'the municipality' => 'Caliraya',
+            'the province' => 'Laguna',
+            'an interest tag' => 'Waterfalls',
+            'the prose' => 'The boat leaves at dawn.',
+            'the entrance fee' => '₱150.00',
+            'the estimated cost' => '₱1,250.00',
+            'the visit length' => '120 min',
+            'the hours label' => 'Opening hours',
+            'a per-day row' => 'Monday',
+            'the weekend split' => '06:00–17:00',
+            'the hours note' => 'The gate closes early on public holidays.',
+            'the timezone' => 'Philippine time (UTC+8)',
+            'the last-checked date' => 'Last checked '.now()->format('j M Y'),
+            'the cited hours source' => 'Caliraya LGU',
+            'the location section' => '02 / Location',
+            'the budget tier' => 'Mid-range',
+            'the reviews section' => 'Traveler notes',
+            'the empty reviews state' => 'No reviews yet.',
+        ] as $fact => $text) {
+            $this->assertStringContainsString(
+                $text,
+                $html,
+                $fact.' is no longer on the destination page. The restyle dropped it.'
+            );
+        }
+
+        $this->assertStringContainsString('href="https://example.gov.ph/caliraya"', $html);
+        $this->assertStringContainsString('rel="noopener noreferrer nofollow"', $html);
+
+        // The map, with its coordinates both on the element and printed beneath it.
+        $this->assertSame(1, $this->dom($html)->query('//*[@data-destination-map]')->length);
+        $this->assertStringContainsString('data-lat="14.1"', $html);
+        $this->assertStringContainsString('14.1, 121.5', $html);
+
+        // The actions.
+        $this->assertStringContainsString('Find similar places', $html);
+        $this->assertStringContainsString('Log in to leave a review.', $html);
+        $this->assertMatchesRegularExpression(
+            '/<form[^>]*method="POST"/',
+            $html,
+            'the review form has gone'
+        );
+    }
     // =====================================================================
     // Panels. Photographs, and only on the active one.
     // =====================================================================
@@ -1109,7 +1362,7 @@ class DestinationStageTest extends TestCase
                 ->assertOk();
 
             $this->assertIsArray(
-                app(DestinationCarousel::class)->slides()->all(),
+                $this->stage()->all(),
                 $label.' was served to the page instead of being rebuilt'
             );
         }
@@ -1133,7 +1386,7 @@ class DestinationStageTest extends TestCase
 
         $this->assertSame(
             [],
-            app(DestinationCarousel::class)->slides()->all(),
+            $this->stage()->all(),
             'an archived destination is still in the stage, so a visitor can click a panel '
             .'onto a page that 404s'
         );
@@ -1145,7 +1398,7 @@ class DestinationStageTest extends TestCase
             'sort_order' => 2,
         ]);
 
-        $this->assertCount(1, app(DestinationCarousel::class)->slides()->all());
+        $this->assertCount(1, $this->stage()->all());
 
         DestinationImage::create([
             'destination_id' => $active->id,
@@ -1155,7 +1408,7 @@ class DestinationStageTest extends TestCase
 
         $this->assertCount(
             2,
-            app(DestinationCarousel::class)->slides()->all(),
+            $this->stage()->all(),
             'an uploaded photograph did not reach the stage, so an admin uploads a picture, '
             .'sees it on the destination page, and the stage does not'
         );
@@ -1180,7 +1433,7 @@ class DestinationStageTest extends TestCase
             'is_featured' => false,
         ]);
 
-        $this->assertCount(1, app(DestinationCarousel::class)->slides()->all());
+        $this->assertCount(1, $this->stage()->all());
 
         $this->get(route('destinations.show', $hidden))
             ->assertOk()

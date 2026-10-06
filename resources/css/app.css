@@ -434,6 +434,21 @@
         color: var(--color-benguet-charcoal);
     }
 
+    /*
+     * The badge is a gold wash with CHARCOAL text, which is right on every light
+     * surface and unreadable on the destination page's teal ground -- a 22% gold
+     * wash over teal is a dark background, and charcoal on dark is nothing.
+     *
+     * A modifier rather than a change to `.tm-gold-badge` itself, because ten
+     * other pages render that class and all of them are light. A global change
+     * would have fixed one page by breaking the other ten.
+     */
+    .tm-gold-badge--dark {
+        background-color: color-mix(in srgb, var(--color-philippine-gold) 16%, transparent);
+        box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-philippine-gold) 40%, transparent) inset;
+        color: var(--color-philippine-gold);
+    }
+
     .tm-hero-art {
         background:
             radial-gradient(circle at 68% 28%, rgb(244 180 26 / 78%) 0 7%, transparent 24%),
@@ -470,12 +485,15 @@
      * THE DESTINATIONS STAGE
      * =========================================================================
      *
-     * A dark editorial theatre slab set into a warm sand page. The page surface
-     * is Palawan Sand and this is the loudest, darkest element on it, so every
-     * colour decision below is made against teal: Island White and Boracay Light
-     * for text, Philippine Gold as an accent (8.7:1 on this teal). Nothing gold
-     * or turquoise appears as small text on the sand ABOVE the stage, because on
-     * sand gold is 1.8:1 and turquoise 2.9:1 and both fail there.
+     * A dark editorial theatre slab, full-bleed, on the SAME teal ground as the
+     * rest of the destination page. It is one world, not a slab on paper -- see
+     * the destination page's own note above, which explains why the Palawan Sand
+     * surface went with it.
+     *
+     * BECAUSE IT MATCHES ITS GROUND, THE SLAB IS CARRIED BY THREE THINGS rather
+     * than by its background: the blurred photographic backdrop, its own radial
+     * vignette, and the shadow below. Remove the shadow and the fan floats in a
+     * void with no edge; remove the vignette and the slab flattens into the page.
      *
      * =========================================================================
      * THE UNIT. `--u`, AND WHY IT IS NOT A VIEWPORT UNIT
@@ -552,7 +570,177 @@
      * times 320, so overflow is impossible at any stage width.
      */
 
+/*
+     * =========================================================================
+     * THE DESTINATION PAGE
+     * =========================================================================
+     *
+     * ONE CONTINUOUS DARK SURFACE, edge to edge, from the nav bar down. The
+     * layout's own header is already `bg-volcanic-teal`, so the page continues
+     * it rather than starting a new one, and there is no Palawan Sand anywhere on
+     * this page.
+     *
+     * THAT IS THE CONSEQUENCE OF THE STAGE BECOMING THE WHOLE PAGE. It began as a
+     * dark theatre set into warm paper, with the heading and the filtered bar on
+     * the paper above it. When it was asked to be the page rather than a panel on
+     * it, the paper went with it: a sand surface under a teal one is two
+     * surfaces, and the composition only reads as one world with one ground.
+     *
+     * WHICH MEANS THE WHOLE COLOUR RULE INVERTS HERE. Gold and Boracay Turquoise
+     * were forbidden as small text because they fail on sand -- gold is 1.8:1 and
+     * turquoise 2.9:1 there. On this teal ground the same gold is 8.7:1 and the
+     * same turquoise carries white or teal text, so gold is now usable as an
+     * accent. What must not appear is the DARK palette: `text-benguet-charcoal`,
+     * `text-volcanic-teal`, `bg-palawan-sand` and `bg-island-white` are all
+     * invisible against this ground. Every rule below is a light value.
+     *
+     * `-mx-5 -my-10 sm:-mx-8` against the layout main's own
+     * `px-5 py-10 sm:px-8 lg:px-12` is EXACT CANCELLATION for this ground only.
+     * See the stage's note for why that is a background bleed and not a width.
+     * Nothing INSIDE the page may carry a `-mx-*`.
+     */
+    .tm-page {
+        background-color: var(--color-volcanic-teal);
+        background-image: radial-gradient(
+            120% 62% at 50% 0%,
+            rgb(255 255 255 / 0.07),
+            rgb(11 37 43 / 0) 62%
+        );
+    }
+
+    /*
+     * The opening screen: heading, filtered bar and stage, filling what is left of
+     * the first viewport below the nav bar.
+     *
+     * `calc(100svh - 6rem)` rather than `100svh`, because `main` begins UNDER the
+     * nav. `svh` rather than `vh` because mobile browser chrome changes the
+     * viewport height while you scroll and `vh` would make the opening jump.
+     *
+     * `min-height`, never `height`. The stage's height follows from `--u` and the
+     * composition's aspect ratio, so on a short viewport the opening grows past
+     * the screen rather than crushing the fan.
+     *
+     * `space-between` puts the heading at the top and the stage on the floor of
+     * the screen, which is what makes it read as a stage rather than as a block
+     * that happens to be tall.
+     */
+    .tm-page__opening {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: 2.5rem;
+        min-height: 100vh;
+        min-height: calc(100svh - 6rem);
+        padding-bottom: 1.5rem;
+    }
+
+    /*
+     * The dark card. ONE surface treatment for every fact on the page, so the
+     * hours, the map, the fees and the reviews read as parts of the same object
+     * rather than as five unrelated widgets.
+     *
+     * A translucent white fill with an inset hairline, NOT an opaque card: an
+     * opaque light card on this ground puts a bright rectangle in the middle of a
+     * dark page, which is the "flat colour block" the stage's panels are forbidden
+     * from being.
+     */
+    .tm-panel {
+        border-radius: 2rem;
+        background-color: rgb(255 255 255 / 0.04);
+        box-shadow: 0 0 0 1px rgb(255 255 255 / 0.09) inset;
+        padding: 1.5rem;
+    }
+
+    @media (width >= 40rem) {
+        .tm-panel {
+            padding: 2rem;
+        }
+    }
+
+    /*
+     * Section labels. Boracay Light is a pale tint of the ground's own hue, so it
+     * reads as a label without competing with the heading. Gold is reserved for
+     * the accent uses below.
+     */
+    .tm-eyebrow {
+        color: var(--color-boracay-light);
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.28em;
+        line-height: 1.2;
+        text-transform: uppercase;
+    }
+
+    /* Palawan Sand at 72% on teal is about 10:1, so this is body text. */
+    .tm-prose {
+        color: rgb(253 251 247 / 0.72);
+        line-height: 1.75;
+    }
+
+    /*
+     * The per-day hours table. Rows separated by hairlines and the day marked by a
+     * wash: on a dark ground a fill is a stronger signal than a border, and
+     * "(today)" alone is not enough to find at a glance.
+     */
+    .tm-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        border-top: 1px solid rgb(255 255 255 / 0.08);
+        padding: 0.5rem 1rem;
+        color: rgb(253 251 247 / 0.6);
+        font-size: 0.875rem;
+    }
+
+    .tm-row:first-child {
+        border-top: 0;
+    }
+
+    .tm-row--today {
+        background-color: rgb(255 255 255 / 0.08);
+        color: var(--color-island-white);
+        font-weight: 600;
+    }
+
+    .tm-row__note {
+        color: var(--color-boracay-light);
+        font-size: 0.75rem;
+        font-weight: 400;
+    }
+
+    /*
+     * Form controls. `bg-palawan-sand` here would be a white box in a dark page,
+     * and `text-benguet-charcoal` would then be the only way to make it legible
+     * -- which is the same light-fill/dark-text pairing the page just removed.
+     */
+    .tm-field {
+        width: 100%;
+        border: 0;
+        border-radius: 0.75rem;
+        background-color: rgb(255 255 255 / 0.06);
+        box-shadow: 0 0 0 1px rgb(255 255 255 / 0.14) inset;
+        padding: 0.625rem 0.875rem;
+        color: var(--color-island-white);
+        font-size: 0.875rem;
+    }
+
+    .tm-field::placeholder {
+        color: rgb(253 251 247 / 0.35);
+    }
+
+    .tm-field:focus {
+        outline: none;
+        box-shadow: 0 0 0 2px var(--color-volcanic-teal), 0 0 0 4px var(--color-boracay);
+    }
+
+    .tm-field option {
+        background-color: var(--color-volcanic-teal);
+        color: var(--color-island-white);
+    }
+
     .tm-stage-wrap {
+
         /*
          * The container, and also the stage's width. The cap lives HERE, on the
          * container, so that `--u` cannot exceed 1px and the geometry cannot grow
@@ -561,6 +749,13 @@
         max-width: 68rem;
         margin-inline: auto;
         container-type: inline-size;
+
+        /*
+         * The slab sits on a page of its own colour, so it has to be separated by
+         * depth rather than by hue. `container-type` implies `contain: layout style`
+         * but NOT paint, so this shadow is not clipped by the container.
+         */
+        box-shadow: 0 calc(28 * 1px) calc(70 * 1px) calc(-30 * 1px) rgb(0 0 0 / 0.7);
     }
 
     .tm-stage {

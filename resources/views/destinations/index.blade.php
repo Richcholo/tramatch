@@ -1,41 +1,24 @@
 <x-app-layout>
-    {{--
-        /*
-         * THE SAND SURFACE.
-         *
-         * The same warm paper the destination page is set on, bleached to the screen
-         * edges by exact cancellation of the layout main's own padding -- see the
-         * longer note in destinations/show.blade.php. NOT `100vw`: that measures
-         * the viewport including the vertical scrollbar and lands a full-bleed
-         * block off-centre.
-         *
-         * The `header` SLOT IS GONE for the same reason it is gone on the
-         * destination page: it renders a bordered strip on the sea-glass shell,
-         * directly above a sand page. The heading now sits on the paper, with the
-         * filter bar and the stage under it, so the two pages read as one surface
-         * rather than as a listing with a banner glued to it.
-         */
-    --}}
-    <div class="-mx-5 -my-10 bg-palawan-sand px-5 py-10 sm:-mx-8 sm:px-8 lg:-mx-8 lg:px-12">
-        <div class="space-y-8">
-            <div class="flex items-end justify-between gap-6">
-                <div>
-                    <p class="text-xs font-bold uppercase tracking-[0.3em] text-boracay-dark">
-                        TraMatch / Collection
-                    </p>
+    <x-slot name="header">
+        <div class="flex items-end justify-between gap-6">
+            <div>
+                <p class="text-xs font-bold uppercase tracking-[0.3em] text-boracay-dark">
+                    TraMatch / Collection
+                </p>
 
-                    <h1 class="mt-3 font-display text-5xl font-medium uppercase leading-[0.85] tracking-[-0.05em] text-volcanic-teal sm:text-7xl lg:text-8xl">
-                        Destinations
-                    </h1>
-                </div>
-
-                <span class="hidden text-xs font-bold uppercase tracking-[0.25em] text-benguet-charcoal/45 md:block">
-                    Luzon / Philippines
-                </span>
+                <h1 class="mt-3 font-display text-5xl font-medium uppercase leading-[0.85] tracking-[-0.05em] text-volcanic-teal sm:text-7xl lg:text-8xl">
+                    Destinations
+                </h1>
             </div>
 
-            {{-- The filtered bar: search and budget, under the heading. --}}
-            <section class="rounded-[1.5rem] border border-boracay-light bg-island-white">
+            <span class="hidden text-xs font-bold uppercase tracking-[0.25em] text-benguet-charcoal/45 md:block">
+                Luzon / Philippines
+            </span>
+        </div>
+    </x-slot>
+
+    <div class="space-y-8">
+        <section class="rounded-[1.5rem] border border-boracay-light bg-palawan-sand">
             <form
                 method="GET"
                 class="grid gap-5 p-6 sm:grid-cols-3 sm:items-center sm:p-8"
@@ -95,27 +78,11 @@
                     </button>
                 </div>
             </form>
-            </section>
+        </section>
 
-            {{--
-                THE STAGE, on the same journey as the destination page's.
-
-                Same presenter, same order, same markup -- differing only in which
-                photograph is active. Here nothing is active, so it opens on the
-                first photograph in canonical order; `?slide=<slug>` centres a
-                specific destination, and every destination page centres its own
-                hero photograph. That is what makes the fan on a destination page
-                read as a continuation of this one rather than as a new screen.
-
-                ABOVE THE GRID, not below it. The stage is the browse surface's
-                opening statement; a grid of nine cards above it would put the
-                loudest, darkest element on the page in second place.
-            --}}
-            @include('components.destinations.stage')
-
-            <div class="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+        <div class="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
             @forelse ($destinations as $index => $destination)
-                <article class="group overflow-hidden rounded-[1.5rem] border border-boracay-light bg-island-white">
+                <article class="group overflow-hidden rounded-[1.5rem] border border-boracay-light bg-palawan-sand">
                     <a
                         href="{{ route('destinations.show', $destination) }}"
                         class="block"
@@ -189,7 +156,7 @@
                     </div>
                 </article>
             @empty
-                <div class="border border-boracay-light bg-island-white p-10 md:col-span-2 lg:col-span-3">
+                <div class="border border-boracay-light bg-palawan-sand p-10 md:col-span-2 lg:col-span-3">
                     <p class="text-xs font-bold uppercase tracking-[0.25em] text-boracay-dark">
                         No results
                     </p>
@@ -203,9 +170,8 @@
                     </p>
                 </div>
             @endforelse
-            </div>
-
-            {{ $destinations->links('pagination.destinations') }}
         </div>
+
+        {{ $destinations->links('pagination.destinations') }}
     </div>
 </x-app-layout>

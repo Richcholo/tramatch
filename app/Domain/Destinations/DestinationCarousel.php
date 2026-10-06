@@ -10,11 +10,12 @@ use Illuminate\Support\Collection;
  * The one place that decides what the destinations stage contains and in what
  * order.
  *
- * Both `/destinations` and `/destinations/{slug}` read this. That is the entire
- * continuity feature: the stage on a destination page IS the index stage with the
- * active index shifted, because it is the same query, the same order and the same
- * markup. A second presenter, or any sorting done in a Blade view, is how the two
- * pages start disagreeing.
+ * Read by `/destinations/{slug}`, which is the ONLY route that renders the
+ * stage. The stage is a fan of photographs that opens on the destination you
+ * have arrived at; putting it on `/destinations` would march 65 destinations'
+ * photographs past above a grid of 9 of the same destinations. So this is not a
+ * two-page seam to keep in step -- it is the stage's only presenter, and there is
+ * no second copy of the order anywhere.
  *
  * THE ORDER IS DESTINATIONS, THE SLIDES ARE PHOTOGRAPHS. Canonical order is
  * `sort_order`, then `name`; each destination then contributes its photographs in
@@ -23,8 +24,8 @@ use Illuminate\Support\Collection;
  *
  * `sort_order` ties across every existing row until somebody curates it, which is
  * why the secondary sort is `name` and not nothing: without it two requests in
- * the same page load could disagree about the order, and the two fans would stop
- * matching.
+ * the same page load could disagree about the order, and the caption would then
+ * name one destination over another's photograph.
  *
  * THE ACTIVE INDEX IS DERIVED FROM THE URL, never from component state. That is
  * what makes a hard page load land in the same visual state as an in-page advance,
@@ -182,7 +183,7 @@ class DestinationCarousel
      *
      * @return \Illuminate\Support\Collection<int, CarouselSlide>
      */
-    public function slides(?string $slug = null): Collection
+    public function slides(string $slug): Collection
     {
         $active = $this->activeIndex($slug);
 
@@ -196,7 +197,7 @@ class DestinationCarousel
      * Index of a slug's first photograph in the canonical order, or 0 when the
      * destination is not in the stage.
      */
-    public function activeIndex(?string $slug): int
+    public function activeIndex(string $slug): int
     {
         if ($slug === null || $slug === '') {
             return 0;
@@ -237,7 +238,7 @@ class DestinationCarousel
      *
      * @return array{prev: ?array{slug: string, name: string, url: string}, next: ?array{slug: string, name: string, url: string}}
      */
-    public function neighbours(?string $slug = null): array
+    public function neighbours(string $slug): array
     {
         $order = $this->payload()['destinations'];
 

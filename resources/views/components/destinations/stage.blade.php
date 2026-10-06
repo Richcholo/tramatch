@@ -1,18 +1,23 @@
 {{--
     The destinations stage: one fanned carousel over photographs.
 
-    THE SPINE. Rendered by `/destinations` and by every `/destinations/{slug}`,
-    from the same presenter and the same order, differing only in which photograph
-    is active. That is the entire continuity feature: the stage on a destination
-    page IS the index stage with the index shifted, so the two cannot drift.
+    THE STAGE. The opening of the destination page, and nothing else.
 
-    A DARK SLAB ON A WARM PAGE, and that relationship is the composition. The page
-    surface is Palawan Sand and the stage is a Deep Volcanic Teal theatre slab --
-    the loudest, darkest element on the page, not a band in it. Everything on the
-    stage is therefore light-on-dark: Island White and Boracay Light text, gold as
-    an accent only. Nothing gold or turquoise appears as small text on the sand
-    above the stage, because on sand gold is 1.8:1 and turquoise 2.9:1 and both
-    fail; on this teal the same gold is 8.7:1.
+    ONE ROUTE ONLY: `/destinations/{slug}`. It is deliberately NOT on
+    `/destinations`. The stage opens on the destination you have ARRIVED at, with
+    that destination's own photographs in the fan, so putting it on the listing
+    would march 65 destinations' photographs past above a grid of 9 of the same
+    destinations -- and its chevrons navigate away from the one page whose whole
+    purpose is to let you choose between them. There is no `?slide=` parameter
+    either, because there is no second route to centre.
+
+    A DARK SLAB ON A DARK GROUND, not a dark slab on paper. The destination page
+    is one continuous Deep Volcanic Teal surface from the nav bar down and this
+    sits on it, so every colour here is a light value on teal: Island White and
+    Boracay Light for text, gold as an accent (8.7:1 here, against 1.8:1 on the
+    sand surface this replaced). The slab separates from its own ground by depth
+    -- its blurred photographic backdrop, its radial vignette and its shadow --
+    rather than by hue.
 
     THE FAN DOES NOT MOVE BECAUSE OF PHP. Read the offset note in app.css first.
     `data-offset` is signed and relative to the active panel, and every geometric
