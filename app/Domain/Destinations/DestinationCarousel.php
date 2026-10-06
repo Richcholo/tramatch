@@ -12,31 +12,40 @@ use Illuminate\Support\Collection;
  *
  * Read by `/destinations/{slug}`, which is the ONLY route that renders the
  * stage. The stage is a fan of photographs that opens on the destination you
- * have arrived at; putting it on `/destinations` would march 65 destinations'
- * photographs past above a grid of 9 of the same destinations. So this is not a
- * two-page seam to keep in step -- it is the stage's only presenter, and there is
- * no second copy of the order anywhere.
+ * have arrived at; putting it on `/destinations` would put a fan of one
+ * destination's photographs above a grid of all of them, which is a caption
+ * for the wrong thing. So this is not a two-page seam to keep in step -- it is
+ * the stage's only presenter, and there is no second copy of the order anywhere.
  *
- * THE ORDER IS DESTINATIONS, THE SLIDES ARE PHOTOGRAPHS. Canonical order is
- * `sort_order`, then `name`; each destination then contributes its photographs in
- * a fixed sequence -- its hero photograph first, then its uploads in `sort_order`.
- * See `CarouselSlide` for why the slide is a photograph.
+ * THE STAGE HOLDS ONE DESTINATION. Its slides are that destination's own
+ * photographs and nothing else. It was built to fan across the whole catalogue
+ * first, which sounds like the richer idea and is the wrong one on this route:
+ * arriving somewhere and being shown a photograph of somewhere else, under this
+ * place's caption, is the failure the caption's one-slide rule exists to prevent
+ * and it cannot prevent it from across a destination boundary.
+ *
+ * THE ORDER IS THE MODEL'S. The hero photograph first, then the uploads in
+ * `sort_order`. See `CarouselSlide` for why a slide is a photograph and not a
+ * destination.
  *
  * `sort_order` ties across every existing row until somebody curates it, which is
- * why the secondary sort is `name` and not nothing: without it two requests in
- * the same page load could disagree about the order, and the caption would then
+ * why the secondary sort is `name` and not nothing: without it two requests in the
+ * same page load could disagree about the order, and the caption would then
  * name one destination over another's photograph.
  *
- * THE ACTIVE INDEX IS DERIVED FROM THE URL, never from component state. That is
- * what makes a hard page load land in the same visual state as an in-page advance,
- * and it is why deep links, Back/Forward and a shared link all replay correctly.
- * It resolves to the destination's FIRST photograph, so arriving on a destination
- * with three uploads lands on its hero rather than in the middle of its own set.
+ * THE ACTIVE INDEX IS DERIVED FROM THE URL, never from component state -- and it
+ * is always 0, because the hero photograph is always first. That is what makes a
+ * hard page load land in the same visual state as an in-page advance, and it is
+ * why deep links, Back/Forward and a shared link all replay correctly. It also
+ * means arriving on a destination with three uploads lands on its hero rather
+ * than in the middle of its own set.
  *
- * THE CACHE HOLDS ARRAYS OF SCALARS. See `CarouselSlide::toArray()`. The cache
- * driver is the database, entries are serialised, and they survive a deploy -- an
- * object graph would come back as `__PHP_INcomplete_Class` and, behind this
- * method's return type, take the page down instead of costing one rebuild.
+ * THE CACHE STILL HOLDS THE WHOLE CATALOGUE, AS ARRAYS OF SCALARS. Filtering it
+ * to one slug in memory is free and a query per page render would not be. See
+ * `CarouselSlide::toArray()` for why scalars: the cache driver is the database,
+ * entries are serialised, and they survive a deploy -- an object graph would come
+ * back as `__PHP_Incomplete_Class` and, behind this method's return type, take the
+ * page down instead of costing one rebuild.
  */
 class DestinationCarousel
 {
@@ -50,37 +59,47 @@ class DestinationCarousel
      */
     public const REACH = 2;
 
-    /**
-     * One cache key for both pages.
+/**
+     * One cache key for the whole catalogue's photographs.
      *
      * Versioned, because the payload SHAPE is part of the contract: a payload
      * written by an older version is rejected as a miss rather than
      * reconstructed from the wrong fields. Bumping the constant is therefore part
-     * of changing this class.
+     * of changing this class -- and it was bumped to `v2` when the stage stopped
+     * fanning across every destination and the `destinations` order list went with
+     * it, so a live `v1` entry is a miss rather than a silently wrong page.
+     *
+     * Still the WHOLE CATALOGUE even though a page only needs one destination's
+     * photographs. Filtering an in-memory array of scalars to one slug is free; a
+     * query per page render is not, and this is the read behind every destination
+     * page.
      *
      * Scoped by the is_active/is_featured pair, because the archived and
      * un-featured filters are part of what defines the collection -- a key that
      * omitted them would serve an archived destination to a visitor for up to ten
      * minutes after an admin archived one.
      */
-    private const CACHE_KEY = 'destinations.stage.v1';
+    private const CACHE_KEY = 'destinations.stage.v2';
+
 
     public function __construct(private readonly CacheRepository $cache) {}
 
-    /**
+/**
      * The cached payload, rebuilt on a miss or on an unexpected shape.
      *
-     * @return array{slides: array<int, array<string, mixed>>, destinations: array<int, array{slug: string, name: string, url: string}>}
+     * ONE KEY, `slides`, and the check is that it is an array. A payload carrying
+     * anything else is a MISS rather than something to trust with a shape guard
+     * bolted on afterwards, which is why the key is versioned: `v2` dropped the
+     * `destinations` list, and a `v1` entry would otherwise have been accepted
+     * while quietly carrying a key nothing reads.
+     *
+     * @return array{slides: array<int, array<string, mixed>>}
      */
     private function payload(): array
     {
         $cached = $this->cache->get(self::CACHE_KEY);
 
-        if (is_array($cached)
-            && isset($cached['slides'], $cached['destinations'])
-            && is_array($cached['slides'])
-            && is_array($cached['destinations'])
-        ) {
+        if (is_array($cached) && isset($cached['slides']) && is_array($cached['slides'])) {
             return $cached;
         }
 
@@ -92,7 +111,7 @@ class DestinationCarousel
     }
 
     /**
-     * @return array{slides: array<int, array<string, mixed>>, destinations: array<int, array{slug: string, name: string, url: string}>}
+     * @return array{slides: array<int, array<string, mixed>>}
      */
     private function build(): array
     {
@@ -107,8 +126,7 @@ class DestinationCarousel
                 'description', 'estimated_cost', 'budget_level',
             ]);
 
-        $slides = [];
-        $order = [];
+$slides = [];
 
         foreach ($destinations as $destination) {
             $photographs = $destination->stagePhotographs();
@@ -136,123 +154,74 @@ class DestinationCarousel
              * It is deliberately not dressed as a photograph: it never pretends to
              * be one, so it cannot read as a broken image, and the fan's rule that
              * every panel is a real photograph is not quietly broken either.
+             *
+             * THERE IS NO `destinations` KEY IN THE PAYLOAD ANY MORE. It held the
+             * canonical destination order for `neighbours()`, which existed only
+             * for the chevrons, which walked to other destinations. Nothing reads
+             * it now, and 65 rows of it in the cache is a cost with no return.
+             *
+             * Its removal is why the cache key is v2. A v1 entry would otherwise be
+             * accepted by the shape check, quietly, and this class would go on
+             * carrying a key nothing reads for as long as the entry lived.
              */
             $slides[] = CarouselSlide::fromDestination($destination, $photographs[0] ?? '')->toArray();
 
             foreach (array_slice($photographs, 1) as $photograph) {
                 $slides[] = CarouselSlide::fromDestination($destination, $photograph)->toArray();
             }
-
-            $order[] = [
-                'slug' => $destination->slug,
-                'name' => $destination->name,
-                'url' => route('destinations.show', $destination),
-            ];
         }
 
-        return ['slides' => $slides, 'destinations' => $order];
+        return ['slides' => $slides];
     }
 
     /**
-     * Every slide in canonical order, each stamped with its offset from the
-     * active index.
+     * This destination's photographs, in order, each stamped with its offset from
+     * the active index.
      *
-     * Every slide is returned, not a window. A window would have to be
-     * re-rendered as the fan advances, and the whole point is that advancing is a
-     * re-index rather than a re-layout -- the panels are already in the DOM and
-     * only their offset changes. Offsets beyond the reach render off-stage.
+     * ONE DESTINATION, NOT THE CATALOGUE. This is the second time this has been
+     * decided, and the first time was wrong in a way that was not obvious from the
+     * code.
      *
-     * Clamped, not wrapped. Wrapping sends a panel from far-left to near-right in
-     * one step, which is a visible pop; clamping means the fan thins out at each
-     * end the way a carousel should.
+     * The stage was built to fan across every featured destination, with the one
+     * you arrived at in the middle and the chevrons walking to the others. That
+     * reads as a feature in a spec and as a bug on the page: you arrive at Fort
+     * Santiago and the fan is holding a photograph of Aguinaldo Shrine, with the
+     * caption naming Fort Santiago and the backdrop showing Fort Santiago. Two
+     * different destinations on screen at once, both of them correct, which is the
+     * worst kind of wrong -- the kind nobody can report precisely.
+     *
+     * The fan is the page's opening. Its job is to show you THIS place: its hero
+     * photograph, then its uploads, in the order the model already fixes. The
+     * catalogue is one click away and it is a grid, which is the right shape for
+     * choosing between places.
+     *
+     * THE PAYLOAD IS STILL THE WHOLE CATALOGUE, cached once. Filtering an
+     * in-memory array of scalars down to one slug is free; a query per page render
+     * would not be. The build is unchanged.
+     *
+     * OFFSETS RESTART AT ZERO. With one destination's own photographs, the hero is
+     * the first and is therefore the active one -- which is what `data-stage-active`
+     * has always said, and what the URL already implies. A three-photograph
+     * destination is a fan of three: the hero centred, one upload either side.
      *
      * @return \Illuminate\Support\Collection<int, CarouselSlide>
      */
     public function slides(string $slug): Collection
     {
-        $active = $this->activeIndex($slug);
-
         return collect($this->payload()['slides'])
-            ->map(fn (array $row, int $index) => CarouselSlide::fromCache($row)?->withOffset($index - $active))
+            ->filter(fn (array $row) => ($row['slug'] ?? null) === $slug)
+            ->values()
+            ->map(fn (array $row, int $index) => CarouselSlide::fromCache($row)?->withOffset($index))
             ->filter()
             ->values();
     }
 
-    /**
-     * Index of a slug's first photograph in the canonical order, or 0 when the
-     * destination is not in the stage.
-     */
-    public function activeIndex(string $slug): int
-    {
-        if ($slug === null || $slug === '') {
-            return 0;
-        }
-
-        /*
-         * Read straight off the cached rows rather than through `CarouselSlide`.
-         * Rebuilding every slide to find one slug would be 260 objects built to
-         * answer a question the array can answer, and this runs before every
-         * render of both pages.
-         */
-        foreach ($this->payload()['slides'] as $index => $row) {
-            if (($row['slug'] ?? null) === $slug) {
-                return (int) $index;
-            }
-        }
-
-        return 0;
-    }
-
-    public function count(): int
-    {
-        return count($this->payload()['slides']);
-    }
-
-    /**
-     * The neighbouring DESTINATIONS, for the chevrons and rel=prev / rel=next.
+/**
+     * Forget the cached payload. Called whenever a destination or a photograph
+     * changes.
      *
-     * Neighbours rather than neighbouring slides, deliberately. A chevron is a
-     * "go there" affordance for the journey, so from a destination with three
-     * uploaded photographs it skips its own remaining two and offers the next
-     * destination. The dots are the control for moving through photographs in
-     * place, and having both is the point: one control walks the collection, the
-     * other walks one destination.
-     *
-     * Null at each end rather than wrapping, so a chevron can be omitted instead
-     * of silently cycling round.
-     *
-     * @return array{prev: ?array{slug: string, name: string, url: string}, next: ?array{slug: string, name: string, url: string}}
-     */
-    public function neighbours(string $slug): array
-    {
-        $order = $this->payload()['destinations'];
-
-        if ($order === [] || $slug === null || $slug === '') {
-            return ['prev' => null, 'next' => null];
-        }
-
-        $index = null;
-
-        foreach ($order as $position => $entry) {
-            if ($entry['slug'] === $slug) {
-                $index = $position;
-
-                break;
-            }
-        }
-
-        if ($index === null) {
-            return ['prev' => null, 'next' => null];
-        }
-
-        return [
-            'prev' => $index > 0 ? $order[$index - 1] : null,
-            'next' => $index < count($order) - 1 ? $order[$index + 1] : null,
-        ];
-    }
-
-    /**
-     * Forget the cached order. Called whenever a destination changes.
+     * The whole catalogue is one entry, so this is the only invalidation there is:
+     * there is no per-slug key to expire and no second model to remember.
      */
     public function forget(): void
     {

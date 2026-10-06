@@ -78,14 +78,48 @@ export default function destinationStage() {
         slides: [],
         matchScores: {},
 
+        /**
+         * The offsets the server rendered, read once in `init()` from
+         * `data-stage-start`. See `offsetOf()` for why they exist separately.
+         */
+        starts: [],
+
+        /**
+         * TRUE when the payload island could not be read, or does not describe the
+         * panels that were actually rendered.
+         *
+         * A distinct state rather than an error to swallow, because it changes what
+         * the component is ALLOWED to do: an unreadable payload must leave the stage
+         * exactly as the server rendered it, so autoplay does not start, no control
+         * moves the fan, and `offsetOf()` answers from `starts`. Everything keeps
+         * working and nothing shows the wrong photograph.
+         */
+        unreadable: false,
+
         panels: [],
         backdrops: [],
         shownBackdrop: null,
+        fan: null,
+
+        /**
+         * Drag state.
+         *
+         * `dragging` is only true past the dead zone, so it means "a gesture is
+         * underway", not "a pointer is down on the stage" -- otherwise a tap on a
+         * panel would light up the dragging class and change the cursor.
+         *
+         * `dragFrom` is the null sentinel for "not dragging at all", because 0 is a
+         * legitimate `clientX`.
+         */
+        dragging: false,
+        dragFrom: null,
+        dragDelta: 0,
+        suppressClick: false,
 
         reducedMotion: false,
         timers: { settle: null, autoplay: null, count: null },
 
-        init() {
+init() {
             const payload = this.readPayload();
 
             this.slides = payload.slides;
@@ -94,13 +128,49 @@ export default function destinationStage() {
             this.count = this.slides.length;
             this.interval = Number(this.$el.dataset.stageInterval) || this.interval;
             this.reach = Number(this.$el.dataset.stageReach) || this.reach;
-            this.index = clamp(Number(this.$el.dataset.stageActive) || 0, 0, Math.max(0, this.count - 1));
 
             this.reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
             this.panels = [...this.$el.querySelectorAll('[data-stage-panel]')];
             this.backdrops = [...this.$el.querySelectorAll('[data-stage-backdrop]')];
             this.shownBackdrop = this.backdrops.find((layer) => layer.classList.contains('is-shown')) || null;
+
+            /*
+             * THE SERVER'S OWN OFFSETS, captured before anything can rewrite them.
+             *
+             * `data-offset` is the LIVE attribute -- Alpine overwrites it on every
+             * index change -- so it cannot be read back as the starting state. Every
+             * panel therefore also carries `data-stage-start`, written once by PHP
+             * and never bound, and this reads those.
+             *
+             * It exists so that a stage which CANNOT READ ITS PAYLOAD leaves the
+             * stage exactly as the server rendered it, instead of re-indexing itself
+             * onto whatever happens to be panel zero. That failure was not
+             * theoretical: the payload island used to sit OUTSIDE the `x-data`
+             * element, so `readPayload()`'s `this.$el.querySelector` never found
+             * it, `count` came back 0, `index` clamped to 0, and the page showed the
+             * first destination's photographs under this destination's backdrop --
+             * with autoplay dead, every dot inert and no motion at all, and nothing
+             * reported anywhere.
+             *
+             * With this captured, an unreadable payload is a DEGRADED stage rather
+             * than a WRONG one: the fan stays where the server put it, the dots and
+             * the pause control are inert because there is nothing to move through,
+             * and the photograph in front of you is the right one.
+             */
+            this.starts = this.panels.map((panel) => Number(panel.dataset.stageStart));
+            this.unreadable = this.slides.length === 0 || this.starts.length !== this.slides.length;
+
+            /*
+             * Which panel the server put in the middle. Usually the same answer as
+             * `data-stage-active`, and asked separately because it is the only one
+             * available when the payload is unusable.
+             */
+            const centred = Math.max(0, this.starts.indexOf(0));
+
+            this.index = this.unreadable
+                ? centred
+                : clamp(Number(this.$el.dataset.stageActive) || 0, 0, Math.max(0, this.count - 1));
 
             /*
              * PUSH THE RENDERED STATE INTO STEP RATHER THAN TRUSTING IT.
@@ -113,21 +183,23 @@ export default function destinationStage() {
              * then `index` lands somewhere other than `data-stage-active`, and the fan
              * opens on a panel that was never given a photograph.
              *
-             * The same shape of fault is what made the width bug this file now sits
-             * beside so expensive: the markup was correct, every image URL answered
-             * 200, the stylesheet was correct, and only the computed reality was
-             * wrong. Asserting the state here costs three idempotent passes over a
-             * couple of hundred nodes and takes "the server thought so" off the
-             * critical path.
-             *
              * `syncNumbers()` and `syncMetrics()` are here for the same reason and
              * also settle the guest case: the match metric starts hidden and the two
              * numbers start on the opening slide's values, and both are re-asserted
              * from the same `active()` the caption reads.
+             *
+             * Skipped entirely when the payload was unusable, because every one of
+             * them reads `active()` -- which is `slides[index]`, and there are no
+             * slides. Re-asserting an empty state over a correct render is the one
+             * thing this whole block exists to prevent.
              */
-            this.syncImages();
-            this.syncNumbers();
-            this.syncMetrics();
+            if (!this.unreadable) {
+                this.syncImages();
+                this.syncNumbers();
+                this.syncMetrics();
+            }
+
+            this.bindDrag();
 
             this.announce();
             this.trackVisibility();
@@ -168,8 +240,22 @@ export default function destinationStage() {
          * `offsetOf`, not `offset`: the panel bindings call it with a literal index
          * and read no argument back, which keeps the attribute they write a pure
          * function of `index`.
+         *
+         * THE SERVER'S OFFSET, WHEN THERE IS NO PAYLOAD. `unreadable` is set once,
+         * in `init()`, when the island could not be read or does not match the
+         * rendered panels. Returning `starts[i]` then freezes the fan exactly where
+         * the server put it, instead of letting `index` fall to 0 and re-indexing
+         * every panel onto the first one in the DOM.
+         *
+         * That distinction is the whole point: a degraded stage and a WRONG stage
+         * look identical from outside, and only one of them is showing you a
+         * photograph of somewhere else.
          */
         offsetOf(i) {
+            if (this.unreadable) {
+                return Number.isFinite(this.starts[i]) ? this.starts[i] : 0;
+            }
+
             return i - this.index;
         },
 
@@ -201,6 +287,11 @@ export default function destinationStage() {
         // --- moving ----------------------------------------------------------
 
         go(next) {
+            // Nothing to move through, and moving would move it to the WRONG place.
+            if (this.unreadable) {
+                return;
+            }
+
             const target = clamp(next, 0, Math.max(0, this.count - 1));
 
             // A no-op on the current slide, so clicking the active dot does not
@@ -232,6 +323,205 @@ export default function destinationStage() {
 
         prev() {
             this.go(this.index - 1);
+        },
+
+        // --- dragging ---------------------------------------------------------
+
+        /**
+         * How far the fan must travel before a release commits to an advance.
+         *
+         * A DISTANCE, not a velocity, deliberately. Velocity needs a time sample,
+         * and a sample taken from a slow careful drag and from a fast flick across
+         * the same physical distance should not be able to disagree about what
+         * happened -- which they do constantly, because the flick has one pointer
+         * event and the drag has thirty. So a fast flick is judged on the ground it
+         * covered, like everything else.
+         *
+         * 15% of the fan's own width, with a floor, so the threshold scales with
+         * the panel and feels the same on a phone and on a desktop.
+         */
+        dragThreshold() {
+            return Math.max(48, (this.fan ? this.fan.offsetWidth : 640) * 0.15);
+        },
+
+        /**
+         * Listen for the gesture. Bound once, in `init()`, imperatively.
+         *
+         * Not through `x-on` attributes in the markup, because a drag needs
+         * `setPointerCapture` and a capture-phase click interceptor, and expressing
+         * those in attributes means either an `x-on` per panel or reaching for
+         * `$refs` and a custom directive. The listener is on the fan, so it is ONE
+         * listener for the whole stage however many photographs it holds.
+         */
+        bindDrag() {
+            if (this.unreadable || this.count < 2) {
+                return;
+            }
+
+            this.fan = this.$el.querySelector('[data-stage-fan]');
+
+            if (!this.fan) {
+                return;
+            }
+
+            this.fan.addEventListener('pointerdown', (event) => {
+                // A fresh press clears a stale suppression, so a gesture that ends
+                // without producing a click cannot eat the next real one.
+                this.suppressClick = false;
+
+                this.dragStart(event);
+            });
+
+            this.fan.addEventListener('pointermove', (event) => this.dragMove(event));
+            this.fan.addEventListener('pointerup', (event) => this.dragEnd(event));
+            this.fan.addEventListener('pointercancel', (event) => this.dragEnd(event));
+
+            /*
+             * A drag that ends over a panel must not ALSO follow that panel's link.
+             *
+             * CAPTURE phase, and on the stage rather than the fan. By the time the
+             * click event exists there is no drag left to cancel -- the gesture has
+             * already happened and the browser has already synthesised the click
+             * from the same pointer sequence. The only thing that can stop it is to
+             * intercept the click BEFORE it reaches the anchor, which means a
+             * capture-phase listener on an ancestor of that anchor.
+             * `stopPropagation` in the capture phase means the anchor never sees it.
+             *
+             * Without this, every drag that ends over a card navigates away from
+             * the page the visitor is looking at -- and on a touch screen, where
+             * releasing always lands on something, the gesture is simply unusable.
+             */
+            this.$el.addEventListener('click', (event) => {
+                if (!this.suppressClick) {
+                    return;
+                }
+
+                this.suppressClick = false;
+
+                event.preventDefault();
+                event.stopPropagation();
+            }, true);
+        },
+
+        dragStart(event) {
+            // Primary button only, so a right-click never starts a drag.
+            if (event.button !== 0 || this.unreadable) {
+                return;
+            }
+
+            this.dragging = false;
+            this.dragFrom = event.clientX;
+            this.dragDelta = 0;
+
+            /*
+             * CAPTURE THE POINTER ON THE FAN, not on the panel the press started
+             * on. The panels are narrow and the fan is wider than any of them, so a
+             * drag travelling more than a panel's width leaves the element the
+             * press landed on -- and without capture the browser stops delivering
+             * moves there, the gesture dies halfway, and the fan snaps back under
+             * a finger that is still moving.
+             */
+            this.fan.setPointerCapture(event.pointerId);
+
+            // A press is contact with the stage, whatever it turns into.
+            this.hold('drag');
+        },
+
+        dragMove(event) {
+            if (this.dragFrom === null) {
+                return;
+            }
+
+            const delta = event.clientX - this.dragFrom;
+
+            /*
+             * A 6px dead zone before the drag counts.
+             *
+             * Without it a plain tap is a zero-pixel drag: it flickers the
+             * `is-dragging` class, changes the cursor, takes the autoplay hold and
+             * releases it again, and on a touch screen competes with the browser's
+             * own tap gesture. Six pixels is below the tap threshold on every
+             * platform that has one, so a tap is never mistaken for a drag.
+             */
+            if (!this.dragging && Math.abs(delta) < 6) {
+                return;
+            }
+
+            if (!this.dragging) {
+                this.dragging = true;
+                this.fan.classList.add('is-dragging');
+            }
+
+            /*
+             * THE FAN IS THE ONLY THING THAT TRACKS THE POINTER. Every panel keeps
+             * its formation and its own `data-offset` for the whole gesture, so a
+             * release into an advance hands the movement to the CSS transition
+             * from a known origin instead of from wherever the pointer left off.
+             *
+             * `* 0.55` is RESISTANCE, not physics: the fan follows about half the
+             * pointer's travel, which keeps the gesture legible while making it
+             * impossible to pull a panel so far that a cancelled drag reads as a
+             * throw.
+             */
+            this.dragDelta = delta * 0.55;
+
+            this.fan.style.setProperty('--tm-drag-x', `${this.dragDelta}px`);
+        },
+
+        dragEnd() {
+            if (this.dragFrom === null) {
+                return;
+            }
+
+            this.dragFrom = null;
+
+            this.release('drag');
+
+            // A press that never cleared the dead zone was a click, not a drag.
+            if (!this.dragging) {
+                return;
+            }
+
+            this.dragging = false;
+            this.fan.classList.remove('is-dragging');
+
+            // Read the direction BEFORE the delta is cleared.
+            const travelled = Math.abs(this.dragDelta);
+            const forwards = this.dragDelta < 0;
+
+            /*
+             * The gesture is over and real, so the click the browser is about to
+             * synthesise from this same pointer sequence must not also navigate.
+             */
+            this.suppressClick = true;
+            this.dragDelta = 0;
+
+            /*
+             * HOME THE FAN FIRST, in both branches.
+             *
+             * `.tm-fan`'s `transform` transition is suppressed by `is-dragging`,
+             * which has just been removed, so this re-centre is instant in a commit
+             * and eased in a cancel -- and either way it happens BEFORE the panels
+             * start animating, so the two movements are sequential rather than
+             * running over the same pixels at once.
+             *
+             * Only the custom property changes here. `--tm-drag-x` feeds a
+             * transitioned `transform`, and the transition applies to the resolved
+             * value, so no `@property` registration is needed and none of this
+             * needs a second frame to settle.
+             */
+            this.fan.style.setProperty('--tm-drag-x', '0px');
+
+            if (travelled < this.dragThreshold()) {
+                // Too short to commit: a cancel. The fan eases home on its own.
+                return;
+            }
+
+            if (forwards) {
+                this.next();
+            } else {
+                this.prev();
+            }
         },
 
         scheduleSettle() {
@@ -428,7 +718,11 @@ export default function destinationStage() {
          * back in forever, for no reason.
          */
         autoplayable() {
-            return this.count > 1 && !this.paused && this.held.length === 0 && !document.hidden;
+            return this.count > 1
+                && !this.unreadable
+                && !this.paused
+                && this.held.length === 0
+                && !document.hidden;
         },
 
         scheduleAutoplay() {

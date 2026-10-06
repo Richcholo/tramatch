@@ -33,7 +33,7 @@
          * everything else.
          */
     --}}
-    <div class="tm-page -mx-5 -my-10 px-5 py-10 sm:-mx-8 sm:px-8 lg:-mx-8 lg:px-12">
+    <div class="tm-page -mx-5 -my-10 px-5 py-10 sm:-mx-8 sm:px-8 lg:-mx-12 lg:px-12">
         {{--
             THE OPENING SCREEN. Heading, filtered bar and stage, filling what is
             left of the first viewport below the nav bar.

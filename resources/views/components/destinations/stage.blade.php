@@ -35,11 +35,7 @@
     @json, not a hand-written json_encode: it applies JSON_HEX_TAG, which is what
     keeps a destination name containing `</script>` from closing this element.
 
-    @param  \App\Domain\Destinations\CarouselSlide[]  $stageSlides
-    @param  int  $stageActiveIndex
-    @param  array  $stageNeighbours
-    @param  array<int, float>  $stageMatchScores
-    @param  int  $stageInterval
+@param  int  $stageInterval
 --}}
 
 @php
@@ -145,8 +141,8 @@
             {{-- The caption. Stage-level, never a child of a panel. --}}
             @include('components.destinations.stage-caption')
 
-            {{-- The chevrons, pinned to the stage's own edges. --}}
-            @include('components.destinations.stage-chevrons', ['stageNeighbours' => $stageNeighbours])
+            {{-- The chevrons, pinned to the stage's own edges. They move the fan now. --}}
+            @include('components.destinations.stage-chevrons', ['stageCount' => $count])
 
             {{--
                 Dots plus the mandated pause control.
@@ -177,11 +173,41 @@
                 aria-atomic="true"
                 x-text="announcement"
             ></p>
-        </section>
-    @endif
 
-    {{-- Read once by the script. Outside the empty branch: no stage, no data. --}}
-    @if ($count > 0)
-        <script type="application/json" data-stage-data>@json($stagePayload)</script>
+            {{--
+                THE PAYLOAD ISLAND, AND IT MUST BE INSIDE THE `x-data` SCOPE.
+
+                `readPayload()` reads it with `this.$el.querySelector(...)`, and
+                `$el` is this `<section>`. An element outside the section is not in
+                that subtree, so the query returns null, `.textContent` throws, and
+                the `catch` in the script returns `slides: []`.
+
+                That failure is SILENT and it is total. `count` becomes 0, `index`
+                clamps to 0, and the fan re-indexes itself onto slide 0 -- the first
+                destination in the catalogue -- while the caption, the backdrop and
+                the server-rendered offsets all still describe the destination you
+                actually asked for. Observed exactly this way: one destination's
+                photographs under another destination's backdrop, autoplay never
+                starting (`autoplayable()` needs `count > 1`), every dot clamping to
+                0 and doing nothing, and no motion at all because the offsets had
+                been rewritten to 0, 1, 2 and then never changed again.
+
+                A stage whose script cannot read its data must leave the stage as
+                rendered. `readPayload()` still warns, and `offsetOf()` now falls
+                back to the server's own offsets when the payload is unusable, but
+                the fix is structural: the island is a child of the component that
+                reads it, so the subtree it searches is the subtree it lives in.
+
+                It is last in the section, after the live region, so it cannot
+                affect the fan's geometry or paint order. A `script` is
+                `display: none` from the UA stylesheet, so it costs no layout
+                wherever it sits.
+
+                @json, not a hand-written json_encode: it applies JSON_HEX_TAG,
+                which is what keeps a destination name containing `</script>` from
+                closing this element.
+            --}}
+            <script type="application/json" data-stage-data>@json($stagePayload)</script>
+        </section>
     @endif
 </div>

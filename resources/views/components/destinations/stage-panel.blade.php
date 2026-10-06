@@ -36,6 +36,21 @@
     {{-- Read by the script to build the live-region announcement. --}}
     data-stage-name="{{ $slide->name }}"
     data-stage-region="{{ $slide->province }}"
+    {{--
+        The server's offset, under a name the script NEVER writes.
+
+        `data-offset` is the live attribute and Alpine overwrites it on every
+        index change, so it cannot be read back as the starting state. This one
+        is written once by PHP and never bound, and that is what lets the script
+        fall back to exactly what the server rendered if it cannot read its own
+        payload.
+
+        A stage that cannot read its data must leave the stage as it found it.
+        Without this, an unreadable island makes `index` clamp to 0 and the fan
+        re-index itself onto the first panel in the DOM, which is a different
+        photograph entirely, under the correct destination's caption.
+    --}}
+    data-stage-start="{{ $slide->offset }}"
     x-bind:data-offset="offsetOf({{ $index }})"
     
     x-bind:data-far="offsetOf({{ $index }}) > {{ $reach }} || offsetOf({{ $index }}) < -{{ $reach }} ? '' : null"

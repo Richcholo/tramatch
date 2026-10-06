@@ -1,52 +1,56 @@
 {{--
-    The stage chevrons: the "go there" controls, on the stage's own edges.
+    The stage chevrons: the arrow controls, on the stage's own edges.
 
-    LINKS, NOT BUTTONS. They navigate to a neighbouring DESTINATION's page, which
-    is why they are anchors: they work with JavaScript disabled, they are
-    middle-clickable and openable in a new tab, and the browser shows the
-    destination in the status bar -- none of which is true of a button.
+    BUTTONS NOW, AND THEY MOVE THE FAN. They used to be links to a neighbouring
+    DESTINATION's page, which was right while the stage fanned across the whole
+    catalogue and wrong the moment it stopped. A chevron that navigates off the
+    page you are reading, in a control shaped exactly like the ones that move the
+    pictures in front of you, is a control that lies about what it does.
 
-    NEIGHBOURS, NOT NEIGHBOURING SLIDES. From a destination with three uploaded
-    photographs these skip its own remaining two and offer the next destination.
-    The dots are the control for moving through photographs in place; having both
-    is the point, because they answer different questions -- "take me to the next
-    place" and "show me the next picture of this one".
+    So they are the same action as the dots, the drag and the arrow keys, with
+    three real advantages over all of them: they are the biggest target on the
+    stage, they are reachable without touching the photographs, and they are
+    visible to someone who has not worked out that the fan can be dragged at all.
 
-    OMITTED AT EACH END RATHER THAN DISABLED. There is no wrap-around, so at the
-    first destination there is no previous one, and a permanently disabled control
-    is a dead control. Omitting it also keeps the caption clear of an arrow.
+    RENDERED UNCONDITIONALLY, and hidden from assistive technology at the ends
+    rather than omitted. This is the opposite of what they used to do, and the
+    reason is the drag: a control that vanishes at each end makes the stage look
+    different as it moves, and a keyboard user's focus can be sitting on a button
+    that is about to stop existing. They stay mounted, keep their position, and
+    carry `disabled` plus `aria-hidden` when there is nowhere to go. `inert` is
+    not used because it is not universal enough to rely on alone.
 
     Pinned to the stage's left and right EDGES at its vertical middle, which is
     where a thumb expects them and keeps them off the photographs. The 44px box
     is the hit area and the glyph is smaller, so the control does not crowd a
     320px panel.
 
-    @param  array{prev: ?array{slug: string, name: string, url: string}, next: ?array{slug: string, name: string, url: string}}  $stageNeighbours
+    @param  int  $stageCount
 --}}
 
-@if ($stageNeighbours['prev'] || $stageNeighbours['next'])
+@if (($stageCount ?? 0) > 1)
     <div class="tm-stage__chevrons">
         @foreach (['prev' => 'Previous', 'next' => 'Next'] as $side => $word)
-            @if ($stageNeighbours[$side])
-                <a
-                    href="{{ $stageNeighbours[$side]['url'] }}"
-                    rel="{{ $side }}"
-                    data-stage-chevron="{{ $side }}"
-                    aria-label="{{ $word }} destination: {{ $stageNeighbours[$side]['name'] }}"
-                    class="tm-stage__chevron tm-stage__chevron--{{ $side }}"
-                >
-                    <svg viewBox="0 0 24 24" aria-hidden="true" class="tm-stage__chevron-glyph">
-                        <path
-                            d="{{ $side === 'prev' ? 'M15 5l-7 7 7 7' : 'M9 5l7 7-7 7' }}"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="1.75"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                        ></path>
-                    </svg>
-                </a>
-            @endif
+            <button
+                type="button"
+                data-stage-chevron="{{ $side }}"
+                x-on:click="{{ $side === 'prev' ? 'prev()' : 'next()' }}"
+                x-bind:disabled="index {{ $side === 'prev' ? '===' : '>=' }} 0 ? true : {{ $side === 'prev' ? 'count - 1' : 'count' }}"
+                x-bind:aria-hidden="{{ $side === 'prev' ? 'index === 0' : 'index === count - 1' }}"
+                aria-label="{{ $word }} photograph"
+                class="tm-stage__chevron tm-stage__chevron--{{ $side }} tm-stage__chevron--{{ $side }}-on"
+            >
+                <svg viewBox="0 0 24 24" aria-hidden="true" class="tm-stage__chevron-glyph">
+                    <path
+                        d="{{ $side === 'prev' ? 'M15 5l-7 7 7 7' : 'M9 5l7 7-7 7' }}"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.75"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                    ></path>
+                </svg>
+            </button>
         @endforeach
     </div>
 @endif

@@ -560,16 +560,27 @@ class DestinationGalleryTest extends TestCase
         $this->assertStringNotContainsString('src=""', $markup);
     }
 
-    /**
-     * Every featured destination appears in the stage at least once.
+/**
+     * Every featured destination GETS A STAGE, and none of them gets an empty one.
      *
-     * The invariant behind the plate above: whether a destination is in the stage
-     * is decided by `is_active` and `is_featured` and by nothing else -- not by
-     * whether anyone has uploaded a photograph for it. A curation flag that
-     * silently drops rows is not curation.
+     * The invariant behind the typographic plate: whether a destination has
+     * anything to show is decided by `is_active` and `is_featured` and by nothing
+     * else -- not by whether anyone has uploaded a photograph for it. A curation
+     * flag that silently drops rows is not curation.
+     *
+     * IT IS ASSERTED ONE DESTINATION AT A TIME, and that is the shape change this
+     * test had to absorb. `slides()` filters the cached payload down to the slug
+     * it is given, so asking for `no-photo` and expecting `with-photo` back in the
+     * same collection is asking for the old behaviour -- where the stage fanned
+     * across every featured destination and one call returned them all.
+     *
+     * Reading it the old way would have "passed" for the wrong reason if the
+     * filter had silently stopped filtering. Asking each destination for its own
+     * stage and requiring all three to be non-empty cannot: an empty stage for any
+     * one of them fails, which is exactly the bug the plate exists to prevent.
      */
     #[Test]
-    public function every_featured_destination_appears_in_the_stage_at_least_once(): void
+    public function every_featured_destination_gets_a_stage_at_least_once(): void
     {
         $this->destination([
             'name' => 'With Photo',
@@ -597,24 +608,31 @@ class DestinationGalleryTest extends TestCase
             'is_featured' => false,
         ]);
 
-        $slugs = app(\App\Domain\Destinations\DestinationCarousel::class)
-            ->slides('no-photo')
-            ->map->slug
-            ->unique()
-            ->all();
+        $carousel = app(\App\Domain\Destinations\DestinationCarousel::class);
 
         foreach (['with-photo', 'no-photo', 'also-none'] as $slug) {
-            $this->assertContains(
-                $slug,
-                $slugs,
-                $slug.' is active and featured but missing from the stage. A destination\'s '
+            $slides = $carousel->slides($slug);
+
+            $this->assertNotEmpty(
+                $slides,
+                $slug.' is active and featured but has an EMPTY stage. A destination\'s '
                 .'presence is decided by is_active and is_featured, not by whether a '
                 .'photograph has been uploaded for it.'
+            );
+
+            $this->assertSame(
+                [$slug],
+                $slides->map->slug->unique()->values()->all(),
+                $slug.'\'s stage has picked up a photograph belonging to another destination'
             );
         }
 
         foreach (['archived', 'unfeatured'] as $slug) {
-            $this->assertNotContains($slug, $slugs, $slug.' is not publishable and should not be in the stage');
+            $this->assertCount(
+                0,
+                $carousel->slides($slug),
+                $slug.' is not publishable and should have no stage at all'
+            );
         }
     }
 

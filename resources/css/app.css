@@ -766,16 +766,30 @@
          * looks like. **Any `margin-*: auto` on a flex item needs a definite width
          * next to it.**
          *
-         * `width: 100%` + `max-width: 68rem` + `margin-inline: auto` is the pattern
-         * that is correct in both contexts: a definite size, the max-width capping
-         * it, then the auto margins centring the leftover.
+         * `width: 100%` + `margin-inline: auto` is the pattern that is correct in
+         * both contexts: a definite size, then the auto margins centring whatever is
+         * left over.
          *
-         * The `max-width` cap lives HERE, on the container, deliberately: it is what
-         * keeps `--u` at or below 1px, and so keeps the geometry from growing past
-         * the composition on a wide page.
+         * THERE IS NO MAX-WIDTH HERE NOW, and the `--u` cap moved with it.
+         *
+         * The stage used to be capped at 68rem so that `--u` could not exceed 1px,
+         * which kept the composition from growing past its reference on a wide page.
+         * But a capped stage on an uncapped page is a small dark object floating in
+         * a field of the same dark colour, and at a 1600px content width that is
+         * most of the screen doing nothing. It read as a layout that had not been
+         * finished.
+         *
+         * So the stage now fills its container, `--u` grows with it, and the
+         * composition scales up as one piece -- which is what `--u` was built to do.
+         * The bound did not disappear, it MOVED: `main` is capped at
+         * `max-w-[1600px]` in `layouts/app.blade.php`, so the container can never
+         * exceed that and `--u` tops out around 1.35. The stage can no longer grow
+         * without the page around it growing first.
+         *
+         * That cap is load-bearing and it is easy to move by accident. It is
+         * asserted by `the_stage_grows_with_its_container_and_main_bounds_it`.
          */
         width: 100%;
-        max-width: 68rem;
         margin-inline: auto;
         container-type: inline-size;
 
@@ -873,6 +887,44 @@
         z-index: 2;
         height: calc(660 * var(--u));
         perspective: calc(1600 * var(--u));
+
+        /*
+         * THE DRAG.
+         *
+         * `--tm-drag-x` is written by the script as the pointer travels, and it
+         * feeds this `transform` and nothing else. It is a plain custom property
+         * rather than a directly-assigned `transform` for two reasons: the script
+         * never has to know the fan's own geometry, and the CANCEL case gets the
+         * transition for free -- setting it back to `0px` eases home, because the
+         * transition applies to the RESOLVED `transform` value. No `@property`
+         * registration is needed for that, and no second frame has to be waited on.
+         *
+         * `translate3d` rather than `translate` so the fan is composited and the
+         * gesture does not relayout the panels on every pointermove.
+         *
+         * `touch-action: pan-y` is the load-bearing part on a touch screen. It tells
+         * the browser "you may scroll this vertically, but horizontal movement is
+         * mine", which is what stops the page from scrolling sideways out from
+         * under a swipe and what stops the browser from waiting to see whether a
+         * touch is a scroll before delivering any pointermove at all. Without it a
+         * swipe on a phone is a coin toss between a scroll and a carousel.
+         */
+        transform: translate3d(var(--tm-drag-x, 0px), 0, 0);
+        transition: transform 260ms var(--ease-out);
+        touch-action: pan-y;
+    }
+
+    /*
+     * While a gesture is actually underway -- not merely while a pointer is down,
+     * which is what `dragging` means in the script too.
+     *
+     * The transition comes off so the fan tracks the pointer rather than lagging
+     * behind it, and comes back the moment `is-dragging` is removed so a cancelled
+     * drag eases home and a committed one hands over cleanly.
+     */
+    .tm-fan.is-dragging {
+        transition: none;
+        cursor: grabbing;
     }
 
     .tm-fan-panel {

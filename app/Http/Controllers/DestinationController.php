@@ -99,10 +99,9 @@ class DestinationController extends Controller
          */
         $stage = $this->stage($destination->slug);
 
-        return view('destinations.show', [
+return view('destinations.show', [
             'stageSlides' => $stage['slides'],
             'stageActiveIndex' => $stage['activeIndex'],
-            'stageNeighbours' => $stage['neighbours'],
             'stageMatchScores' => $stage['matchScores'],
             'stageInterval' => self::STAGE_INTERVAL_MS,
             'destination' => $destination,
@@ -117,24 +116,34 @@ class DestinationController extends Controller
         ]);
     }
 
-    /**
+/**
      * Everything the destinations stage needs, for its one route.
      *
      * The stage lives on `/destinations/{slug}` ONLY, so this is a single call
-     * rather than a shared seam. It is still one method because the four things it
-     * resolves are four things the component cannot work without, and a view that
+     * rather than a shared seam. It is still one method because the three things it
+     * resolves are three things the component cannot work without, and a view that
      * reaches for any of them directly is a second source of truth.
      *
-     * @return array{slides: \Illuminate\Support\Collection, activeIndex: int, neighbours: array{prev: ?array, next: ?array}, matchScores: array<int, float>}
+     * `activeIndex` is always 0 and is passed as a literal rather than asked of
+     * the carousel. There used to be an `activeIndex($slug)` method that searched
+     * the whole catalogue for a slug's first photograph, and it was genuinely
+     * non-trivial while the stage fanned across every destination. Now the slides
+     * ARE one destination's own photographs in order, so the first one is the
+     * active one by definition and a method that searched for it would be
+     * re-deriving an index it cannot get wrong.
+     *
+     * There is no `neighbours` key any more either. The chevrons walked to the
+     * neighbouring DESTINATION, which only meant anything when the fan did too;
+     * they now move through this destination's photographs, like the dots, the
+     * drag and the keyboard.
+     *
+     * @return array{slides: \Illuminate\Support\Collection, activeIndex: int, matchScores: array<int, float>}
      */
     private function stage(string $slug): array
     {
-        $carousel = app(DestinationCarousel::class);
-
         return [
-            'slides' => $carousel->slides($slug),
-            'activeIndex' => $carousel->activeIndex($slug),
-            'neighbours' => $carousel->neighbours($slug),
+            'slides' => app(DestinationCarousel::class)->slides($slug),
+            'activeIndex' => 0,
             'matchScores' => $this->stageMatchScores(),
         ];
     }

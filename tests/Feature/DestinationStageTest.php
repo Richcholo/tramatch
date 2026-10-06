@@ -105,18 +105,40 @@ class DestinationStageTest extends TestCase
     }
 
     /**
-     * The whole stage, as it renders for the first destination in canonical
-     * order.
+     * An uploaded photograph on a destination, which is what a "slide" is.
      *
-     * `slides()` requires a slug because its only caller is `show`, and there is
-     * exactly one route that renders the stage. Tests about the COLLECTION rather
-     * than about one destination's position go through here, so none of them has
-     * to invent a slug -- and the first destination in canonical order is the one
-     * whose offsets the collection-level assertions are actually about.
+     * A helper because the stage is about photographs grouped per destination and
+     * every test that means anything has to build a set of them. `sort_order`
+     * defaults to 0, which is the value every real row carries until somebody
+     * curates it, so a test that wants a particular order has to say so.
+     */
+    private function photograph(Destination $destination, string $path, int $sortOrder = 0): DestinationImage
+    {
+        return DestinationImage::create([
+            'destination_id' => $destination->id,
+            'path' => $path,
+            'sort_order' => $sortOrder,
+        ]);
+    }
+
+    /**
+     * The stage for the first PUBLISHED destination in canonical order.
+     *
+     * `slides()` filters the cached payload down to one slug, so this helper has
+     * to hand it a slug that is actually IN that payload. It used to pick the
+     * first destination of any kind, which worked only while `slides()` returned
+     * the whole catalogue and ignored the slug entirely -- hand it an archived
+     * destination now and it correctly returns nothing, which reads as a bug
+     * until you remember the helper is asking for the wrong thing.
+     *
+     * `where('is_active', true)` rather than assuming the first row is published:
+     * the tests that archive a destination and then ask what the stage holds are
+     * exactly the ones that would otherwise silently assert nothing.
      */
     private function stage(): Collection
     {
         $first = Destination::query()
+            ->where('is_active', true)
             ->orderBy('sort_order')
             ->orderBy('name')
             ->value('slug');
@@ -128,139 +150,572 @@ class DestinationStageTest extends TestCase
     // The order. One query, one order, both pages.
     // =====================================================================
 
-    /**
-     * Photographs are grouped BY DESTINATION, and a destination's own photographs
-     * run together with its hero photograph first.
+/**
+     * THE STAGE HOLDS ONE DESTINATION'S PHOTOGRAPHS AND NOTHING ELSE.
      *
-     * This is the shape decision the whole stage rests on, so it is pinned here
-     * rather than described in a comment and hoped for: if the flattening ever
-     * interleaves two destinations' photographs, the caption's fields stop
-     * describing one place and the stage quietly starts lying.
+     * It used to fan across every featured destination with this one in the middle,
+     * which sounds like the richer idea and is the wrong one on this route. You
+     * arrive somewhere and the fan is holding a photograph of somewhere else,
+     * with this destination's caption over it. Two places on screen at once, both
+     * of them rendering correctly -- which is the worst kind of wrong, because it
+     * cannot be described precisely enough to be reported.
+     *
+     * The caption's rule that every field is read off ONE slide cannot prevent
+     * that from across a destination boundary. The stage has to not do it.
      */
     #[Test]
-    public function slides_are_grouped_by_destination_with_the_hero_photograph_first(): void
+    public function the_stage_holds_this_destinations_photographs_and_nobody_elses(): void
     {
-        $first = $this->destination([
+        $alpha = $this->destination([
             'name' => 'Alpha',
             'slug' => 'alpha',
             'image_url' => 'https://images.example.com/alpha-hero.jpg',
         ]);
 
-        DestinationImage::create([
-            'destination_id' => $first->id,
-            'path' => 'https://images.example.com/alpha-1.jpg',
-            'sort_order' => 0,
-        ]);
+        $this->photograph($alpha, 'https://images.example.com/alpha-1.jpg');
 
-        $this->destination([
+        $beta = $this->destination([
             'name' => 'Beta',
             'slug' => 'beta',
             'image_url' => 'https://images.example.com/beta-hero.jpg',
         ]);
+
+        $this->photograph($beta, 'https://images.example.com/beta-1.jpg');
+
+        $carousel = app(DestinationCarousel::class);
 
         $this->assertSame(
             [
                 'https://images.example.com/alpha-hero.jpg',
                 'https://images.example.com/alpha-1.jpg',
-                'https://images.example.com/beta-hero.jpg',
             ],
-            $this->stage()->map->imageUrl->all()
+            $carousel->slides('alpha')->map->imageUrl->all(),
+            "Alpha's stage has picked up a photograph that is not Alpha's"
         );
-    }
-
-    /**
-     * `sort_order`, then `name`.
-     *
-     * The secondary sort is not decoration. `sort_order` defaults to 0 for every
-     * existing row, so with no secondary key two requests in the same page load
-     * could disagree about the order -- and the fan on a destination page has to
-     * be the index fan with the index shifted, so a disagreement means the two
-     * pages show different things for the same destination.
-     */
-    #[Test]
-    public function the_order_is_sort_order_then_name(): void
-    {
-        $this->destination(['name' => 'Zulu', 'slug' => 'zulu', 'sort_order' => 5]);
-        $this->destination(['name' => 'Bravo', 'slug' => 'bravo', 'sort_order' => 5]);
-        $this->destination(['name' => 'Alpha', 'slug' => 'alpha', 'sort_order' => 1]);
 
         $this->assertSame(
-            ['Alpha', 'Bravo', 'Zulu'],
-            $this->stage()->map->name->all()
+            [
+                'https://images.example.com/beta-hero.jpg',
+                'https://images.example.com/beta-1.jpg',
+            ],
+            $carousel->slides('beta')->map->imageUrl->all(),
+            'each destination must get its OWN stage rather than a shared one'
         );
     }
 
     /**
-     * A destination page opens on that destination's FIRST photograph.
+     * Within one destination: the hero photograph first, then uploads in
+     * `sort_order`.
      *
-     * Not merely "a photograph of it": the first one. Landing in the middle of a
-     * destination's own set is disorienting, and it would mean the hero
-     * photograph -- the one the page is about -- is never the one on screen.
+     * The hero is first because it is the photograph the page is about, and it is
+     * the one the LCP candidate budget is spent on. The uploads follow the order
+     * an admin chose by dragging them, which is `sort_order`.
+     *
+     * Note that the SECONDARY destination sort (`sort_order`, then `name`) is no
+     * longer observable on this route and is not asserted here: it orders the
+     * cached payload, and the payload is filtered down to one slug before a slide
+     * is ever returned. It still matters, because two requests in the same page
+     * load must agree on the payload they are both filtering.
      */
     #[Test]
-    public function the_active_index_is_the_destinations_first_photograph(): void
+    public function a_destinations_own_photographs_run_hero_first_then_in_sort_order(): void
     {
-        $first = $this->destination([
+        $alpha = $this->destination([
             'name' => 'Alpha',
             'slug' => 'alpha',
             'image_url' => 'https://images.example.com/alpha-hero.jpg',
         ]);
 
-        DestinationImage::create([
-            'destination_id' => $first->id,
-            'path' => 'https://images.example.com/alpha-1.jpg',
-            'sort_order' => 0,
-        ]);
+        // Created out of order on purpose: `sort_order` decides, not creation order.
+        $this->photograph($alpha, 'https://images.example.com/alpha-3.jpg', 30);
+        $this->photograph($alpha, 'https://images.example.com/alpha-1.jpg', 10);
+        $this->photograph($alpha, 'https://images.example.com/alpha-2.jpg', 20);
 
-        $this->destination([
-            'name' => 'Beta',
-            'slug' => 'beta',
-            'image_url' => 'https://images.example.com/beta-hero.jpg',
-        ]);
-
-        $carousel = app(DestinationCarousel::class);
-
-        $this->assertSame(0, $carousel->activeIndex('alpha'));
-        $this->assertSame(2, $carousel->activeIndex('beta'));
-
-        $slides = $carousel->slides('beta');
-
-        $this->assertSame(0, $slides[2]->offset);
-        $this->assertTrue($slides[2]->isActive);
-        $this->assertSame(-2, $slides[0]->offset);
+        $this->assertSame(
+            [
+                'https://images.example.com/alpha-hero.jpg',
+                'https://images.example.com/alpha-1.jpg',
+                'https://images.example.com/alpha-2.jpg',
+                'https://images.example.com/alpha-3.jpg',
+            ],
+            app(DestinationCarousel::class)->slides('alpha')->map->imageUrl->all()
+        );
     }
 
     /**
-     * Offsets are signed, relative and clamped to the reach -- never wrapped.
+     * OFFSETS RESTART AT ZERO, so the fan opens ONE-SIDED.
      *
-     * Wrapping sends a panel from far-left to near-right in one step, which is a
-     * visible pop. Clamping means the fan thins out at each end.
+     * This is the honest consequence of two decisions arriving together, and it is
+     * worth stating plainly because it looks like a bug in a screenshot.
+     *
+     *   - the hero photograph is always the active one, so the stage opens on the
+     *     photograph the page is about, and
+     *   - offsets are `index - 0`, so everything else is to the RIGHT.
+     *
+     * There is nothing to the left because there is no earlier photograph of this
+     * destination. A fan that wrapped, or that centred the middle photograph and
+     * opened on an upload instead of the hero, would be symmetrical and would be
+     * lying about which picture you arrived at.
+     *
+     * So a three-photograph destination opens as: hero centred, second to its
+     * right, third further right. Which is the ordinary arrangement for a
+     * "current and what follows" carousel.
+     *
+     * There is no negative offset on this route, and that is the point to assert:
+     * a negative one would mean another destination's photograph had crept in.
      */
     #[Test]
-    public function offsets_are_signed_relative_and_clamped(): void
+    public function the_hero_photograph_is_active_and_the_offsets_restart_at_zero(): void
     {
-        $this->destination(['name' => 'Alpha', 'slug' => 'alpha']);
-        $this->destination(['name' => 'Bravo', 'slug' => 'bravo']);
-        $this->destination(['name' => 'Zulu', 'slug' => 'zulu']);
+        $alpha = $this->destination([
+            'name' => 'Alpha',
+            'slug' => 'alpha',
+            'image_url' => 'https://images.example.com/alpha-hero.jpg',
+        ]);
 
-        $slides = app(DestinationCarousel::class)->slides('bravo');
+        $this->photograph($alpha, 'https://images.example.com/alpha-1.jpg');
+        $this->photograph($alpha, 'https://images.example.com/alpha-2.jpg');
 
-        $this->assertSame([-1, 0, 1], $slides->map->offset->all());
+        $slides = app(DestinationCarousel::class)->slides('alpha');
 
-        $atTheEnd = app(DestinationCarousel::class)->slides('zulu');
+        $this->assertSame([0, 1, 2], $slides->map->offset->all());
+
+        $this->assertTrue($slides[0]->isActive, 'the hero photograph must be the active one');
+        $this->assertFalse($slides[1]->isActive);
+        $this->assertFalse($slides[2]->isActive);
+
+        $this->assertGreaterThanOrEqual(
+            0,
+            $slides->map->offset->min(),
+            'a negative offset means a photograph from BEFORE this destination\'s own set, '
+            .'which is another destination\'s picture'
+        );
+    }
+
+    /**
+     * A photograph past the reach is marked `data-far`, NOT removed and NOT wrapped.
+     *
+     * All five stay in the DOM so the cascade has somewhere to come from, and the
+     * two beyond the reach are pushed off-stage by CSS. Wrapping would send the
+     * fifth from far-right to far-left in one step, which is a visible pop.
+     *
+     * Five photographs also exercises the outer pair of the formation for the only
+     * time on this route: a destination with three uploads is offsets 0, 1 and 2,
+     * so the left flank and the two `-2` rules are dead code at that size and only
+     * mean anything once somebody uploads a fourth and fifth.
+     */
+    #[Test]
+    public function a_photograph_past_the_reach_is_rendered_far_and_never_dropped(): void
+    {
+        $alpha = $this->destination([
+            'name' => 'Alpha',
+            'slug' => 'alpha',
+            'image_url' => 'https://images.example.com/alpha-hero.jpg',
+        ]);
+
+        foreach (range(1, 4) as $n) {
+            $this->photograph($alpha, "https://images.example.com/alpha-{$n}.jpg", $n * 10);
+        }
+
+        $carousel = app(DestinationCarousel::class);
+        $slides = $carousel->slides('alpha');
+
+        $this->assertCount(5, $slides, 'a photograph beyond the reach must still be a slide');
+
+        $this->assertSame([0, 1, 2, 3, 4], $slides->map->offset->all());
+
+        $html = (string) $this->get(route('destinations.show', $alpha))->assertOk()->getContent();
+
+        $this->assertCount(5, $this->dom($html)->query('//*[@data-stage-panel]'));
+
+        foreach ($slides as $slide) {
+            $far = $slide->offset > DestinationCarousel::REACH;
+
+            $this->assertSame(
+                $far ? 1 : 0,
+                $this->dom($html)
+                    ->query(sprintf('//*[@data-stage-panel][@data-offset="%d"][@data-far]', $slide->offset))
+                    ->length,
+                "offset {$slide->offset} should ".($far ? '' : 'NOT ').'be marked data-far'
+            );
+        }
+    }
+
+/**
+     * THE PAYLOAD ISLAND IS INSIDE THE `x-data` SCOPE.
+     *
+     * THE BUG THIS EXISTS FOR. `readPayload()` reads the island with
+     * `this.$el.querySelector('[data-stage-data]')`, and `$el` is the
+     * `<section x-data="destinationStage">`. The island used to be rendered as a
+     * SIBLING of that section, one line further down the same Blade file, which
+     * reads as tidier and is outside the subtree the script searches. The query
+     * returned null, `.textContent` threw, and the `catch` returned `slides: []`.
+     *
+     * The failure is silent and total, and it is worth writing down in full
+     * because every symptom looks like a different bug:
+     *
+     *   - `count` is 0, so `autoplayable()` is false and autoplay never starts;
+     *   - `index` clamps to 0, so `offsetOf()` returns `i - 0` and the fan
+     *     re-indexes itself onto whatever the FIRST panel in the DOM is -- a
+     *     photograph of a completely different destination;
+     *   - `go()` clamps every target to 0 and returns early because the target
+     *     already equals the index, so the dots and the chevrons all do nothing;
+     *   - the offsets have been rewritten to 0, 1, 2 ... and then never change,
+     *     so nothing animates;
+     *   - and the caption, the backdrop and the server-rendered offsets all still
+     *     describe the destination that was actually asked for.
+     *
+     * So the page showed one destination's photographs under another
+     * destination's backdrop, with every control inert and no motion, and
+     * nothing anywhere reported an error. Every HTTP-level test passed
+     * throughout, because the server-rendered markup was genuinely correct.
+     *
+     * Asserted on the DOM RATHER than by grepping the Blade source, because the
+     * relationship that matters is the one the browser builds: the island has to
+     * be a DESCENDANT of the element carrying `x-data`.
+     */
+    #[Test]
+    public function the_payload_island_is_a_descendant_of_the_element_that_reads_it(): void
+    {
+        $html = (string) $this->get(route('destinations.show', $this->destination()))
+            ->assertOk()
+            ->getContent();
+
+        $dom = $this->dom($html);
+
+        $island = $dom->query('//script[@data-stage-data]');
+
+        $this->assertSame(1, $island->length, 'the payload island is missing or duplicated');
+
+        /*
+         * `ancestor::*[@data-stage]` rather than counting ancestors: what matters
+         * is that the reader is one of them, not how many wrappers are in between.
+         */
+        $this->assertGreaterThan(
+            0,
+            $dom->query('//script[@data-stage-data]/ancestor::*[@data-stage]')->length,
+            'THE PAYLOAD ISLAND IS OUTSIDE THE x-data SCOPE. `readPayload()` searches '
+            .'`this.$el`, so an island that is not a DESCENDANT of the section is '
+            .'invisible to it: the payload reads as empty, `count` is 0, the fan '
+            .'re-indexes onto the first panel in the DOM -- a different '
+            .'destination\'s photograph -- autoplay never starts, every control '
+            .'clamps to 0 and does nothing, and the offsets stop changing.'
+        );
+
+        $this->assertStringContainsString(
+            'this.$el.querySelector(\'[data-stage-data]\')',
+            $this->script(),
+            'the script no longer reads the island from `$el`. If it reaches for '
+            .'`document` instead, the descendant relationship above stops being '
+            .'load-bearing and this guard is asserting the wrong thing.'
+        );
+    }
+
+    /**
+     * A STAGE THAT CANNOT READ ITS DATA LEAVES THE STAGE AS RENDERED.
+     *
+     * The structural fix above is the real one. This is the second line of
+     * defence, and it exists because the failure mode above is so bad: a
+     * DEGRADED stage and a WRONG stage look identical from outside, and only one
+     * of them is showing you a photograph of somewhere else.
+     *
+     * So every panel carries `data-stage-start` -- the server's offset, written
+     * once by PHP and never bound -- and `offsetOf()` answers from it whenever the
+     * payload is unusable. `data-offset` itself cannot be used for this: it is
+     * the live attribute, and Alpine overwrites it before anything could read it
+     * back.
+     *
+     * This asserts the three halves that have to agree: the attribute exists on
+     * every panel, the script reads it, and the script has a branch that uses it.
+     */
+    #[Test]
+    public function an_unreadable_payload_freezes_the_fan_where_the_server_put_it(): void
+    {
+        $destination = $this->destination();
+
+        $this->photograph($destination, 'https://images.example.com/one.jpg');
+        $this->photograph($destination, 'https://images.example.com/two.jpg');
+
+        $html = (string) $this->get(route('destinations.show', $destination))->assertOk()->getContent();
+        $dom = $this->dom($html);
+
+        $panels = $dom->query('//*[@data-stage-panel]');
+
+        $this->assertSame(3, $panels->length);
+
+        foreach ($panels as $panel) {
+            $this->assertSame(
+                $panel->getAttribute('data-offset'),
+                $panel->getAttribute('data-stage-start'),
+                'data-stage-start must record the offset the server rendered, in a '
+                .'attribute the script never writes'
+            );
+        }
+
+        // The one that is live and unbound: a bound attribute would be rewritten.
+        $this->assertStringNotContainsString(
+            'x-bind:data-stage-start',
+            $html,
+            'data-stage-start must not be bound, or it stops being the server\'s value'
+        );
+
+        $script = $this->script();
+
+        $this->assertStringContainsString(
+            'Number(panel.dataset.stageStart)',
+            $script,
+            'the script no longer captures the server offsets, so there is nothing to '
+            .'fall back to'
+        );
+
+        $this->assertMatchesRegularExpression(
+            '/offsetOf\(i\)\s*\{\s*if \(this\.unreadable\)/s',
+            $script,
+            'offsetOf() does not fall back to the server offsets when the payload is '
+            .'unusable. Without the branch, an unreadable payload re-indexes the fan '
+            .'onto panel zero.'
+        );
+    }
+
+/**
+     * THE FAN CAN BE DRAGGED, AND EVERY PART OF THAT IS A CONTRACT.
+     *
+     * There is no browser automation in this repo, so none of this can be tested
+     * by dragging. What it can do is pin the four pieces without which a drag is
+     * either invisible or unusable -- and each one fails SILENTLY, which is what
+     * makes them worth asserting separately.
+     *
+     *   1. `touch-action: pan-y` on the fan. Without it a swipe on a phone is a
+     *      coin toss between scrolling the page and moving the carousel, and the
+     *      browser delays every pointermove until it has decided which.
+     *   2. The pointer is CAPTURED on the fan. The panels are narrower than the
+     *      fan, so a drag that travels more than a panel's width leaves the
+     *      element the press landed on -- and without capture the gesture dies
+     *      halfway and the fan snaps back under a finger that is still moving.
+     *   3. The click is intercepted in the CAPTURE phase, on an ANCESTOR of the
+     *      panel link. By the time a click event exists there is no drag left to
+     *      cancel, and every panel is an `<a>`: without this, every drag that
+     *      ends over a card navigates away from the page being read.
+     *   4. The transition is suspended while dragging and restored after it. The
+     *      fan has to TRACK the pointer, not lag behind it, and a cancelled drag
+     *      has to ease home rather than jump.
+     *
+     * A DEAD ZONE is asserted too, because it is the difference between a tap and
+     * a drag: 6px, below the tap threshold on every platform that has one. Without
+     * it a plain tap on a panel flickers the dragging class, changes the cursor,
+     * takes the autoplay hold and releases it again, and competes with the
+     * browser's own tap gesture on a touch screen.
+     */
+    #[Test]
+    public function the_fan_is_draggable_and_the_gesture_has_the_parts_that_make_it_usable(): void
+    {
+        $css = $this->css();
+        $script = $this->script();
+
+        // 1. The browser may scroll vertically, and horizontal movement is ours.
+        $this->assertMatchesRegularExpression(
+            '/\.tm-fan\s*\{[^}]*touch-action:\s*pan-y/s',
+            $css,
+            'the fan does not declare `touch-action: pan-y`. A swipe on a phone is then a '
+            .'coin toss between scrolling the page and moving the carousel.'
+        );
+
+        // 2. The pointer is captured, and on the FAN rather than on a panel.
+        $this->assertStringContainsString(
+            'this.fan.setPointerCapture(event.pointerId)',
+            $script,
+            'the drag does not capture the pointer. The panels are narrower than the fan, so '
+            .'the gesture dies the moment it travels more than a panel width.'
+        );
+
+        // 3. The click is killed before the anchor can see it.
+        $this->assertMatchesRegularExpression(
+            "/this\.\\\$el\.addEventListener\('click'.*?\}, true\);/s",
+            $script,
+            'the drag does not suppress the synthesised click. Every panel is a link to its '
+            .'destination, so a drag that ends over one navigates away from the page.'
+        );
+
+        $this->assertStringContainsString(
+            'event.stopPropagation()',
+            $script,
+            'the click interceptor does not stop propagation, so the anchor still receives it'
+        );
+
+        // 4. No transition while the finger is down; one again once it is up.
+        $this->assertMatchesRegularExpression(
+            '/\.tm-fan\.is-dragging\s*\{[^}]*transition:\s*none/s',
+            $css,
+            'the transition is not suspended while dragging, so the fan lags behind the '
+            .'pointer instead of tracking it'
+        );
+
+        $this->assertStringContainsString(
+            "this.fan.classList.add('is-dragging')",
+            $script,
+            'the drag never adds the dragging class'
+        );
+
+        $this->assertStringContainsString(
+            "this.fan.classList.remove('is-dragging')",
+            $script,
+            'the dragging class is never removed, so a cancelled drag can never ease home'
+        );
+
+        // The dead zone, and the distance threshold that commits an advance.
+        $this->assertStringContainsString(
+            'Math.abs(delta) < 6',
+            $script,
+            'the drag has no dead zone, so a plain tap counts as a gesture'
+        );
+
+        $this->assertStringContainsString(
+            'dragThreshold()',
+            $script,
+            'a release does not have to travel far enough to commit to an advance'
+        );
+    }
+
+    /**
+     * A DRAG ENDS BY MOVING THE INDEX, AND IT READS ITS DIRECTION BEFORE CLEARING.
+     *
+     * `dragEnd()` zeroes `dragDelta` and then branches on it. Swapping those two
+     * lines compiles, passes every other guard on this page, and makes every drag
+     * advance in the same direction -- forwards on a rightward swipe and backwards
+     * on a leftward one.
+     *
+     * There is no way to test the gesture itself here, so what is pinned is the
+     * ORDER: the direction is captured while the delta is still non-zero.
+     */
+    #[Test]
+    public function the_drag_reads_its_direction_before_clearing_the_delta(): void
+    {
+        $script = $this->script();
+
+        $direction = strpos($script, 'const forwards = this.dragDelta < 0;');
+        $cleared = strpos($script, 'this.dragDelta = 0;', $direction ?: 0);
+
+        $this->assertIsInt($direction, 'dragEnd() no longer captures the drag direction');
+        $this->assertIsInt($cleared, 'dragEnd() no longer clears the delta');
+        $this->assertLessThan(
+            $cleared,
+            $direction,
+            'the drag direction is read AFTER the delta has been zeroed, so every drag '
+            .'advances the same way regardless of which way it was thrown'
+        );
+
+        $this->assertStringContainsString('if (forwards) {', $script);
+        $this->assertStringContainsString('this.next();', $script);
+        $this->assertStringContainsString('this.prev();', $script);
+    }
+
+    /**
+     * NO METHOD IN THE STAGE IS DEFINED TWICE.
+     *
+     * This is not a style rule. `destinationStage()` returns an OBJECT LITERAL,
+     * and a duplicate key in an object literal is not an error, not a warning, and
+     * not a lint failure in most configurations: the LAST one silently wins and
+     * the earlier one is discarded.
+     *
+     * It happened here, and it disabled a safety net while every test still passed.
+     * A replacement anchored on `offsetOf()`'s docblock rather than on its whole
+     * body added the new definition above the old one; the old definition then won,
+     * so the `unreadable` fallback that stops a stage with no payload from
+     * re-indexing itself onto the first panel in the DOM was dead code -- present,
+     * commented at length, asserted by name, and never once executed.
+     *
+     * A duplicate here is the most dangerous possible edit outcome: the file
+     * reads correctly, the feature reads as implemented, and the browser runs the
+     * version nobody meant. So the count is asserted, per method name.
+     */
+    #[Test]
+    public function no_method_in_the_stage_is_defined_twice(): void
+    {
+        preg_match_all('/^\s{8}(\w+)\(/m', $this->script(), $matches);
+
+        $names = array_map('trim', $matches[1]);
+
+        $this->assertNotEmpty($names, 'no component methods were found, which cannot be right');
+
+        $duplicates = array_keys(array_filter(array_count_values($names), fn ($n) => $n > 1));
 
         $this->assertSame(
-            [-DestinationCarousel::REACH, -DestinationCarousel::REACH + 1, 0],
-            $atTheEnd->map->offset->all(),
-            'at the far end of the collection the fan must THIN OUT (nothing to the right), '
-            .'not wrap around to the far left'
+            [],
+            $duplicates,
+            'the stage defines '.implode(', ', $duplicates).' more than once. A duplicate key in '
+            .'an object literal is not an error: the LAST definition silently wins, so this '
+            .'ships dead code that still reads as implemented.'
         );
+    }
+
+    /**
+     * THE DARK SURFACE REACHES BOTH EDGES AT EVERY BREAKPOINT.
+     *
+     * `.tm-page` cancels `main`'s own padding with negative margins, which is the
+     * only way a background can run under padding without a wrapper. The
+     * arithmetic has to be exact at EVERY breakpoint the layout declares, and it
+     * was not: `main` goes to `lg:px-12` while the page only reached back to
+     * `lg:-mx-8`, leaving a 1rem band of the page's own background down each side
+     * at the widest sizes. Which is a white edge on a dark page -- small, and only
+     * on a big screen, which is why it is easy to accept as a rendering quirk.
+     *
+     * This reads `main`'s own classes out of the layout rather than hard-coding
+     * the breakpoints, so adding `xl:px-16` there without a matching
+     * `xl:-mx-16` here fails this test instead of shipping.
+     */
+    #[Test]
+    public function the_dark_surface_cancels_the_layout_padding_at_every_breakpoint(): void
+    {
+        $layout = (string) file_get_contents(resource_path('views/layouts/app.blade.php'));
+
+        $this->assertMatchesRegularExpression(
+            '/px-5 py-10 sm:px-8 lg:px-12/',
+            $layout,
+            'the layout\'s own padding on `main` has changed. This test reads it above; if '
+            .'it no longer matches, `.tm-page` needs re-checking by hand.'
+        );
+
+        $dom = $this->dom(
+            (string) $this->get(route('destinations.show', $this->destination()))->assertOk()->getContent()
+        );
+
+        $page = $dom->query('//*[contains(concat(" ", normalize-space(@class), " "), " tm-page ")]')->item(0);
+
+        $this->assertNotNull($page, 'the dark surface wrapper is missing from the page');
+
+        $classes = preg_split('/\s+/', (string) $page->getAttribute('class'), -1, PREG_SPLIT_NO_EMPTY);
+
+        /*
+         * `main` pads on the inline axis and the page pads back out on the same
+         * axis, so each negative margin needs its positive counterpart at the SAME
+         * breakpoint -- and the two live under the same prefix in the class list.
+         */
+        foreach ([
+            '-mx-5' => 'px-5',
+            'sm:-mx-8' => 'sm:px-8',
+            'lg:-mx-12' => 'lg:px-12',
+        ] as $negative => $positive) {
+            $this->assertContains(
+                $negative,
+                $classes,
+                "`.tm-page` no longer reaches back by {$negative}, so the teal does not reach "
+                .'the edge at that breakpoint'
+            );
+
+            $this->assertContains(
+                $positive,
+                $classes,
+                "`.tm-page` no longer pads back out by {$positive}, so its own content has "
+                .'moved outwards with the background'
+            );
+        }
+
+        $this->assertContains('-my-10', $classes, 'the page no longer bleeds under main\'s block padding');
     }
 
     // =====================================================================
     // The frozen-stage regression. Read this one first.
     // =====================================================================
-
     /**
      * THE FAN ACTUALLY MOVES.
      *
@@ -299,11 +754,28 @@ class DestinationStageTest extends TestCase
             .'offset from the active index, not read one from the markup.'
         );
 
+        /*
+         * `return i - this.index` must be the LAST statement, not the first: it is
+         * now preceded by the `unreadable` fallback, which returns the server's
+         * own offset instead. Anchoring on "immediately after the brace" would
+         * have failed the moment that fallback was added, and the obvious
+         * response -- loosening it to "contains the string somewhere" -- is what
+         * let a DUPLICATE `offsetOf` sit underneath this one and win.
+         *
+         * So the method body is captured and the last return is checked. That
+         * distinguishes the real implementation from a dead copy, which a plain
+         * substring check cannot.
+         */
+        preg_match('/offsetOf\(i\) \{(.*?)\n        \},/s', $this->script(), $body);
+
+        $this->assertArrayHasKey(1, $body, 'offsetOf() has no single body to inspect');
+
         $this->assertMatchesRegularExpression(
-            '/offsetOf\(i\)\s*\{\s*return i - this\.index;/',
-            $this->script(),
-            'offsetOf() no longer subtracts the active index, so every panel would report '
-            .'the same offset and the geometry would not move.'
+            '/return i - this\.index;\s*$/',
+            $body[1],
+            'offsetOf() no longer ENDS by returning the panel\'s index minus the active '
+            .'index. Every panel would report the same offset and the geometry would not '
+            .'move.'
         );
 
         $this->assertMatchesRegularExpression(
@@ -459,7 +931,7 @@ class DestinationStageTest extends TestCase
      * width cannot.
      */
 #[Test]
-    public function the_stage_declares_a_width_and_not_only_a_max_width(): void
+    public function the_stage_declares_a_definite_width(): void
     {
         preg_match('/\.tm-stage-wrap\s*\{(.*?)\n    \}/s', $this->css(), $rule);
 
@@ -467,7 +939,6 @@ class DestinationStageTest extends TestCase
 
         foreach ([
             'width: 100%',
-            'max-width: 68rem',
             'margin-inline: auto',
             'container-type: inline-size',
         ] as $declaration) {
@@ -480,6 +951,54 @@ class DestinationStageTest extends TestCase
                 .'absolutely positioned.'
             );
         }
+    }
+
+    /**
+     * THE STAGE FILLS ITS CONTAINER, AND `main` IS WHAT BOUNDS IT.
+     *
+     * The stage used to be capped at 68rem so that `--u` could not exceed 1px. The
+     * cap did its job -- until it became the reason the page looked unfinished: a
+     * 1088px dark object centred in a 1600px dark field, with the same colour on
+     * both sides of it, which reads as a layout that ran out rather than one that
+     * was chosen.
+     *
+     * So the cap is gone, `--u` grows with the container, and the composition
+     * scales up as one piece -- which is what `--u` was built to do in the first
+     * place.
+     *
+     * THE BOUND MOVED RATHER THAN DISAPPEARED, and that is the part worth
+     * guarding: `main` is capped at 1600px in `layouts/app.blade.php`, so the
+     * stage can only ever be as wide as the page around it. Removing that cap as
+     * well would let `--u` run away on a 4K display and the panels would grow
+     * without limit.
+     *
+     * Both halves are asserted together, because neither means anything alone: a
+     * stage with no cap and no page cap is the failure, and a page cap with no
+     * assertion that the stage actually grew is the bug this page had.
+     */
+    #[Test]
+    public function the_stage_grows_with_its_container_and_main_bounds_it(): void
+    {
+        preg_match('/\.tm-stage-wrap\s*\{(.*?)\n    \}/s', $this->css(), $rule);
+
+        $declarations = (string) preg_replace('/\/\*.*?\*\//s', '', $rule[1] ?? '');
+
+        $this->assertStringNotContainsString(
+            'max-width',
+            $declarations,
+            'the stage wrapper is capped again. On a wide page that puts a small dark '
+            .'object in the middle of a large dark one, which is what the cap looked '
+            .'like and is why it was removed.'
+        );
+
+        $layout = (string) file_get_contents(resource_path('views/layouts/app.blade.php'));
+
+        $this->assertMatchesRegularExpression(
+            '/max-w-\[1600px\]/',
+            $layout,
+            'the stage no longer caps `--u`, so `main` must. Without this the panels grow '
+            .'without limit on a wide display and nothing else on the page does.'
+        );
     }
 
     /**
@@ -563,6 +1082,15 @@ class DestinationStageTest extends TestCase
     {
         $this->destination(['name' => 'Alpha', 'slug' => 'alpha', 'sort_order' => 1]);
         $second = $this->destination(['name' => 'Bravo', 'slug' => 'bravo', 'sort_order' => 2]);
+
+        /*
+         * A SECOND PHOTOGRAPH ON THIS DESTINATION, and not merely a second
+         * destination. The stage holds one destination's own photographs, so
+         * "Bravo" needs an upload for its stage to have more than one slide: a
+         * pager, dots and chevrons are all correctly absent from a
+         * one-photograph stage, and asserting them here would be asserting a bug.
+         */
+        $this->photograph($second, 'https://images.example.com/bravo-1.jpg');
 
         $show = $this->dom(
             (string) $this->get(route('destinations.show', $second))->assertOk()->getContent()
@@ -1339,11 +1867,16 @@ class DestinationStageTest extends TestCase
     #[Test]
     public function there_is_a_reachable_pause_control(): void
     {
-        $this->destination(['name' => 'Alpha', 'slug' => 'alpha']);
-        $this->destination(['name' => 'Bravo', 'slug' => 'bravo']);
+        /*
+         * A SECOND PHOTOGRAPH ON THIS ONE DESTINATION, which is now the only way a
+         * stage gets more than one slide. Two destinations used to be enough,
+         * because the stage fanned across all of them. It does not any more.
+         */
+        $destination = $this->destination();
+        $this->photograph($destination, 'https://images.example.com/caliraya-1.jpg');
 
         $dom = $this->dom(
-            (string) $this->get(route('destinations.show', $this->destination()))
+            (string) $this->get(route('destinations.show', $destination))
                 ->assertOk()
                 ->getContent()
         );
@@ -1367,50 +1900,98 @@ class DestinationStageTest extends TestCase
         );
     }
 
-    /**
-     * The chevrons navigate to neighbouring DESTINATIONS and are omitted, not
-     * disabled, at each end.
+/**
+     * THE CHEVRONS MOVE THE FAN, and they stay mounted at both ends.
      *
-     * They are links because they go somewhere real: they work with JavaScript
-     * disabled, they are middle-clickable, and the browser shows the destination
-     * in the status bar. A permanently disabled control at each end is a dead
-     * control, so there is none there.
+     * They were links to a neighbouring DESTINATION, which was correct while the
+     * stage fanned across the catalogue and is wrong now that it does not. A
+     * chevron that navigates off the page you are reading, shaped exactly like the
+     * controls that move the pictures in front of you, is a control that lies
+     * about what it does -- and with the fan now holding one destination's own
+     * photographs, "the next destination" is not a thing the fan is doing at all.
+     *
+     * RENDERED UNCONDITIONALLY rather than omitted at each end, which is the
+     * opposite of what they used to do. Omission was right for a link whose target
+     * did not exist. It is wrong for a button that disables: a keyboard user's
+     * focus can be sitting on a control that is about to stop existing, and the
+     * stage visibly rearranges itself every time it reaches an end. So the
+     * buttons keep their position and carry `disabled` and `aria-hidden` from the
+     * script instead.
      */
     #[Test]
-    public function the_chevrons_are_links_to_neighbouring_destinations_and_vanish_at_the_ends(): void
+    public function the_chevrons_move_the_fan_and_stay_mounted_at_both_ends(): void
     {
-        $this->destination(['name' => 'Alpha', 'slug' => 'alpha']);
+        $destination = $this->destination();
 
-        $middle = $this->destination(['name' => 'Bravo', 'slug' => 'bravo']);
+        $this->photograph($destination, 'https://images.example.com/bravo-1.jpg');
+        $this->photograph($destination, 'https://images.example.com/bravo-2.jpg');
 
-        $this->destination(['name' => 'Zulu', 'slug' => 'zulu']);
-
-        $html = (string) $this->get(route('destinations.show', $middle))->assertOk()->getContent();
+        $html = (string) $this->get(route('destinations.show', $destination))->assertOk()->getContent();
         $dom = $this->dom($html);
 
         $this->assertSame(2, $dom->query('//*[@data-stage-chevron]')->length);
 
-        foreach ($dom->query('//*[@data-stage-chevron]') as $chevron) {
-            $this->assertSame('a', $chevron->tagName, 'a chevron is not a link, so it cannot work without JavaScript');
-            $this->assertStringContainsString('/destinations/', (string) $chevron->getAttribute('href'));
+        foreach (['prev', 'next'] as $side) {
+            $chevron = $dom->query('//*[@data-stage-chevron="'.$side.'"]')->item(0);
+
+            $this->assertNotNull($chevron, "the {$side} chevron is missing");
+
+            $this->assertSame(
+                'button',
+                $chevron->tagName,
+                "the {$side} chevron is not a button, so it cannot be the fan's own control"
+            );
+
+            $this->assertEmpty(
+                $chevron->getAttribute('href'),
+                "the {$side} chevron still points at a URL, so clicking it will navigate away "
+                .'from the page the visitor is reading'
+            );
+
+            $this->assertStringContainsString(
+                $side === 'prev' ? 'prev()' : 'next()',
+                (string) $chevron->getAttribute('x-on:click'),
+                "the {$side} chevron does not move the fan"
+            );
+
+            /*
+             * Disabled AT THE ENDS, from the script, not by not rendering. The
+             * opening slide is index 0, so prev must be inert on arrival and next
+             * must be live.
+             */
+            $this->assertStringContainsString(
+                $side === 'prev' ? 'index === 0 ? true : count - 1' : 'index >= 0 ? true : count',
+                (string) $chevron->getAttribute('x-bind:disabled'),
+                "the {$side} chevron is not disabled at the ends"
+            );
         }
 
         $this->assertStringContainsString('tm-stage__chevron--prev', $html);
         $this->assertStringContainsString('tm-stage__chevron--next', $html);
+    }
 
-        $atTheStart = $this->dom(
-            (string) $this->get(route('destinations.show', Destination::where('slug', 'alpha')->firstOrFail()))
-                ->assertOk()
-                ->getContent()
+    /**
+     * A ONE-PHOTOGRAPH DESTINATION HAS NO CHEVRONS AT ALL.
+     *
+     * Not disabled ones -- none. There is nowhere for them to go, a stage with two
+     * dead arrows on it is worse than a stage without them, and this is the
+     * normal state for a destination whose owner has uploaded nothing.
+     */
+    #[Test]
+    public function a_one_photograph_destination_has_no_chevrons_and_no_pager(): void
+    {
+        $dom = $this->dom(
+            (string) $this->get(route('destinations.show', $this->destination()))->assertOk()->getContent()
         );
+
+        $this->assertSame(0, $dom->query('//*[@data-stage-chevron]')->length);
+        $this->assertSame(0, $dom->query('//*[@data-stage-pager]')->length);
 
         $this->assertSame(
-            0,
-            $atTheStart->query('//*[@data-stage-chevron="prev"]')->length,
-            'there is a previous chevron at the first destination, where there is no previous one'
+            1,
+            $dom->query('//*[@data-stage-panel]')->length,
+            'a one-photograph destination still gets its one panel'
         );
-
-        $this->assertSame(1, $atTheStart->query('//*[@data-stage-chevron="next"]')->length);
     }
 
     /**
@@ -1531,7 +2112,7 @@ class DestinationStageTest extends TestCase
     {
         $this->destination();
 
-        $key = 'destinations.stage.v1';
+        $key = 'destinations.stage.v2';
 
         foreach ([
             'an object graph from an older version' => serialize(new \stdClass()),
