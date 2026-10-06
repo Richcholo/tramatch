@@ -920,6 +920,18 @@
         transition: transform 260ms var(--ease-out);
         touch-action: pan-y;
         cursor: grab;
+
+        /*
+         * A swipe must not SELECT anything either. Selection and
+         * the native drag are the two ways a pull on a photograph
+         * becomes something other than a pull on the fan: the
+         * `dragstart` listener in the script takes the drag, and
+         * this takes the text. The province pill is the only text
+         * inside the fan, but a swipe across it is exactly the
+         * gesture the stage needs to own.
+         */
+        user-select: none;
+        -webkit-user-select: none;
     }
 
     /*

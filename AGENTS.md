@@ -698,7 +698,7 @@ it**, which is why it asserts the invariant now.
   button. The expression is now `$side === 'prev' ? 'index === 0' :
   'index === count - 1'`, asserted verbatim by the test. Any ternary
   with a non-boolean arm in a `x-bind:disabled` is this bug again.
-- **THE FAN IS DRAGGABLE**, and four pieces of it are load-bearing, each failing
+- **THE FAN IS DRAGGABLE**, and five pieces of it are load-bearing, each failing
   silently on its own:
   - **`touch-action: pan-y`** on `.tm-fan`. Without it a swipe on a phone is a coin
     toss between scrolling the page and moving the carousel, and the browser
@@ -716,6 +716,17 @@ it**, which is why it asserts the invariant now.
   - **THE TRANSITION IS SUSPENDED WHILE DRAGGING** (`.tm-fan.is-dragging`) so the
     fan tracks the pointer instead of lagging behind it, and restored on release
     so a cancelled drag eases home rather than jumping.
+  - **THE BROWSER'S OWN DRAG IS CANCELLED.** The photograph
+    and the link wrapping it are both draggable by default, so
+    a horizontal pull starts a native drag-and-drop: a ghost
+    image follows the pointer, `pointercancel` fires, and the
+    fan's gesture dies halfway. `draggable="false"` on both
+    elements is the first line of defence and works without
+    JavaScript; a `dragstart` listener on the fan is the net
+    under it, because `dragstart` bubbles and so cancels the
+    gesture for every descendant whatever it started on.
+    `user-select: none` on the fan takes the text-selection
+    path too.
 
   `--tm-drag-x` is the only thing the script writes; it feeds a transitioned
   `transform`, and the transition applies to the **resolved** value, so a cancel is

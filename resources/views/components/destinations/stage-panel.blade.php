@@ -61,6 +61,7 @@
     <a
         href="{{ $slide->url }}"
         data-stage-link
+        draggable="false"
         @if ($isCurrentPage) aria-current="page" @endif
         class="tm-fan-panel__link"
     >

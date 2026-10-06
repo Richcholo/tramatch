@@ -402,6 +402,25 @@ init() {
             this.fan.addEventListener('pointercancel', (event) => this.dragEnd(event));
 
             /*
+             * THE BROWSER'S OWN DRAG IS THE ENEMY HERE, and `dragstart`
+             * is where it begins. The photograph and the link wrapping
+             * it are BOTH draggable by default, so a horizontal pull
+             * starts a native drag-and-drop: a ghost image follows the
+             * pointer, `pointercancel` fires, and the fan's gesture
+             * dies halfway. `dragstart` bubbles, so this one listener
+             * on the fan cancels it for every descendant whatever the
+             * gesture started on, and the pull stays with the stage
+             * that owns it.
+             *
+             * The `draggable="false"` on the image and the link is
+             * the first line of defence and works without JavaScript;
+             * this is the net under it.
+             */
+            this.fan.addEventListener('dragstart', (event) => {
+                event.preventDefault();
+            });
+
+            /*
              * A drag that ends over a panel must not ALSO follow that panel's link.
              *
              * CAPTURE phase, and on the stage rather than the fan. By the time the

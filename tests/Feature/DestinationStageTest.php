@@ -574,6 +574,58 @@ class DestinationStageTest extends TestCase
             $script,
             'a release does not have to travel far enough to commit to an advance'
         );
+
+        // 5. THE BROWSER'S OWN DRAG MUST NOT TAKE THE GESTURE. The
+        // photograph and the link wrapping it are both draggable by
+        // default, so a horizontal pull starts a native drag-and-drop:
+        // a ghost image follows the pointer, `pointercancel` fires, and
+        // the fan's gesture dies halfway. `dragstart` bubbles, so one
+        // listener on the fan cancels it for every descendant.
+        $this->assertStringContainsString(
+            "addEventListener('dragstart'",
+            $script,
+            'the fan does not cancel native dragstart, so pulling a '
+            ."photograph starts the browser's own drag-and-drop and the "
+            .'gesture dies halfway'
+        );
+
+        $this->assertMatchesRegularExpression(
+            '/\.tm-fan\s*\{[^}]*user-select:\s*none/s',
+            $css,
+            'the fan does not disable text selection, so a swipe selects '
+            .'the province pill instead of moving the fan'
+        );
+
+        $destination = $this->destination();
+        $this->photograph($destination, 'https://images.example.com/drag-1.jpg');
+        $this->photograph($destination, 'https://images.example.com/drag-2.jpg');
+
+        $html = (string) $this->get(route('destinations.show', $destination))->assertOk()->getContent();
+        $dom = $this->dom($html);
+
+        $links = $dom->query('//*[@data-stage-panel]//a[@data-stage-link]');
+        $this->assertGreaterThan(0, $links->length, 'no panel links were rendered');
+
+        foreach ($links as $link) {
+            $this->assertSame(
+                'false',
+                $link->getAttribute('draggable'),
+                'a panel link is still draggable, so pulling it starts the '
+                ."browser's own link drag and the fan's gesture dies"
+            );
+        }
+
+        $images = $dom->query('//*[@data-stage-panel]//img');
+        $this->assertGreaterThan(0, $images->length, 'no panel photographs were rendered');
+
+        foreach ($images as $image) {
+            $this->assertSame(
+                'false',
+                $image->getAttribute('draggable'),
+                'a panel photograph is still draggable, so pulling it starts '
+                ."the browser's own image drag and the fan's gesture dies"
+            );
+        }
     }
 
     /**

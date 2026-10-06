@@ -62,12 +62,22 @@
         branch rather than being skipped, which is why the page is never empty.
 --}}
 @if ($slide->hasImage())
+    {{--
+        NOT DRAGGABLE, and that is deliberate. A photograph is
+        draggable by default, so pulling one horizontally starts
+        the browser's own drag-and-drop: a ghost image follows the
+        pointer, `pointercancel` fires, and the fan's gesture dies
+        halfway. The link wrapping the panel carries the same
+        attribute for the same reason, and the fan cancels
+        `dragstart` as the net under both.
+    --}}
     <img
         data-src="{{ $slide->imageUrl }}"
         @if ($inPreloadWindow) src="{{ $slide->imageUrl }}" @endif
         alt=""
         width="320"
         height="570"
+        draggable="false"
         class="tm-fan-card__image"
         @if ($slide->offset === 0)
             loading="eager"
