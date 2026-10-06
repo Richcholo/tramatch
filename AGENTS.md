@@ -1,4 +1,4 @@
-﻿# TraMatch — agent notes
+# TraMatch — agent notes
 
 Laravel 13 + Breeze (Blade) travel-itinerary recommender for Luzon destinations.
 Deployment is deliberately on hold (polish/QA phase).
@@ -57,7 +57,7 @@ not make `pint --test` a pass/fail gate.
   `DB_CONNECTION=sqlite`, array cache/session, sync queue) and needs
   `pdo_sqlite` enabled in `php.ini`. Never point it at MySQL to work around a
   driver problem — `RefreshDatabase` would drop the development database.
-- The suite is currently **327 passing**. It is also the only thing that
+- The suite is currently **348 passing**. It is also the only thing that
   migrates from scratch, so it is the only check that a fresh clone can
   migrate — your dev database cannot detect a broken migration chain,
   because every migration in it has already run.
@@ -301,10 +301,294 @@ browser, not asserted by a test.
 | Budget tier auto-fill and mismatch warning | — |
 | The navigation loading overlay | Timing under a slow connection |
 
+The photo-carousel row is **historical**: that carousel was deleted when its
+photographs became stage panels. It is left in the table because the provenance
+it records is still true of everything else there — see the destinations stage
+section for what has replaced it and for its own "verified by hand" list, which
+is currently empty.
+
 The loading overlay is the one that behaves differently by design: it appears
 only when a navigation takes longer than 350 ms, so a click-through on a fast
 connection proves it does **not** appear, not that it works. Throttle the network
 before judging it.
+
+### The destinations stage
+
+A dark editorial theatre slab set into a warm sand page, on **both**
+`/destinations` and `/destinations/{slug}`. It is a fanned carousel and it is
+the loudest, darkest element on the page.
+
+`App\Domain\Destinations\DestinationCarousel` is the presenter. One component,
+`components/destinations/stage.blade.php`, renders on both routes from that one
+presenter; they differ only in which photograph is active. **That is the entire
+continuity feature** — the stage on a destination page is the index stage with
+the index shifted — and it is only true because both routes resolve through one
+`DestinationController::stage()` call. A second presenter, or any sorting done in
+a Blade view, is how the two pages start disagreeing.
+`both_routes_render_the_same_stage_from_the_same_presenter` is the guard.
+
+- **A SLIDE IS A PHOTOGRAPH, NOT A DESTINATION.** Canonical order is
+  `sort_order`, then `name`; each destination then contributes its photographs in
+  a fixed sequence — its hero photograph (`destinations.image_url`) first, then
+  its uploads (`destination_images`) in `sort_order`. This is the decision the
+  whole stage rests on, and it is why the destination page's hero block and its
+  scroll-snap photo strip were both deleted: their photographs are panels now,
+  and an admin's uploads are reachable from the public page again instead of
+  living in a strip that a redesign could quietly orphan.
+  `slides_are_grouped_by_destination_with_the_hero_photograph_first` pins it.
+- **THE SECONDARY SORT IS NOT DECORATION.** `sort_order` defaults to 0 for every
+  existing row, so without `orderBy('name')` two requests in the same page load
+  could disagree about the order — and the two pages must show the same thing.
+- **A DESTINATION WITH NO PHOTOGRAPH CONTRIBUTES NOTHING** — no panel, no
+  placeholder, no gradient card. The stage promises every panel is a real
+  photograph and a flat colour block is not one. Leaving them out also removes
+  them from the chevron order, so an arrow can never lead to a page whose stage
+  would have to describe some other destination.
+- **THE ACTIVE INDEX COMES FROM THE URL.** `show()` passes the destination's
+  slug, which resolves to that destination's **first** photograph. That is what
+  makes a hard page load land in the same visual state as an in-page advance, so
+  deep links, Back/Forward and a shared link all replay. `?slide=<slug>` on the
+  index does the same thing for a bookmarkable "the stage, showing X".
+
+#### `data-offset` is the whole mechanism
+
+**This was inverted once and the stage shipped looking frozen.** The first
+version wrote each panel's offset from PHP into a static `data-stage-offset` and
+never touched it again, so advancing changed which panel was "active" and never
+where the panels were. State updated; layout did not; and **no test failed**,
+because the server-rendered markup was genuinely correct.
+
+`data-offset` is signed and relative to the active panel — 0 is active, −1 is
+the one to its left — and **every** geometric property is derived from it in
+`app.css`. The script changes one integer (`index`), Alpine rewrites the
+attribute on every panel, and the CSS transition interpolates.
+
+- **The Blade-written offset is the STARTING STATE ONLY.** It is what makes the
+  page correct with JavaScript disabled. It is not re-rendered per advance.
+  Never write a second offset from PHP — that is the frozen-stage bug.
+- **Never set an offset from PHP expecting it to survive an advance.**
+- **`all slides stay in the DOM`**; offsets past the reach are pushed off-stage
+  with `data-far` (`visibility: hidden`, `pointer-events: none`). A re-rendered
+  five-element window cannot animate at all: the panels would be new elements
+  with nothing in the compositor.
+- **NEVER HIDE A SLOT FROM THE SCRIPT.** No `display: none` on a narrow screen
+  and none under `prefers-reduced-motion`. A slot the script cannot see is one it
+  steps onto, and the fan then looks frozen on a phone. Push it further out
+  instead — which is what the narrow container query does.
+- `the_fan_actually_moves` asserts all four conditions at once (binding,
+  computed-from-index, geometry keyed on the attribute, a transition on it)
+  because dropping any one of them reproduces the freeze.
+
+#### The geometry, and why the stage is 68rem
+
+`--u: calc(100cqw / 1088)`. One `--u` is 1/1088th of the stage's width, so
+every dimension is written once as a number and scales as one piece. At the
+reference the stage is exactly 1088px, so `--u` is 1px and the numbers are
+literal pixels: a **320 × 570** centre panel (that is `width: calc(320 *
+var(--u))` plus `aspect-ratio: 9 / 16`), the flanking pair **300** units out at
+`scale(0.79)` and `rotateY(∓7deg)` nudged 8 down, the outer pair **532** out at
+`scale(0.58)` and `rotateY(∓14deg)` nudged 14 down.
+
+- **THE GAPS ARE SOLVED, NOT EYEBALLED.** The centre panel's half-width is 160
+  and the flanking panel's scaled half-width is 126.4, so 300 leaves a **13.6px**
+  gap. The outer panel's near edge at 532 is 443.2 and the flanking panel's far
+  edge is 426.4 — at 536 that gap is 16.8px, over the 16px the composition
+  wants, which is why the offset is 532 and the gap is **12.8px**. Both sit in
+  the 10–16px band.
+- **THE 68rem CAP IS WHAT CROPS THE OUTER PAIR, not the other way round.** The
+  outer panel's far edge is 532 + 92.8 = **624.8** from centre, so a stage
+  narrower than 1250px cuts it; the flanking pair's far edge is 426.4 and needs
+  at least 853px to stay whole. 1088px sits in that window. `overflow: hidden`
+  on `.tm-stage` is therefore load-bearing — do not add `overflow: visible`.
+- **`cqw`, never `vw`.** The page container runs to 1600px; viewport units would
+  keep growing the fan past the cap and crop the outer panels far more than
+  intended.
+- **`--u` must be declared one level BELOW `container-type`.** An element cannot
+  resolve container query units against its own container — on the container
+  element they read the nearest *ancestor* container, which here would be some
+  unrelated page wrapper or nothing at all. `.tm-stage-wrap` is the container;
+  `.tm-stage` carries `--u`.
+- **THE ROTATION SIGN MUST MIRROR.** A same-sign rotation tilts the fan into a
+  `>` instead of the shallow V, bringing one panel's outer edge toward the viewer
+  at the moment the other is meant to fall away.
+- **NO STAGGER.** All five panels move as one formation over 620ms on one
+  ease-out. A `transition-delay` reads as five cards animating rather than one
+  object turning.
+- Side panels are dimmed by a **teal overlay inside the scrim element**, not by
+  panel `opacity` — an overlay keeps the photograph opaque, and a see-through
+  panel is the glass look the design forbids.
+
+#### The caption: one slide, never two
+
+This is the guard to read first. Slides are photographs **grouped by
+destination**, so two adjacent slides can be two different places, and the fan
+can be sitting on any of them — the dots move it in place and autoplay walks it
+on its own. A caption assembled field-by-field from "the active panel" and "the
+previous active panel" would eventually show one destination's name over another
+destination's peso figure, with both halves rendering correctly and every test
+passing.
+
+So **every caption binding calls `active()` exactly once and reaches for nothing
+else.** `every_caption_field_is_read_off_one_slide` asserts that directly rather
+than matching `active().` as a substring — a substring match passes
+`active().name + previous().name`, which is the exact bug written in a way that
+looks correct in a template.
+
+- **It is stage-level, never a child of a panel.** A caption inside a panel is
+  clipped by that panel's `overflow: hidden`, and a panel painted above the copy
+  occludes it. `pointer-events: none` keeps the centre panel clickable through
+  the text on top of it.
+- **IT IS AN `h2` AND NEVER AN `h1`.** On a destination page the document
+  heading is the page heading, on the sand, *above* the stage.
+- **The name and the province are two block-level spans**, so the heading breaks
+  onto exactly two lines and the province can never trail onto a third under a
+  long name.
+- **THE STANDFIRST AND THE BODY DESCRIPTION ARE A PAIR.**
+  `Destination::standfirst()` is the description's first sentence and the stage
+  caption prints it; `Destination::bodyDescription()` prints the rest in section
+  01. Printing the description in both places put the same opening sentence on
+  screen twice within one screenful. Every word now appears exactly once.
+  **A one-sentence description returns an EMPTY standfirst** — there is no rest
+  to split, and returning the single sentence would empty it off the page.
+- **THE GOLD KICKER IS AN INTEREST TAG, NOT A REGION.** There is no `region`
+  column in this schema, and the province already appears twice in the caption.
+  A region is derivable from the province (PSGC groups the 65 provinces into the
+  seven Luzon regions), but that mapping belongs in a seeder with a source
+  behind it, not inferred in a view. `Destination::kicker()` sorts tags by name
+  because `destination_tag` is a bare composite key with no ordering column, so
+  the database has no opinion and would otherwise return a different "first" tag
+  on two requests.
+- **THE TWO NUMBERS ARE SCRIPT-OWNED AND CARRY NO `x-text`.** The count-up writes
+  their `textContent`; an `x-text` would overwrite it on every re-evaluation.
+  They carry `data-stage-value` instead, and the server-rendered number is the
+  no-JS fallback either way. `font-variant-numeric: tabular-nums` is load-bearing:
+  a number that changes width while it changes is worse than one that does not
+  animate.
+- **THE MATCH SCORE IS EMPTY FOR A GUEST**, which is the honest answer rather
+  than a missing feature: a match score means "how well this fits YOUR profile"
+  and there is no profile behind an anonymous request. The label and **the
+  separator that follows it** are hidden together, or the row reads "· EST. COST
+  ₱450". It comes from `RecommendationService`, not a second implementation, so
+  the stage quotes the same figure the recommendations page does.
+
+#### Controls, and what each one actually does
+
+- **CHEVRONS WALK DESTINATIONS; DOTS WALK PHOTOGRAPHS.** Both, deliberately —
+  they answer different questions ("take me to the next place" / "show me the
+  next picture of this one"). The chevrons are **links**, so they work without
+  JavaScript, are middle-clickable, and show the destination in the status bar.
+  They are **omitted at each end** rather than disabled: there is no wrap-around
+  and a permanently disabled control is a dead one. `neighbours()` skips a
+  destination's remaining photographs and offers the next destination.
+- **THE PAGER SITS ON THE TEAL, not on the sand.** Its dots are Island White and
+  Island White on Palawan Sand is invisible, so the slab extends to include the
+  control strip. The dots show a **window** the size of the fan's reach: a
+  destination set is 65 destinations of up to four photographs, and 200-odd dots
+  is a texture, not a pager. Each dot's accessible name still carries its real
+  position.
+- **AUTOPLAY IS ON, ON BOTH PAGES, AND THE PAUSE CONTROL IS MANDATORY.** This
+  reverses an earlier decision on this page, which had deliberately shipped the
+  stage with neither ("a timer that keeps shifting the fan under someone reading
+  it is worse than no timer"). It was changed on request. WCAG 2.2.2 still
+  applies: content that moves by itself and loops for longer than five seconds
+  must be stoppable, so the pause control ships with it and is always in the
+  accessibility tree with `aria-pressed`.
+  `DestinationController::STAGE_INTERVAL_MS` is **7000**, not the customary
+  four seconds: the stage's own motion is 620ms of panel travel plus a 700–900ms
+  backdrop cross-fade, and a shorter dwell reads as an interruption rather than
+  as rhythm.
+- **HOLD REASONS, NOT A BOOLEAN.** `held` is a list of reasons (`hover`,
+  `focus`), because those overlap — a keyboard user's focus lands inside the
+  stage while their pointer is over it — and a single flag makes whichever event
+  fired last the only one that counts, so the slideshow resumes under someone who
+  has not moved the pointer. A hidden tab also stops it.
+- **THERE IS NO `x-cloak` RULE IN `app.css`.** So the pause/play glyph swap is
+  CSS keyed off `aria-pressed` — the attribute the control needs anyway — rather
+  than `x-show`, which toggles the `hidden` attribute and would paint both glyphs
+  for a frame before Alpine initialises. `element.hidden` on the match metric is
+  fine for the same reason: the `hidden` *attribute*, never a Tailwind `hidden`
+  *class*.
+- **`settled` is ONE flag driving TWO fades** — the caption's cross-fade and the
+  pager's fade-out. They are the same event seen from two places, so they share a
+  state rather than each running their own timer and being able to disagree about
+  when the fan settled.
+
+#### `stage.js` is an Alpine component, not a Vite entry
+
+Registered in `app.js`, **before `Alpine.start()`**. Both halves matter and both
+have bitten: registering after `start()` leaves `x-data` unevaluated, so the
+panels render and the script never attaches — indistinguishable from a frozen
+stage and reporting nothing; and a standalone entry whose export nobody imports
+gets tree-shaken, which produced a 0.00 kB bundle once already.
+`the_alpine_component_is_registered_before_alpine_starts` strips comments
+before searching, because the note above the registration in `app.js` contains
+the literal text `Alpine.start()` and an unstripped search reads the comment and
+concludes the code is wrong.
+
+#### Motion, and the path that is not motion
+
+620ms panels, an 800ms backdrop cross-fade between **two** layers (one `<img>`'s
+`src` can only be swapped, not cross-faded), and a 450ms caption cross-fade with
+a 6px rise that is *delayed* until the panels settle — `PANEL_MS` in
+`stage.js` must match the 620ms in the stylesheet, because that delay is the
+caption's cue. Under `prefers-reduced-motion` the arc transforms are **removed,
+not shortened** (the fan's whole depth cue is carried by them, so a 620ms arc at
+200ms is still an arc), the panels stack on the centre, and everything except
+the active panel fades — which, because they are all in the same place, is a
+cross-fade rather than a hard swap.
+
+#### The cache
+
+`destinations.stage.v1` holds **arrays of scalars**, not objects, and holds
+slides and the destination order in one payload. The cache driver is the
+database, entries are serialised, and they **survive a deploy**: an object graph
+outlives the class that built it, unserialises to `__PHP_INcomplete_Class`, and
+behind a strict return type takes the page down instead of costing one rebuild.
+`CarouselSlide::fromCache()` returns null for anything unexpected, which the
+caller treats as a **miss**. Bump the key constant when changing the payload's
+shape.
+
+It is busted from **two** models, because they are two tables: `Destination`
+(archive, feature, rename, edit) and `DestinationImage` (a photograph IS a
+slide). Registered in `booted()` on each, since this project has no Observers.
+Without the first, an archived destination stays in both fans while its own page
+404s, so a visitor can click straight from a panel onto a 404. Without the
+second, an admin uploads a photograph and the stage does not show it for ten
+minutes.
+
+**`is_active` is PUBLISHING; `is_featured` is CURATION.** Both default so all 65
+rows participate. An archived destination 404s *and* leaves the stage; an
+un-featured one keeps its page and is merely not in the fan. Do not merge them.
+
+#### Colour discipline
+
+Every colour on the stage is chosen against **teal**, because that is its
+ground: Island White and Boracay Light for text, Philippine Gold as an accent
+(8.7:1 there). On the **sand above it**, gold is 1.8:1 and Boracay Turquoise is
+2.9:1 and both fail — which is why the filtered bar under the heading is
+Benguet Charcoal and Boracay **Dark**, never the bright turquoise. Nothing is
+communicated by colour alone: the budget tier is a **word** plus a three-step
+indicator that is `aria-hidden` because the word beside it is the same fact.
+
+`.tm-primary-button` changed from Benguet Charcoal on turquoise to **Deep
+Volcanic Teal on turquoise** (3.98:1 → 5.0:1). The darker grey is the more
+usual choice and the one that looks more "correct" against the palette, which is
+exactly why it went unnoticed. Hover is unchanged, so it already lands on
+Boracay Dark with white.
+
+#### Removed, deliberately
+
+`resources/js/gallery.js`, `destinations/partials/carousel.blade.php`,
+`.tm-no-scrollbar`, the destination page's hero block, and the `header` slot on
+both destination routes (it rendered a bordered strip on the sea-glass shell
+directly above a sand page). Do not re-add any of them.
+
+**Verified by hand: nothing yet.** There is no browser automation in this repo,
+so none of the choreography, the autoplay timing, the count-up, the chevron
+hover states or the reduced-motion path has been clicked. The tests pin the
+order, the mechanism and the markup/CSS seams; the motion rests on a
+click-through that has not happened. **Click through the whole stage after any
+change to `stage.js`, the `[data-offset]` rules or the panel markup.**
 
 ### Destination-source crawling
 
@@ -918,50 +1202,19 @@ migration.
   `#hero` (welcome.blade.php ↔ home.js and page-transitions.js), and
   `[data-swipe-deck|-card|-action|-count|-empty]` (discover/index.blade.php ↔
   swipe.js).
-- **`gallery.js` must never identify its own controls by sniffing their
-  markup.** `paint()` used to disable each arrow by asking it whether it had
-  `dataset.galleryPrev`, while `buildControls()` wrote `dataset[key]` with
-  `key` being the *keyboard shortcut* — so the attribute actually written was
-  `data-arrow-left`. The check was therefore never true for either button, both
-  fell through to the "last slide" branch, and **reaching the final photo
-  disabled Previous as well: no way back.** One argument doing two unrelated
-  jobs, and the two halves were never wired to each other.
-  `buildControls()` now takes `shortcut` and `hook` as separate arguments and
-  puts `prev` / `next` on `state`, which `paint()` reads directly. It also no
-  longer overwrites `state.controls` — that name meant the container element
-  before that line and a button array after it.
-  `the_previous_control_is_only_disabled_on_the_first_photo` pins the two
-  halves agreeing by reading the source, because there is no JS test runner
-  here and the symptom was invisible to every test that existed.
-- **The carousel and the hero are both full width, and that is knowingly soft.**
-  The page container runs to `max-w-[1600px]`, so both blocks render ~1504px
-  wide, while `DestinationController::storeUploadedImage()` stores uploads
-  **verbatim** with no resize and they are typically 1080–1170px phone shots.
-  That is a 1.3–1.4× upscale, so the photos render soft on wide screens.
-  **This is a decision, not an oversight.** `max-w-5xl` (1024px) on both blocks
-  was implemented and tested — sharp *and* consistent — then reverted: the owner
-  judged the narrower pair the wrong look for the page and asked twice for the
-  carousel to match the hero. Do not "fix" the softness by re-adding the cap
-  without asking; that is the option that was already declined.
-  **`object-fit` is not the lever either.** `cover` ships and is correct — it
-  crops without distorting. `fill` stretches the aspect ratio and `contain`
-  letterboxes a ~3.9:1 strip. No `object-fit` value prevents an upscale, so
-  "try a different object-fit" is the wrong fix.
-  The actual fix is to **resize the uploads** so a 1504px box has enough
-  pixels, which also makes `srcset` viable. That needs GD or Imagick, and
-  **neither is installed** — verified on the CLI *and* under XAMPP — so it means
-  enabling an extension on the host plus a backfill of existing photos.
-  `the_carousel_matches_the_hero_and_neither_is_capped` pins the match, records
-  the accepted cost in its own docblock, and still pins `object-cover` on both
-  images. Its failure message on the cap assertion points at that note so the
-  next person does not read it as a bug.
-- **The destination page's hero and carousel are adjacent inset cards at the
-  container width. Four layouts have been tried; do not redo the first three.**
-  The carousel has been: above the hero; hero-first full-bleed via `100vw`;
-  full-bleed via negative margins; down beside `02 / Location`; and is now back
-  directly under the hero at full width. It is a partial,
-  `destinations/partials/carousel` — one file keeps the no-JS fallback and the
-  `gallery.js` hooks from drifting apart.
+- **`resources/js/gallery.js` is GONE**, and so is the scroll-snap strip it
+  drove. Its lesson is worth keeping, because the stage's script has the same
+  shape of hazard: `paint()` used to disable each arrow by asking it whether it
+  had `dataset.galleryPrev`, while `buildControls()` wrote `dataset[key]` where
+  `key` was the *keyboard shortcut* — so the attribute written was
+  `data-arrow-left`, the check was never true for either button, and **reaching
+  the final photo disabled Previous as well: no way back.** One argument doing
+  two unrelated jobs, with the two halves never wired to each other.
+- **The destination page's hero block and its scroll-snap photo strip are both
+  gone.** Both sets of photographs are panels in the stage now, and the hero
+  photograph *is* the active panel. Do not re-add either. The stage's own section
+  documents the fan; this is only the history of what was removed, because two of
+  these attempts were tried and reverted on this page already:
   **Attempt 1 — `width: 100vw` + `margin-inline: calc(50% - 50vw)`.** Landed
   off-centre by roughly half a scrollbar: `100vw` measures the viewport
   *including* the vertical scrollbar, so the block is ~15px too wide; centring on
@@ -969,52 +1222,41 @@ migration.
   `body` only took **one**. One edge visibly short, the hero's background showing
   where the image was cut. That is what "it doesn't look smooth" was — a
   misalignment, not a preference.
-  **Attempt 2 — negative margins** (`-mx-5 sm:-mx-8 lg:-mx-12`, the inverse of
-  `<main>`'s `px-5 sm:px-8 lg:px-12`). Aligned, no arithmetic to get wrong, but
-  too wide for the page.
-  **Attempt 3 — beside the location map.** Left half the page empty on a wide
+  **Attempt 2 — beside the location map.** Left half the page empty on a wide
   screen *and* shrank the photos to ~40% of the container. The dead space was the
   give-away: the aside beside it is shorter than the left column, so the whole
   right half of the viewport sat empty.
-  So the width is whatever the container gives it. **Never put a `100vw` or a
-  `-mx-*` on either block**, and note that *any* `overflow-*` on an ancestor inside
-  the container silently defeats the attempt.
-  **The radii match on purpose:** both `rounded-[2rem]`, so the two adjacent media
-  blocks read as one unit. They were `2rem` / `1.5rem` while the carousel sat beside
-  the map card; that difference went with the move.
-  **Softness: accepted, and it is the trade.** ~1504px against a typical
-  1080–1170px upload is a ~1.3–1.4× upscale, so the photos are soft on a wide
-  screen. Narrower versions were implemented and reverted more than once, each
-  time sharp and each time judged too small. If the cap assertion fails, that is a
-  design change to raise, not a bug. The root fix is resizing uploads, which needs
-  GD or Imagick — absent from both the CLI and XAMPP.
-  **The carousel must stay the hero's `nextElementSibling`.** Order alone is not
-  enough: it was still "after the hero" while sitting below the map, which is what
-  let that regression through. `the_carousel_sits_directly_under_the_hero`
-  compares `nextElementSibling` *and* `compareDocumentPosition` — the first
-  catches drift, the second catches the carousel moving above the `<h1>`, which
-  would hand a screen reader and the tab order the photo strip before the
-  destination's name.
+  **The photos are still knowingly soft, and that is unchanged.**
+  `DestinationController::storeUploadedImage()` stores uploads **verbatim** with
+  no resize and they are typically 1080–1170px phone shots. Panels are 320 units
+  wide at the reference stage size, so the shortfall is now smaller than the
+  ~1.3–1.4× upscale the full-width strip had — but nothing about it is fixed.
+  `object-fit` is not the lever: `cover` ships and is correct, `fill` stretches the
+  aspect ratio and `contain` letterboxes a portrait strip. The actual fix is
+  **resizing the uploads**, which needs GD or Imagick, and **neither is
+  installed** — verified on the CLI *and* under XAMPP.
+- **The sand surface on both destination routes uses `-mx-*`, and that is a
+  BACKGROUND BLEED, not a width.** `-mx-5 -my-10 sm:-mx-8` against the layout
+  main's own `px-5 py-10 sm:px-8 lg:px-12` is exact cancellation: the element
+  ends up exactly as wide as its container's content box with the sand running
+  under the padding. **Never put a `100vw` or a `-mx-*` on a stage panel, the
+  stage itself, or anything inside the stage** — only on that one surface wrapper.
+  Also note that *any* `overflow-*` on an ancestor inside the stage silently
+  defeats a bleed, and `.tm-stage` is `overflow: hidden` on purpose: that is what
+  crops the outer pair of panels.
 - **`overflow-x: clip` on `body` is not available as a fallback.** It came and
   went with the `100vw` attempt. If it is ever wanted, `hidden` is the wrong value:
   **`hidden` creates a scroll container**, making `position: sticky` resolve against
   `body` instead of the viewport — silently breaking the itinerary editor's sticky
   save bar and the discover deck's sticky header. `clip` clips without a scrollport.
-- **`.tm-no-scrollbar` hides the carousel's scrollbar without stopping it
-  scrolling.** Separate from `.tm-drag-rail`, which already hid one, because that
-  class also sets `cursor: grab` — wrong for the carousel, which is driven by
-  arrows, dots, keyboard and swipe, so a grab cursor promises a drag nothing
-  implements. It needs **both** spellings: `scrollbar-width: none` covers Firefox
-  and now Chrome, and the `::-webkit-scrollbar` rule covers the rest; dropping
-  either silently brings the bar back on some browsers. `overflow-x-auto` must
-  stay on the track regardless — `goTo()` and `watchScroll()` both read
-  `scrollLeft`.
-  `the_track_hides_its_scrollbar_and_the_rule_still_exists` pins both halves: the
-  class on the track, **and** that app.css still defines it. A class in markup
-  with no rule behind it is the failure mode
-  `InteractionMarkupTest::every_attribute_selector_in_the_stylesheet_is_produced_by_something`
-  does not cover — that one guards CSS styling nothing, not markup styling
-  nothing.
+- **`.tm-no-scrollbar` is GONE, and `.tm-drag-rail` is all that remains of that
+  pair.** It existed only for the deleted scroll-snap track and hid a scrollbar
+  nothing scrolls any more. A rule with no markup behind it reads like proof a
+  component still exists, which is the same failure as the `[data-page-curtain]`
+  CSS noted below — and `InteractionMarkupTest::every_attribute_selector_in_the_stylesheet_is_produced_by_something`
+  does **not** cover it, because that guard is about `data-*` attributes.
+  `DestinationGalleryTest::the_scroll_snap_photo_strip_is_gone` asserts both the
+  markup and the stylesheet and the deleted files.
 - `page-transitions.js` never intercepts navigation. It only *observes* it: a
   same-origin link click or a same-origin form submit arms a 350 ms timer, and
   only if the browser has not already navigated does the full-screen

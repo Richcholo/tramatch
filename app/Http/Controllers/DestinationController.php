@@ -2,12 +2,29 @@
 
 namespace App\Http\Controllers;
 
+use App\Domain\Destinations\DestinationCarousel;
 use App\Models\Destination;
+use App\Models\User;
+use App\Services\RecommendationService;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class DestinationController extends Controller
 {
+    /**
+     * How long a slide holds before autoplay advances, in milliseconds.
+     *
+     * Not the four seconds a carousel is usually given. The stage's own motion is
+     * 620ms of panel travel and a 700-900ms backdrop cross-fade, and a dwell
+     * shorter than the sum of those reads as an interruption rather than as
+     * rhythm -- the visitor spends longer watching the transition than reading
+     * the caption. Seven seconds is long enough to read the caption and the
+     * standfirst under it.
+     *
+     * Rendered into the markup as `data-stage-interval`, so the script and the
+     * view have one number to agree with.
+     */
+    private const STAGE_INTERVAL_MS = 7000;
     public function index(Request $request): View
     {
         $locations = Destination::query()
@@ -44,7 +61,24 @@ class DestinationController extends Controller
             ->onEachSide(1)
             ->withQueryString();
 
-        return view('destinations.index', compact('destinations', 'locations'));
+        /*
+         * `?slide=<slug>` centres a specific destination, so a link can point at
+         * "the stage, showing X" and stay bookmarkable. Without it the stage opens
+         * on the first photograph in canonical order.
+         */
+        $stage = $this->stage($request->filled('slide')
+            ? $request->string('slide')->toString()
+            : null);
+
+        return view('destinations.index', [
+            'destinations' => $destinations,
+            'locations' => $locations,
+            'stageSlides' => $stage['slides'],
+            'stageActiveIndex' => $stage['activeIndex'],
+            'stageNeighbours' => $stage['neighbours'],
+            'stageMatchScores' => $stage['matchScores'],
+            'stageInterval' => self::STAGE_INTERVAL_MS,
+        ]);
     }
 
     public function show(Destination $destination): View
@@ -59,7 +93,23 @@ class DestinationController extends Controller
                 ->latest(),
         ]);
 
+        /*
+         * The shared stage, with THIS destination centred.
+         *
+         * `activeIndex` is derived from the route, which is what makes a hard page
+         * load land in exactly the same visual state as an in-page advance -- so
+         * deep links, Back/Forward and a shared link all replay correctly. The
+         * order comes from the same presenter the index uses, so the stage here is
+         * the index stage with the index shifted, and the two cannot drift.
+         */
+        $stage = $this->stage($destination->slug);
+
         return view('destinations.show', [
+            'stageSlides' => $stage['slides'],
+            'stageActiveIndex' => $stage['activeIndex'],
+            'stageNeighbours' => $stage['neighbours'],
+            'stageMatchScores' => $stage['matchScores'],
+            'stageInterval' => self::STAGE_INTERVAL_MS,
             'destination' => $destination,
             'openState' => $this->openState($destination),
             'hoursLabel' => $this->hoursLabel($destination),
@@ -70,6 +120,65 @@ class DestinationController extends Controller
             'daySlugs' => Destination::daySlugs(),
             'updatedOn' => $this->updatedOn($destination),
         ]);
+    }
+
+    /**
+     * Everything the destinations stage needs, for either page.
+     *
+     * ONE method, because the two routes must not be able to disagree. The fan on
+     * a destination page being the index fan with the index shifted is the whole
+     * continuity feature, and it is only true if both routes resolve through the
+     * same call.
+     *
+     * @return array{slides: \Illuminate\Support\Collection, activeIndex: int, neighbours: array{prev: ?array, next: ?array}, matchScores: array<int, float>}
+     */
+    private function stage(?string $slug = null): array
+    {
+        $carousel = app(DestinationCarousel::class);
+
+        return [
+            'slides' => $carousel->slides($slug),
+            'activeIndex' => $carousel->activeIndex($slug),
+            'neighbours' => $carousel->neighbours($slug),
+            'matchScores' => $this->stageMatchScores(),
+        ];
+    }
+
+    /**
+     * Match scores for the stage caption, keyed by destination id.
+     *
+     * EMPTY FOR A GUEST, which is the honest answer rather than a missing feature:
+     * a match score in this app means "how well this fits YOUR travel profile",
+     * and there is no profile behind an anonymous request. The caption's score
+     * micro-label is conditional on this map having an entry, so a guest sees the
+     * cost and the budget tier and nothing invented.
+     *
+     * Read from `RecommendationService` rather than reimplemented, so the number on
+     * the stage is the same number the recommendations page and the itinerary
+     * generator use. That service's own rule applies unchanged: only destinations
+     * this user LIKED and whose budget matches exactly, so a destination the user
+     * has never swiped simply has no score rather than a low one.
+     *
+     * The limit is generous because the stage can reach any destination and the
+     * default twenty would blank the label on most slides. It is still one query:
+     * the service fetches the whole candidate set and takes afterwards.
+     *
+     * @return array<int, float>
+     */
+    private function stageMatchScores(): array
+    {
+        $user = auth()->user();
+
+        if (! $user instanceof User) {
+            return [];
+        }
+
+        return app(RecommendationService::class)
+            ->recommend($user, 500)
+            ->mapWithKeys(fn (Destination $destination) => [
+                $destination->id => (float) $destination->match_score,
+            ])
+            ->all();
     }
 
     private function hoursLabel(Destination $destination): ?string

@@ -51,6 +51,27 @@ class DestinationImage extends Model
     }
 
     /**
+     * A photo IS a stage slide, so touching one changes the cached stage order.
+     *
+     * Without this, an admin uploads a photograph, sees it on the destination's
+     * page, and the destinations stage keeps serving the cached slide list without
+     * it for up to ten minutes.
+     *
+     * On the model rather than in `Destination::booted()`, which cannot see a
+     * child row's own save or delete events. `saved` rather than `created`, so a
+     * re-save of an existing photo also invalidates.
+     */
+    protected static function booted(): void
+    {
+        $forget = function (): void {
+            app(\App\Domain\Destinations\DestinationCarousel::class)->forget();
+        };
+
+        static::saved($forget);
+        static::deleted($forget);
+    }
+
+    /**
      * The next free slot, so a new upload lands after the existing ones.
      *
      * Starts at 0 for an empty destination. Note `max()` returns null rather
