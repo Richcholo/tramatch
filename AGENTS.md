@@ -517,6 +517,36 @@ a **320 × 570** centre panel (`width: calc(320 * var(--u))` plus
 - **`--u` must be declared one level BELOW `container-type`.** An element cannot
   resolve container query units against its own container; on the container
   element they read the nearest *ancestor*, which here would be nothing.
+- **THE STAGE MUST DECLARE A WIDTH, NOT ONLY A MAX-WIDTH, AND THIS COST A
+  STAGE.** `.tm-stage-wrap` is a flex ITEM in `.tm-page__opening`, which is a
+  *column* flex container — so the cross axis is horizontal, and on the cross axis
+  **`margin-inline: auto` disables the default `align-items: stretch`**. The item
+  stopped being stretched and was sized by its content instead. Every panel inside
+  is `position: absolute`, so the stage's content width is zero, and
+  shrink-to-fit of zero is zero.
+  The consequence ran the whole chain: `.tm-stage` at `width: 0` → `--u` of
+  nothing → `.tm-fan { height: calc(660 * var(--u)) }` → `0px` → every
+  absolutely-positioned panel clipped out of sight by the stage's own
+  `overflow: hidden`. The panels were in the HTML, every image URL answered 200,
+  the stylesheet carried every geometry rule, and **all 352 tests passed**. The
+  page rendered a photograph-free stage and reported nothing, because the defect
+  was computed GEOMETRY and **no test in this repo measures any**.
+  It worked before the stage became the page because the stage was in BLOCK
+  layout then, where `margin-inline: auto` + `max-width` does exactly what it
+  looks like. **Rule: any `margin-*: auto` on a flex item needs a definite width
+  beside it.** `width: 100%` + `max-width` + `margin-inline: auto` is correct in
+  both contexts.
+  `the_stage_declares_a_width_and_not_only_a_max_width` asserts the declaration
+  and `the_stage_wrapper_is_a_flex_item_of_the_opening_column` asserts the
+  flex-item relationship that makes it load-bearing; both were **falsified** by
+  deleting `width: 100%`.
+- **A BRACE INSIDE A CSS COMMENT BREAKS BRACE-MATCHING READERS.** Legal CSS, and
+  it shipped here while the stage was broken for an unrelated reason — but a `}`
+  in a comment terminates any tool that reads `app.css` by matching braces, which
+  is how a build gets "verified" against a rule that was never parsed. Comments
+  are prose; prose does not need braces.
+  `no_comment_in_the_stylesheet_contains_a_brace` is the guard, and it is falsified
+  by putting one brace in a comment.
 - **THE ROTATION SIGN MUST MIRROR.** A same-sign rotation tilts the fan into a
   `>` instead of the shallow V.
 - **NO STAGGER.** One formation, 620ms, one ease-out.
@@ -595,6 +625,15 @@ it**, which is why it asserts the invariant now.
   Tailwind `hidden` *class*.
 - **`settled` is ONE flag driving TWO fades**, the caption's and the pager's, so
   they cannot disagree about when the fan settled.
+- **`init()` PUSHES STATE INTO STEP RATHER THAN TRUSTING THE RENDER.** It calls
+  `syncImages()`, `syncNumbers()` and `syncMetrics()`, which look redundant — the
+  server already renders the preload window, the opening numbers and the hidden
+  guest metric — and are not. `index` is **clamped** to the payload's slide
+  count, so a stale cache entry shorter than the rendered markup lands the fan on
+  a panel that was never given a photograph. Three idempotent passes over a couple
+  of hundred nodes take "the server thought so" off the critical path, which is
+  the same shape of fault as the width bug below: everything the server said was
+  true and only the computed reality was wrong.
 
 #### `stage.js` is an Alpine component, not a Vite entry
 
@@ -644,12 +683,24 @@ rows participate. Do not merge them.
 destination route, **and the stage's include from `destinations/index.blade.php`**.
 Do not re-add any of them.
 
-**Verified by hand: nothing yet.** No browser automation exists in this repo, so
-the choreography, the autoplay timing, the count-up, the chevron hover states and
-the reduced-motion path have not been clicked, and **neither has the page-wide
-dark restyle**. The tests pin the order, the mechanism, the composition and the
-markup/CSS seams; the motion and the look need a click-through that has not
-happened. **Click through the whole page after any change to `stage.js`, the
+**Verified by hand: the WIDTH BUG, and nothing else.** No browser automation
+exists in this repo, so the choreography, the autoplay timing, the count-up, the
+chevron hover states and the reduced-motion path have not been clicked, and
+**neither has the page-wide dark restyle**. The tests pin the order, the
+mechanism, the composition and the markup/CSS seams; the motion and the look need
+a click-through that has not happened.
+
+**What a console probe DID establish**, and it is worth recording because it is the
+only measurement of this stage that has ever been taken: reading
+`getComputedStyle` on `.tm-stage`, `.tm-fan` and `[data-offset="0"]` reported
+`stageWidth: 0`, `fanHeight: 0px`, `cardWidth: 0px` — which located the flex
+auto-margin trap instantly after twenty greps of the served HTML had found
+nothing. **When a stage bug resists the markup, go and read the computed
+geometry; do not keep grepping the HTML.** A dump of
+`{ stageWidth, fanHeight, cardWidth, cardHeight, u, imgSrc, imgDataSrc, imgBox,
+imgComplete, imgNatural }` is about eight lines and settles it. The fix is not
+verified until someone sees photographs on the page, which has not happened yet.
+**Click through the whole page after any change to `stage.js`, the
 `[data-offset]` rules, the panel markup or `.tm-page`.**
 
 ### Destination-source crawling
