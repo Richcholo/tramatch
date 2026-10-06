@@ -431,6 +431,119 @@ class DestinationStageTest extends TestCase
         $this->assertCount(1, $this->stage()->all());
     }
 
+/**
+     * THE STAGE MUST DECLARE A WIDTH, not only a max-width.
+     *
+     * THE BUG THIS EXISTS FOR. `.tm-page__opening` is a COLUMN flex container, so
+     * the cross axis is horizontal — and on the cross axis `margin-inline: auto`
+     * DISABLES the default `align-items: stretch`. The stage stopped being
+     * stretched and was sized by its content instead. Every panel inside it is
+     * `position: absolute`, so the stage's content width was zero, and
+     * shrink-to-fit of zero is zero.
+     *
+     * So `.tm-stage` rendered at `width: 0`, `--u` became `calc(100cqw / 1088)` of
+     * nothing, `.tm-fan`'s `height: calc(660 * var(--u))` resolved to `0px`, and
+     * every absolutely-positioned panel was clipped out of sight by the stage's own
+     * `overflow: hidden`.
+     *
+     * Everything else was perfect and everything reported success: the panels were
+     * in the HTML, every image URL returned 200, the stylesheet carried every
+     * geometry rule, and all 350-odd HTTP-level tests passed. The console showed
+     * `stageWidth: 0`. It worked before the stage became the page because the stage
+     * was in block layout then, where `margin-inline: auto` does what it looks
+     * like — which is why nothing in review caught it and the browser did, in one
+     * glance, in about a second.
+     *
+     * NO TEST HERE MEASURES GEOMETRY. This one asserts the DECLARATION that
+     * geometry depends on, because a declaration can be asserted and computed
+     * width cannot.
+     */
+#[Test]
+    public function the_stage_declares_a_width_and_not_only_a_max_width(): void
+    {
+        preg_match('/\.tm-stage-wrap\s*\{(.*?)\n    \}/s', $this->css(), $rule);
+
+        $declarations = (string) preg_replace('/\/\*.*?\*\//s', '', $rule[1] ?? '');
+
+        foreach ([
+            'width: 100%',
+            'max-width: 68rem',
+            'margin-inline: auto',
+            'container-type: inline-size',
+        ] as $declaration) {
+            $this->assertStringContainsString(
+                $declaration,
+                $declarations,
+                'the stage wrapper has lost `'.$declaration.'`. It is a flex item with '
+                .'auto inline margins, so it needs a DEFINITE width or it collapses to '
+                .'its content width -- which is zero, because every panel inside it is '
+                .'absolutely positioned.'
+            );
+        }
+    }
+
+    /**
+     * The stage wrapper is a flex item, and that is what makes the width matter.
+     *
+     * Asserted from the rendered markup as well as the stylesheet, because the two
+     * together are the whole mechanism: the wrapper really is inside the flex
+     * column, so the auto-margin rule really does apply to it.
+     */
+#[Test]
+    public function the_stage_wrapper_is_a_flex_item_of_the_opening_column(): void
+    {
+        $html = (string) $this->get(route('destinations.show', $this->destination()))
+            ->assertOk()
+            ->getContent();
+
+        $dom = $this->dom($html);
+
+        $opening = $dom->query('//*[contains(concat(" ", normalize-space(@class), " "), " tm-page__opening ")]');
+
+        $this->assertSame(1, $opening->length);
+
+        $this->assertSame(
+            1,
+            $dom->query('.//*[contains(concat(" ", normalize-space(@class), " "), " tm-stage-wrap ")]', $opening->item(0))->length,
+            'the stage has drifted out of the opening column'
+        );
+
+        $this->assertMatchesRegularExpression(
+            '/\.tm-page__opening\s*\{[^}]*flex-direction:\s*column/s',
+            $this->css(),
+            'the opening is no longer a column flex container, which would change the rule '
+            .'that makes the stage\'s width load-bearing'
+        );
+    }
+
+    /**
+     * A comment in this stylesheet must not contain a brace.
+     *
+     * Legal CSS, and the stage shipped looking broken because of an adjacent
+     * mistake -- but a `}` inside a comment terminates every naive brace-matching
+     * reader of this file, which is how a build gets "verified" against a rule that
+     * was never actually parsed. Comments are prose; prose does not need braces.
+     */
+#[Test]
+    public function no_comment_in_the_stylesheet_contains_a_brace(): void
+    {
+        preg_match_all('~/\*.*?\*/~s', $this->css(), $comments);
+
+        $this->assertNotEmpty($comments[0], 'the stylesheet has no comments, which cannot be right');
+
+        foreach ($comments[0] as $comment) {
+            $this->assertDoesNotMatchRegularExpression(
+                '~[{}]~',
+                $comment,
+                'a CSS comment contains a brace, which breaks any tool that reads this '
+                .'stylesheet by matching braces. Comment: '
+                .trim(preg_replace('/\s+/', ' ', $comment) ?? '')
+            );
+        }
+    }
+
+    /**
+     * THE STAGE IS ON THE DESTINATION PAGE AND NOWHERE ELSE.
     /**
      * THE STAGE IS ON THE DESTINATION PAGE AND NOWHERE ELSE.
      *

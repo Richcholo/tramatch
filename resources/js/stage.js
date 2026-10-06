@@ -102,6 +102,33 @@ export default function destinationStage() {
             this.backdrops = [...this.$el.querySelectorAll('[data-stage-backdrop]')];
             this.shownBackdrop = this.backdrops.find((layer) => layer.classList.contains('is-shown')) || null;
 
+            /*
+             * PUSH THE RENDERED STATE INTO STEP RATHER THAN TRUSTING IT.
+             *
+             * The server already renders the preload window for the opening index,
+             * so these calls look redundant and are not. The `index` set above is
+             * CLAMPED to the real slide count: if the cached payload is shorter than
+             * the rendered markup -- a stale cache entry against a catalogue that has
+             * since grown, which is exactly what a ten-minute cache window invites --
+             * then `index` lands somewhere other than `data-stage-active`, and the fan
+             * opens on a panel that was never given a photograph.
+             *
+             * The same shape of fault is what made the width bug this file now sits
+             * beside so expensive: the markup was correct, every image URL answered
+             * 200, the stylesheet was correct, and only the computed reality was
+             * wrong. Asserting the state here costs three idempotent passes over a
+             * couple of hundred nodes and takes "the server thought so" off the
+             * critical path.
+             *
+             * `syncNumbers()` and `syncMetrics()` are here for the same reason and
+             * also settle the guest case: the match metric starts hidden and the two
+             * numbers start on the opening slide's values, and both are re-asserted
+             * from the same `active()` the caption reads.
+             */
+            this.syncImages();
+            this.syncNumbers();
+            this.syncMetrics();
+
             this.announce();
             this.trackVisibility();
             this.scheduleAutoplay();

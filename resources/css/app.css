@@ -740,12 +740,41 @@
     }
 
     .tm-stage-wrap {
-
         /*
-         * The container, and also the stage's width. The cap lives HERE, on the
-         * container, so that `--u` cannot exceed 1px and the geometry cannot grow
-         * past the composition on a wide page.
+         * `width: 100%` IS LOAD-BEARING AND IT IS NOT COSMETIC.
+         *
+         * The stage sits as a flex ITEM inside `.tm-page__opening`, which is a COLUMN
+         * flex container. That makes the cross axis HORIZONTAL, and on the cross
+         * axis `margin-inline: auto` **disables the default `align-items: stretch`**:
+         * the item stops being stretched and is sized by its content, then centred.
+         *
+         * Every panel inside the stage is `position: absolute`, so the stage's
+         * content width is zero -- and shrink-to-fit of zero is zero. The whole
+         * stage therefore collapsed to `width: 0`, `--u` became `calc(100cqw / 1088)`
+         * of nothing, `.tm-fan`'s `height: calc(660 * var(--u))` resolved to `0px`,
+         * and every absolutely-positioned panel was clipped out of sight by
+         * the stage's own `overflow: hidden`.
+         *
+         * What it looked like from the outside: the panels were in the DOM, every
+         * image URL returned 200, the stylesheet was correct, and every HTTP-level
+         * test passed. The page rendered a photograph-free stage and reported
+         * nothing, because the defect was computed GEOMETRY and no test here measures
+         * any.
+         *
+         * It worked before the stage became the page because the stage was in BLOCK
+         * layout then, where `margin-inline: auto` + `max-width` does exactly what it
+         * looks like. **Any `margin-*: auto` on a flex item needs a definite width
+         * next to it.**
+         *
+         * `width: 100%` + `max-width: 68rem` + `margin-inline: auto` is the pattern
+         * that is correct in both contexts: a definite size, the max-width capping
+         * it, then the auto margins centring the leftover.
+         *
+         * The `max-width` cap lives HERE, on the container, deliberately: it is what
+         * keeps `--u` at or below 1px, and so keeps the geometry from growing past
+         * the composition on a wide page.
          */
+        width: 100%;
         max-width: 68rem;
         margin-inline: auto;
         container-type: inline-size;
