@@ -1,162 +1,162 @@
 {{--
-    The destinations stage: one shared fanned carousel.
+    The destinations hero on a destination page: the fan, the page's heading, and
+    the controls.
 
-    THE SPINE. Rendered by `/destinations` and by every `/destinations/{slug}`,
-    from the same presenter and the same order, differing only in which slide is
-    active. That is the entire continuity feature: the fan on a destination page
-    IS the index fan with the index shifted, so the two pages cannot drift.
+    Shown on a destination page only. `/destinations` is a search-and-grid listing
+    again and does not use this.
 
     THE FAN DOES NOT MOVE BECAUSE OF PHP. Read the offset note in app.css first.
     `data-offset` is signed and relative to the active panel, and every geometric
-    property is derived from it in CSS. The server renders each slide's INITIAL
-    offset so the page is correct with JavaScript disabled; Alpine then keeps
-    rewriting that attribute as the index moves, and the CSS transition
+    property is derived from it in CSS. The server renders each panel's INITIAL
+    offset so the page is right with JavaScript disabled; the script then keeps
+    rewriting that attribute as the active index moves, and the CSS transition
     interpolates. If you ever set an offset from PHP expecting it to survive an
     advance, it will not.
 
+    THE HEADING BELONGS TO THE PAGE, NOT THE CAROUSEL, and it is rendered here for
+    POSITION rather than for ownership -- it is fed `$destination` directly, never
+    a slide.
+
+    That distinction is load-bearing twice over. It used to be derived from the
+    active slide, which put a different destination's name above prose, hours and
+    fees that were all still about the first one, and moved the document heading out
+    from under the reader. Worse, because it lived only here, a destination with no
+    featured destinations rendered a page with NO `h1` AT ALL -- the section was
+    skipped as empty and took the heading with it. Rendering it unconditionally and
+    from the destination fixes both.
+
+    Three further things this no longer does, all deliberate:
+
+    It renders no backdrop. It used to put a blurred layer of every slide behind
+    the fan. The page now paints the destination's own photo as a whole-page
+    background behind everything, so a second blurred layer would double-darken the
+    hero and fight it for the same job.
+
+    It does not autoplay, and has no pause control. This is a page someone has
+    arrived at; the copy beneath is all about one place, and a timer that keeps
+    shifting the fan under someone reading it is worse than no timer. With nothing
+    moving by itself, WCAG 2.2.2 does not apply and a pause button would be a dead
+    control.
+
+    @param  \App\Models\Destination  $destination
     @param  \App\Domain\Destinations\CarouselSlide[]  $slides
     @param  int  $activeIndex
     @param  array{prev: ?\App\Domain\Destinations\CarouselSlide, next: ?\App\Domain\Destinations\CarouselSlide}  $neighbours
-    @param  bool  $autoplay
-    @param  int  $interval
-    @param  string  $headingTag
 --}}
 
 @php
     $count = count($slides);
-    $headingTag = $headingTag ?? 'h1';
-
-    /*
-     * Autoplay is OFF on a destination page.
-     *
-     * On the index it is a browse surface: the visitor is looking through
-     * destinations and a slow advance is a suggestion to keep looking. On a
-     * destination page they have arrived somewhere, and a timer that keeps
-     * swapping the backdrop out from under someone reading the description is
-     * worse than no timer. It also fights the page's own scroll.
-     *
-     * Where autoplay DOES run, the pause control is always present, because a
-     * loop longer than five seconds without one fails WCAG 2.2.2.
-     */
-    $label = $activeIndex + 1;
+    $reach = \App\Domain\Destinations\DestinationCarousel::REACH;
 @endphp
 
-{{-- No carousel at all, and not an empty arc either. --}}
-@if ($count === 0)
-    <section
-        data-destination-stage
-        aria-label="Destinations"
-        class="relative isolate overflow-hidden bg-volcanic-teal"
-    >
-        <div class="px-6 py-20 text-center">
-            <h1 class="font-display text-3xl font-semibold text-white">
-                No destinations to show yet
-            </h1>
-
-            <p class="mx-auto mt-3 max-w-md text-sm text-white/70">
-                Nothing has been published, so there is nothing to browse. Everything
-                appears here as soon as a destination is published.
-            </p>
-        </div>
-    </section>
-@else
-    <section
-        data-destination-stage
-        data-stage-count="{{ $count }}"
-        data-stage-active="{{ $activeIndex }}"
-        data-stage-interval="{{ $interval }}"
-        data-stage-autoplay="{{ $autoplay ? '1' : '0' }}"
+<section
+    data-destination-stage
+    data-stage-count="{{ $count }}"
+    data-stage-active="{{ $activeIndex }}"
+    @if ($count > 0)
         aria-roledescription="carousel"
-        aria-label="Destinations"
+    @endif
+    aria-label="{{ $destination->name }}"
+    @if ($count > 0)
         x-data="heroCarousel()"
         @keydown.arrow-left.prevent="prev()"
         @keydown.arrow-right.prevent="next()"
         @keydown.home.prevent="go(0)"
         @keydown.end.prevent="go(count - 1)"
-        @mouseenter="pause('hover')"
-        @mouseleave="resume('hover')"
-        @focusin="pause('focus')"
-        @focusout="resume('focus')"
-        class="relative isolate overflow-hidden bg-volcanic-teal"
-    >
-        {{--
-            The ambient backdrop. One layer per slide, and the active one is the
-            only one unhidden, so the wash tracks the fan.
+    @endif
+    class="relative"
+>
+    {{--
+        The fan and the heading share one relatively-positioned wrapper, because the
+        heading is centred on the FAN. Centring it on the section would drop it
+        below the cards, because the pager sits under them.
+    --}}
+    <div class="relative">
+        @if ($count > 0)
+            {{-- `list` semantics: it is an ordered set of destinations. --}}
+            <ul data-stage-fan class="tm-fan list-none">
+                @foreach ($slides as $index => $slide)
+                    @include('components.destinations.carousel-panel', [
+                        'slide' => $slide,
+                        'index' => $index,
+                        'count' => $count,
+                        'reach' => $reach,
+                    ])
+                @endforeach
+            </ul>
+        @else
+            {{--
+                No featured destinations. The fan is skipped and the heading sits
+                alone over the photograph -- which is the whole point of feeding it
+                from `$destination`. An earlier version skipped the whole section,
+                so this page rendered with no `h1` at all.
+            --}}
+            <div class="flex min-h-[16rem] items-center justify-center px-6 py-16">
+                <div class="max-w-3xl text-center">
+                    <p class="text-xs font-bold uppercase tracking-[0.32em] text-boracay-light">
+                        {{ trim($destination->municipality.', '.$destination->province, ', ') }}
+                    </p>
 
-            Scaled past the edges because `blur-3xl` samples outside the element box
-            and a 1:1 image leaves a transparent rim, which showed as a hard edge
-            inside the stage.
-        --}}
-        @foreach ($slides as $slide)
-            @if ($slide->hasImage())
-                <img
-                    data-stage-backdrop
-                    src="{{ $slide->imageUrl }}"
-                    alt=""
-                    aria-hidden="true"
-                    @if (! $slide->isActive) hidden @endif
-                    class="absolute inset-0 h-full w-full scale-125 object-cover opacity-70 blur-3xl"
-                >
-            @endif
-        @endforeach
+                    <h1 class="mt-3 font-display text-[clamp(2rem,5.5vw,4rem)] font-semibold uppercase leading-[1.02] tracking-[-0.02em] text-white drop-shadow-[0_2px_18px_rgba(11,37,43,0.75)]">
+                        {{ $destination->name }}
+                    </h1>
 
-        @if ($activeSlideHasNoImage = ! collect($slides)->firstWhere('isActive', true)?->hasImage())
-            <div aria-hidden="true" class="absolute inset-0 bg-gradient-to-br from-boracay via-cyan-500 to-volcanic-teal"></div>
+                    <span aria-hidden="true" class="mx-auto mt-5 block h-0.5 w-10 bg-white/60"></span>
+                </div>
+            </div>
         @endif
 
         {{--
-            A GRADIENT scrim, not a flat fill. A flat `bg-volcanic-teal/70` across
-            the stage flattened the backdrop to near-solid dark teal and threw away
-            the blurred photograph, which is most of what makes the stage feel
-            photographic rather than like a coloured box.
+            The heading, over the fan. Stage-level rather than a child of a panel,
+            so a long name is never clipped by a panel's `overflow`, and z-40
+            against the fan's z-30 guarantees no panel can be painted over it.
+            `pointer-events-none` keeps the panels clickable through the text.
+
+            SIZE IS LOAD-BEARING. An earlier version was `lg:text-7xl xl:text-8xl`
+            with no width constraint, which put an ~90px headline across the page and
+            read as a banner laid over the photographs rather than a caption on them.
         --}}
-        <div aria-hidden="true" class="absolute inset-0 bg-gradient-to-b from-volcanic-teal/75 via-volcanic-teal/55 to-volcanic-teal/85"></div>
+        @if ($count > 0)
+            <div class="pointer-events-none absolute inset-0 z-40 flex items-center justify-center px-6 text-center">
+                <div class="max-w-3xl">
+                    <p class="text-xs font-bold uppercase tracking-[0.32em] text-boracay-light">
+                        {{ trim($destination->municipality.', '.$destination->province, ', ') }}
+                    </p>
 
-        {{-- The fan. `list` semantics: it is an ordered set of destinations. --}}
-        <ul
-            data-stage-fan
-            class="tm-fan mt-16 list-none sm:mt-20 lg:mt-24"
-        >
-            @foreach ($slides as $index => $slide)
-                @include('components.destinations.carousel-panel', [
-                    'slide' => $slide,
-                    'index' => $index,
-                    'count' => $count,
-                    'reach' => \App\Domain\Destinations\DestinationCarousel::REACH,
-                ])
-            @endforeach
-        </ul>
+                    <h1
+                        data-stage-title
+                        class="mt-3 font-display text-[clamp(2rem,5.5vw,4rem)] font-semibold uppercase leading-[1.02] tracking-[-0.02em] text-white drop-shadow-[0_2px_18px_rgba(11,37,43,0.75)]"
+                    >{{ $destination->name }}</h1>
 
-        {{-- Chevrons. Links, because they navigate to a real destination. --}}
+                    {{-- The reference's short accent rule, flush-left with the text
+                         block rather than centred under it. --}}
+                    <span aria-hidden="true" class="mt-5 block h-0.5 w-10 bg-white/60"></span>
+
+                    <p class="mt-5 text-[0.7rem] uppercase tracking-[0.2em] text-white/55">
+                        {{ $activeIndex + 1 }} / {{ $count }}
+                    </p>
+                </div>
+            </div>
+        @endif
+    </div>
+
+    @if ($count > 1)
         @include('components.destinations.carousel-chevrons', [
             'neighbours' => $neighbours,
         ])
 
-        {{-- The caption. Stage-level, never a child of a panel. --}}
-        @include('components.destinations.carousel-caption', [
-            'activeSlide' => $slides[$activeIndex],
-            'activeIndex' => $activeIndex,
-            'count' => $count,
-            'headingTag' => $headingTag,
-        ])
-
-        {{-- Dots plus the mandated pause control. --}}
         @include('components.destinations.carousel-pager', [
             'slides' => $slides,
             'activeIndex' => $activeIndex,
-            'autoplay' => $autoplay,
         ])
+    @endif
 
-        {{-- The entrance wash. --}}
-        <div data-wash aria-hidden="true" class="pointer-events-none absolute inset-0 z-30 bg-white"></div>
-
-        <p
-            data-stage-status
-            class="sr-only"
-            role="status"
-            aria-live="polite"
-            aria-atomic="true"
-            x-text="announcement"
-        ></p>
-    </section>
-@endif
+    <p
+        data-stage-status
+        class="sr-only"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        x-text="announcement"
+    ></p>
+</section>

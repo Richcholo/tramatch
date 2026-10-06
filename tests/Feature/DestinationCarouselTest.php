@@ -3,15 +3,21 @@
 namespace Tests\Feature;
 
 use App\Models\Destination;
+use App\Models\User;
 use DOMDocument;
-use DOMElement;
 use DOMXPath;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * The shared destinations carousel, and the seam between the two page kinds.
+ * The destinations fan on a destination page, and the page it sits on.
+ *
+ * SCOPE, because it moved: the fan is on `/destinations/{slug}` ONLY.
+ * `/destinations` is a search-and-grid listing again and has no carousel, so
+ * there is no longer a two-page seam to keep in step. `DestinationCarousel` still
+ * supplies the order, which is what keeps the fan deterministic and the chevrons
+ * pointing at the slides the fan actually shows.
  *
  * THE TEST THIS FILE EXISTS FOR is `the_fan_actually_moves`. The carousel shipped
  * looking frozen: the panels' `data-offset` attributes were written once by Blade
@@ -69,16 +75,21 @@ class DestinationCarouselTest extends TestCase
             ->getContent();
     }
 
-    private function panelOffsets(string $html): array
+    private function indexHtml(): string
+    {
+        return $this->get(route('destinations.index'))->assertOk()->getContent();
+    }
+
+    private function panelNames(string $html): array
     {
         $xpath = $this->xpath($html);
-        $offsets = [];
+        $names = [];
 
         foreach ($xpath->query('//*[@data-stage-panel]') as $panel) {
-            $offsets[] = (int) $panel->getAttribute('data-offset');
+            $names[] = $panel->getAttribute('data-stage-name');
         }
 
-        return $offsets;
+        return $names;
     }
 
     // ---------------------------------------------------------------------
@@ -171,13 +182,6 @@ class DestinationCarouselTest extends TestCase
             .'same size and the fan reads as a flat row'
         );
 
-        // And the heights genuinely differ, or there is no depth.
-        //
-        // The near pair shares ONE grouped rule
-        // (`[data-offset='-1'], [data-offset='1'] { height: ... }`), so a regex
-        // that walks to the next `{` consumes the second selector and never
-        // captures offset 1 at all. Hence: assert the grouped selector exists, and
-        // compare 0 / -1 / -2 rather than 0 / 1 / 2.
         $this->assertMatchesRegularExpression(
             "/\[data-offset='-1'\],\s*\[data-offset='1'\]\s*\{/s",
             $css,
@@ -185,6 +189,10 @@ class DestinationCarouselTest extends TestCase
             .'sides came to disagree about size'
         );
 
+        // And the three heights genuinely differ, or there is no depth. The height
+        // is searched for INSIDE the rule body rather than immediately after the
+        // brace: declaration order differs per rule, and anchoring to the brace
+        // silently misses most of them.
         $heights = [];
 
         preg_match_all(
@@ -197,10 +205,6 @@ class DestinationCarouselTest extends TestCase
         $byOffset = [];
 
         foreach ($heights as $match) {
-            // The height is searched for INSIDE the rule body rather than
-            // immediately after the brace. Declaration order differs per rule --
-            // offset 0 leads with `left`, the grouped near pair leads with
-            // `height` -- so anchoring to the brace silently misses most of them.
             if (preg_match('/height:\s*(\d+)%/', $match[2], $h)) {
                 $byOffset[$match[1]] = (int) $h[1];
             }
@@ -210,17 +214,8 @@ class DestinationCarouselTest extends TestCase
         $this->assertArrayHasKey(-1, $byOffset, 'no height for the near pair');
         $this->assertArrayHasKey(-2, $byOffset, 'no height for the outer pair');
 
-        $this->assertGreaterThan(
-            $byOffset[-1],
-            $byOffset[0],
-            'the active panel must be the tallest'
-        );
-
-        $this->assertGreaterThan(
-            $byOffset[-2],
-            $byOffset[-1],
-            'the outer panels must be shorter than the near ones, or there is no depth'
-        );
+        $this->assertGreaterThan($byOffset[-1], $byOffset[0]);
+        $this->assertGreaterThan($byOffset[-2], $byOffset[-1]);
 
         // 4. Something to interpolate.
         $this->assertMatchesRegularExpression(
@@ -232,7 +227,7 @@ class DestinationCarouselTest extends TestCase
     }
 
     /**
-     * The offset is server-rendered too, so the page is right with JavaScript off.
+     * The starting offset is server-rendered too, so the page is right with JS off.
      *
      * The client binding is what makes the fan move; this static attribute is what
      * makes the page correct before (and without) the script. Both are required,
@@ -244,82 +239,69 @@ class DestinationCarouselTest extends TestCase
     {
         $destination = $this->make('Corregidor Island');
 
-        // Three destinations, so the middle one is not at an edge.
         $this->make('Aguinaldo Shrine');
         $this->make('Taal Volcano');
 
-        $offsets = $this->panelOffsets($this->showHtml($destination));
+        $offsets = [];
 
-        $this->assertSame([-1, 0, 1], $offsets, 'the active destination must be '
-            .'centred on a cold load, and its neighbours one step either side');
-
-        $zero = $this->xpath($this->showHtml($destination))
-            ->query('//*[@data-stage-panel][@data-offset="0"]');
-
-        $this->assertSame(1, $zero->length, 'exactly one panel may be at offset 0');
-    }
-
-    // ---------------------------------------------------------------------
-    // THE SEAM
-    // ---------------------------------------------------------------------
-
-    /**
-     * The index and a destination page render the same fan, in the same order.
-     *
-     * This is the architecture's central claim and the reason the presenter exists:
-     * the fan on `/destinations/{slug}` IS the index fan with the index shifted.
-     * If the two ever disagree on membership or order, the continuity between the
-     * pages is gone and no other test notices.
-     *
-     * WHAT THIS DOES NOT CATCH, established by falsifying it: passing
-     * `slides($slug)` on the show page instead of `slides()` changes only the
-     * active index, not the membership or the order, so this test still passes.
-     * That regression is caught by `the_bound_destination_is_centred`, which is
-     * why the two are separate tests with separate claims rather than one test
-     * trying to assert both.
-     */
-    #[Test]
-    public function the_index_and_a_destination_page_render_the_same_fan_in_the_same_order(): void
-    {
-        $names = ['Aguinaldo Shrine', 'Corregidor Island', 'Taal Volcano', 'Bantay Abot Cave'];
-
-        foreach ($names as $name) {
-            $this->make($name);
+        foreach ($this->xpath($this->showHtml($destination))
+            ->query('//*[@data-stage-panel]') as $panel) {
+            $offsets[] = (int) $panel->getAttribute('data-offset');
         }
 
-        $indexHtml = $this->get(route('destinations.index'))->assertOk()->getContent();
-        $showHtml = $this->showHtml(Destination::where('name', 'Taal Volcano')->firstOrFail());
-
-        $slugs = function (string $html): array {
-            $xpath = $this->xpath($html);
-            $found = [];
-
-            foreach ($xpath->query('//*[@data-stage-panel]') as $panel) {
-                $found[] = $panel->getAttribute('data-href');
-            }
-
-            return $found;
-        };
-
-        $fromIndex = $slugs($indexHtml);
-        $fromShow = $slugs($showHtml);
-
-        $this->assertNotEmpty($fromIndex, 'the index rendered no carousel panels');
+        $this->assertSame(
+            [-1, 0, 1],
+            $offsets,
+            'the active destination must be centred on a cold load, and its '
+            .'neighbours one step either side'
+        );
 
         $this->assertSame(
-            $fromIndex,
-            $fromShow,
-            'the index and the destination page disagree about the carousel. They '
-            .'read the same presenter precisely so they cannot.'
+            1,
+            $this->xpath($this->showHtml($destination))
+                ->query('//*[@data-stage-panel][@data-offset="0"]')->length,
+            'exactly one panel may be at offset 0'
         );
+    }
+
+    /**
+     * The fan is on the destination page and NOT on the index.
+     *
+     * `/destinations` was reverted to its search-and-grid listing. This is pinned
+     * in both directions because the obvious way to "share the carousel" later is
+     * to re-add the include to the index, and the only thing that would notice is
+     * this.
+     */
+    #[Test]
+    public function the_fan_is_on_the_destination_page_only(): void
+    {
+        $destination = $this->make('Aguinaldo Shrine');
+        $this->make('Corregidor Island');
+
+        $this->assertGreaterThan(
+            0,
+            $this->xpath($this->showHtml($destination))->query('//*[@data-stage-panel]')->length,
+            'the destination page must carry the fan'
+        );
+
+        $index = $this->xpath($this->indexHtml());
+
+        $this->assertSame(
+            0,
+            $index->query('//*[@data-destination-stage]')->length,
+            '/destinations is a search-and-grid listing again and must not carry '
+            .'the carousel'
+        );
+
+        $this->assertSame(0, $index->query('//*[@data-stage-panel]')->length);
     }
 
     /**
      * The active slide on a destination page is that destination.
      *
-     * Derived from the URL, which is what makes a hard load land in the same
-     * state as an in-page advance -- so deep links, Back/Forward and a shared link
-     * all replay correctly.
+     * Derived from the URL, which is what makes a hard load land in the same state
+     * as an in-page advance -- so deep links, Back/Forward and a shared link all
+     * replay correctly.
      */
     #[Test]
     public function the_bound_destination_is_centred(): void
@@ -340,13 +322,238 @@ class DestinationCarouselTest extends TestCase
             'the wrong destination is centred'
         );
 
-        $stage = $xpath->query('//*[@data-destination-stage]')->item(0);
-
-        $this->assertSame('1', $stage->getAttribute('data-stage-active'));
+        $this->assertSame(
+            '1',
+            $xpath->query('//*[@data-destination-stage]')->item(0)
+                ->getAttribute('data-stage-active')
+        );
     }
 
     // ---------------------------------------------------------------------
-    // PANELS, CAPTION, CONTROLS
+    // THE PAGE
+    // ---------------------------------------------------------------------
+
+    /**
+     * The destination's photo is a blurred, whole-page backdrop.
+     *
+     * The layer is `fixed` rather than absolute so it stays put as the reader
+     * scrolls; an absolutely-positioned one scrolls away and leaves the lower half
+     * of the page on flat teal. And it is hidden from assistive tech, because it
+     * is decorative -- the same photograph is described by the panel alt and the
+     * caption, and announcing it three times helps nobody.
+     */
+    #[Test]
+    public function the_photo_is_a_blurred_whole_page_backdrop(): void
+    {
+        $destination = $this->make('Aguinaldo Shrine', [
+            'image_url' => 'https://images.example.com/hero.jpg',
+        ]);
+
+        $xpath = $this->xpath($this->showHtml($destination));
+
+        $layer = null;
+
+        foreach ($xpath->query('//img[contains(@src, "hero.jpg")]') as $img) {
+            // The BACKDROP, not the fan panel. The image is `absolute` inside a
+            // `fixed` wrapper, so the WRAPPER is what is checked -- looking for
+            // "fixed" on the img's own class finds nothing and reports a page
+            // background that is plainly there.
+            $parent = $img->parentNode;
+
+            if ($parent instanceof \DOMElement
+                && str_contains($parent->getAttribute('class'), 'fixed')) {
+                $layer = ['img' => $img, 'wrapper' => $parent];
+            }
+        }
+
+        $this->assertNotNull(
+            $layer,
+            'the main photo is not behind the page. It must be the page background, '
+            .'not a band at the top.'
+        );
+
+        $classes = $layer['img']->getAttribute('class');
+
+        $this->assertStringContainsString('blur-', $classes, 'the backdrop must be blurred');
+        $this->assertStringContainsString('scale-', $classes, 'the backdrop must be oversized');
+        $this->assertStringContainsString(
+            'object-cover',
+            $classes,
+            'the backdrop must cover, or its aspect ratio fights the page'
+        );
+
+        $this->assertSame('', trim($layer['img']->getAttribute('alt')), 'the backdrop is decorative');
+
+        $wrapper = $layer['wrapper']->getAttribute('class');
+
+        $this->assertStringContainsString(
+            'fixed',
+            $wrapper,
+            'the backdrop must be fixed so it stays put as the reader scrolls'
+        );
+        $this->assertStringContainsString('inset-0', $wrapper, 'it must cover the viewport');
+        $this->assertStringContainsString(
+            'pointer-events-none',
+            $wrapper,
+            'the backdrop must not take clicks meant for the page'
+        );
+    }
+
+    /**
+     * A destination with no photo still gets a backdrop, not a bare void.
+     */
+    #[Test]
+    public function a_destination_with_no_photo_still_gets_a_backdrop(): void
+    {
+        $destination = $this->make('Photoless Place', ['image_url' => null]);
+
+        $this->make('Somewhere Else');
+
+        $html = $this->showHtml($destination);
+
+        $this->assertStringNotContainsString('hero.jpg', $html);
+        $this->assertMatchesRegularExpression(
+            '/fixed inset-0[^"]*bg-volcanic-teal/',
+            $html,
+            'a photoless destination still needs a full-page ground, or the lower '
+            .'half of the page is body-background'
+        );
+
+        $this->assertMatchesRegularExpression(
+            '/from-boracay via-cyan-500 to-volcanic-teal/',
+            $html,
+            'the fallback should be the brand gradient, not a flat panel'
+        );
+    }
+
+    /**
+     * Every fact the previous layout showed is still on the page.
+     *
+     * The redesign was allowed to change the arrangement and the palette, not the
+     * information. This is the guard on that promise, and it is deliberately
+     * written as a list of the things that used to be here so that dropping one
+     * during a future restyle fails a test rather than quietly removing a feature.
+     */
+    #[Test]
+    public function every_fact_the_previous_layout_showed_is_still_here(): void
+    {
+        $destination = $this->make('Aguinaldo Shrine', [
+            'description' => 'A museum of Philippine history.',
+            'entrance_fee' => 150,
+            'estimated_cost' => 900,
+            'recommended_minutes' => 120,
+            'budget_level' => 'mid-range',
+            'hours_source_url' => 'https://example.gov.ph/hours',
+            'hours_source_label' => 'NHCP',
+            'hours_note' => 'Last entry one hour before closing.',
+        ]);
+
+        $html = $this->showHtml($destination);
+
+        // Name, place, prose.
+        $this->assertStringContainsString('Aguinaldo Shrine', $html);
+        $this->assertStringContainsString('Cavite City', $html);
+        $this->assertStringContainsString('A museum of Philippine history.', $html);
+
+        // The three numbers.
+        $this->assertStringContainsString('₱150.00', $html);
+        $this->assertStringContainsString('₱900.00', $html);
+        $this->assertStringContainsString('120 min', $html);
+
+        // Hours, in full.
+        $this->assertStringContainsString('Philippine time (UTC+8)', $html);
+        $this->assertStringContainsString('NHCP', $html);
+        $this->assertStringContainsString(
+            'https://example.gov.ph/hours',
+            $html,
+            'the cited hours source must survive: a traveller has to be able to '
+            .'check these hours'
+        );
+        $this->assertStringContainsString('Last entry one hour before closing.', $html);
+
+        // Map, and the travel-fit CTA.
+        $this->assertStringContainsString('data-destination-map', $html);
+        $this->assertStringContainsString('Find similar places', $html);
+        $this->assertStringContainsString('Mid-range', $html);
+
+        // Reviews, including the form. The form only renders for a signed-in
+        // visitor -- guests get "Log in to leave a review" instead -- so this is
+        // checked separately rather than asserted on the guest page.
+        $this->assertStringContainsString('Traveler notes.', $html);
+        $this->assertStringContainsString('Log in to leave a review.', $html);
+
+        $this->actingAs(User::factory()->create())
+            ->get(route('destinations.show', $destination))
+            ->assertOk()
+            ->assertSee(route('reviews.store', $destination), escape: false);
+
+        // The photographs an admin uploaded.
+        $destination->images()->create(['path' => 'https://images.example.com/x.jpg']);
+
+        $this->assertStringContainsString(
+            'https://images.example.com/x.jpg',
+            $this->showHtml($destination->fresh()),
+            'the per-destination uploads must still be shown'
+        );
+
+        // A way back.
+        $this->assertStringContainsString(route('destinations.index'), $html);
+    }
+
+    /**
+     * There is exactly one `h1`, it is the destination's name, and it is static.
+     *
+     * The heading is fed from `$destination`, never from a slide. Two failures it
+     * prevents:
+     *
+     *  - It used to follow the fan's active index, which put a different
+     *    destination's name above prose, hours, fees and a map that were all still
+     *    about the first one, and moved the document heading out from under the
+     *    reader.
+     *  - Because it lived inside the carousel section, a destination with no
+     *    featured destinations skipped the section and rendered the page with NO
+     *    `h1` AT ALL. That is covered separately by
+     *    `an_empty_fan_renders_the_page_without_an_empty_arc`.
+     */
+    #[Test]
+    public function there_is_one_static_h1_and_it_is_the_destination_name(): void
+    {
+        $this->make('Aguinaldo Shrine');
+        $second = $this->make('Corregidor Island');
+        $this->make('Taal Volcano');
+
+        $html = $this->showHtml($second);
+
+        $xpath = $this->xpath($html);
+
+        $this->assertSame(
+            1,
+            $xpath->query('//h1')->length,
+            'the destination page must have exactly one h1'
+        );
+
+        $this->assertStringContainsString(
+            'Corregidor Island',
+            $xpath->query('//h1')->item(0)->textContent
+        );
+
+        // And it is not bound to the fan's index. Scoped to the HEADING, not the
+        // page: the live region and the dots legitimately carry `x-text`, so
+        // asserting the whole page has none would fail for the right-looking
+        // reason.
+        $this->assertStringNotContainsString(
+            'x-text',
+            $xpath->query('//h1')->item(0)->ownerDocument->saveHTML(
+                $xpath->query('//h1')->item(0)
+            ),
+            "the heading is bound to the active index. It is this page's h1 and the "
+            .'name of the place the prose below is about -- advancing the fan must '
+            .'not change it.'
+        );
+    }
+
+    // ---------------------------------------------------------------------
+    // PANELS AND CONTROLS
     // ---------------------------------------------------------------------
 
     /**
@@ -367,8 +574,7 @@ class DestinationCarouselTest extends TestCase
 
         $links = $xpath->query('//*[@data-stage-panel]//a[@data-stage-link]');
 
-        // Two of three panels are links; the current one is not.
-        $this->assertSame(2, $links->length);
+        $this->assertSame(2, $links->length, 'two of three panels are links');
 
         foreach ($links as $link) {
             $this->assertNotSame(
@@ -386,80 +592,50 @@ class DestinationCarouselTest extends TestCase
     }
 
     /**
-     * The caption follows the active index rather than being fixed to the first
-     * destination.
+     * There is no autoplay and no pause control, anywhere.
      *
-     * Rendered from PHP alone it would sit frozen on one name while the fan moved
-     * on -- the same class of bug as the frozen fan, one level up. `x-text` is
-     * what keeps the two agreeing.
+     * The fan moved from the index to the destination page alone, and this is
+     * somewhere someone has arrived: the copy beneath it is all about one place,
+     * and a timer that keeps shifting the fan under someone reading it is worse
+     * than no timer. With no autoplay there is nothing to pause, so the pause
+     * control went too -- and a control that can never do anything is worse than
+     * no control at all. WCAG 2.2.2 only applies to content that starts moving by
+     * itself.
      */
     #[Test]
-    public function the_caption_follows_the_active_index(): void
-    {
-        $this->make('Aguinaldo Shrine');
-        $second = $this->make('Corregidor Island');
-
-        $html = $this->showHtml($second);
-
-        $this->assertStringContainsString('x-text="activeSlide().name"', $html);
-        $this->assertStringContainsString('x-text="activeSlide().regionLabel"', $html);
-
-        // And the server-rendered fallback names the right destination, so the
-        // page reads correctly before the script runs.
-        $title = $this->xpath($html)->query('//*[@data-stage-title]')->item(0);
-
-        $this->assertNotNull($title);
-        $this->assertStringContainsString('Corregidor Island', $title->textContent);
-    }
-
-    /**
-     * Autoplay ships with a pause control, because a self-starting loop longer
-     * than five seconds without one fails WCAG 2.2.2.
-     */
-    #[Test]
-    public function autoplay_always_ships_a_pause_control(): void
+    public function there_is_no_autoplay_and_no_pause_control(): void
     {
         $destination = $this->make('Aguinaldo Shrine');
         $this->make('Corregidor Island');
 
-        $xpath = $this->xpath($this->get(route('destinations.index'))->assertOk()->getContent());
+        $html = $this->showHtml($destination);
 
-        $this->assertSame('1', $xpath->query('//*[@data-destination-stage]')
-            ->item(0)->getAttribute('data-stage-autoplay'));
+        $this->assertStringNotContainsString('data-stage-pause', $html);
+        $this->assertStringNotContainsString('data-stage-autoplay', $html);
+        $this->assertStringNotContainsString('data-stage-interval', $html);
 
-        $pause = $xpath->query('//*[@data-stage-pause]')->item(0);
+        $script = (string) file_get_contents(resource_path('js/hero-carousel.js'));
 
-        $this->assertNotNull($pause, 'the index autoplays with no pause control, '
-            .'which fails WCAG 2.2.2');
-
-        $this->assertSame('button', strtolower($pause->nodeName));
-        $this->assertNotSame('', trim($pause->getAttribute('aria-label')));
-
-        // The state is conveyed by aria-pressed, not by the icon alone.
-        $this->assertStringContainsString(
-            'x-bind:aria-pressed="paused ? \'true\' : \'false\'"',
-            $pause->ownerDocument->saveHTML($pause)
+        $this->assertStringNotContainsString(
+            'setInterval',
+            $script,
+            'a timer survived the removal of autoplay. Nothing on this page should '
+            .'move by itself.'
         );
 
-        // The show page does not autoplay, so it must not carry a dead control.
-        $showXpath = $this->xpath($this->showHtml($destination));
-
-        $this->assertSame('0', $showXpath->query('//*[@data-destination-stage]')
-            ->item(0)->getAttribute('data-stage-autoplay'));
-
-        $this->assertSame(
-            0,
-            $showXpath->query('//*[@data-stage-pause]')->length,
-            'a destination page does not autoplay, so the pause control is dead'
-        );
+        $this->assertStringNotContainsString('setTimeout(() => {\n                this.next()', $script);
     }
 
     /**
      * The chevrons navigate to real destinations, and are omitted at each end.
      *
-     * They are links, not buttons: they go somewhere. A permanently disabled
-     * control is a dead control, so at the first destination there is no previous
-     * one to link to and it is not rendered.
+     * They are links, not buttons: they go somewhere. That also means they work
+     * with JavaScript disabled, are middle-clickable and openable in a new tab, and
+     * the browser shows the destination in the status bar -- none of which is true
+     * of a button.
+     *
+     * Omitted at each end rather than disabled, since there is no wrap-around and a
+     * permanently disabled control is a dead control.
      */
     #[Test]
     public function the_chevrons_link_to_real_destinations_and_stop_at_the_ends(): void
@@ -473,15 +649,14 @@ class DestinationCarouselTest extends TestCase
         $this->assertSame(1, $xpath->query('//*[@data-stage-chevron="prev"]')->length);
         $this->assertSame(1, $xpath->query('//*[@data-stage-chevron="next"]')->length);
 
-        $this->assertSame(
-            route('destinations.show', $second->getKey()),
-            route('destinations.show', $second->getKey())
-        );
-
-        // The neighbours match the order around the active slide.
         $prev = $xpath->query('//*[@data-stage-chevron="prev"]')->item(0);
         $next = $xpath->query('//*[@data-stage-chevron="next"]')->item(0);
 
+        $this->assertSame('a', strtolower($prev->nodeName), 'a chevron must be a link');
+        $this->assertSame('prev', $prev->getAttribute('rel'));
+        $this->assertSame('next', $next->getAttribute('rel'));
+
+        // The neighbours match the order around the active slide.
         $this->assertStringContainsString(
             $xpath->query('//*[@data-stage-panel][@data-offset="-1"]')->item(0)
                 ->getAttribute('data-stage-name'),
@@ -511,8 +686,8 @@ class DestinationCarouselTest extends TestCase
      * Panels beyond the fan's reach are removed from the accessibility tree.
      *
      * They stay in the DOM so they can slide in, but they must be untabbable and
-     * announced as hidden, or a screen reader walks 65 destinations to reach the
-     * page content.
+     * announced as hidden, or a screen reader walks the whole catalogue to reach
+     * the page content.
      */
     #[Test]
     public function panels_beyond_the_reach_are_hidden_and_untabbable(): void
@@ -536,16 +711,10 @@ class DestinationCarouselTest extends TestCase
         foreach ($far as $panel) {
             $html = $panel->ownerDocument->saveHTML($panel);
 
-            $this->assertStringContainsString(
-                'x-bind:aria-hidden="Math.abs(offsetOf(',
-                $html,
-                'a far panel is not bound to aria-hidden'
-            );
-
+            $this->assertStringContainsString('x-bind:aria-hidden="Math.abs(offsetOf(', $html);
             $this->assertStringContainsString('x-bind:tabindex=', $html);
         }
 
-        // And CSS removes them from hit testing and the a11y tree outright.
         $css = (string) file_get_contents(resource_path('css/app.css'));
 
         $this->assertMatchesRegularExpression(
@@ -567,11 +736,11 @@ class DestinationCarouselTest extends TestCase
     // ---------------------------------------------------------------------
 
     /**
-     * Archived and un-featured destinations are in neither fan.
+     * Archived and un-featured destinations are not in the fan.
      *
      * The cache is scoped by the membership filter and busted on save; without
-     * that, an archived destination stays clickable in both carousels for up to
-     * ten minutes and leads to a 404.
+     * that, an archived destination stays clickable for up to ten minutes and
+     * leads to a 404.
      */
     #[Test]
     public function archived_and_unfeatured_destinations_appear_in_neither_fan(): void
@@ -581,14 +750,12 @@ class DestinationCarouselTest extends TestCase
         $unfeatured = $this->make('Taal Volcano', ['is_featured' => false]);
         $live = $this->make('Bantay Abot Cave');
 
-        $indexHtml = $this->get(route('destinations.index'))->assertOk()->getContent();
-
-        $this->panelNames($indexHtml);
+        $names = $this->panelNames($this->showHtml($live));
 
         $this->assertSame(
             ['Aguinaldo Shrine', 'Bantay Abot Cave'],
-            $this->panelNames($indexHtml),
-            'the carousel must exclude archived and un-featured destinations'
+            $names,
+            'the fan must exclude archived and un-featured destinations'
         );
 
         // Archived is unpublished, so its page is gone.
@@ -598,82 +765,23 @@ class DestinationCarouselTest extends TestCase
          * Un-featured is NOT unpublished. It is a published destination the owner
          * has chosen not to feature, so its page still works -- it is only absent
          * from the fan. Asserting a 404 here would bake in a much stronger promise
-         * than "not in the carousel", and one an admin would immediately hit when
-         * un-featuring a destination they still want reachable.
+         * than "not in the carousel".
          */
         $this->get(route('destinations.show', $unfeatured))->assertOk();
-    }
-
-    private function panelNames(string $html): array
-    {
-        $xpath = $this->xpath($html);
-        $names = [];
-
-        foreach ($xpath->query('//*[@data-stage-panel]') as $panel) {
-            $names[] = $panel->getAttribute('data-stage-name');
-        }
-
-        return $names;
-    }
-
-    /**
-     * A destination with no photo still renders, and still links.
-     *
-     * No photo is an ordinary row, not a broken one. The panel falls back to a
-     * gradient rather than rendering an empty frame.
-     */
-    #[Test]
-    public function a_destination_with_no_photo_still_has_a_panel(): void
-    {
-        $photoless = $this->make('Photoless Place', ['image_url' => null]);
-
-        // A neighbour, so there is a panel other than the current one to link.
-        // With only the photoless destination the fan has a single panel, which
-        // renders as the current page rather than a link -- so this would assert
-        // nothing about reachability.
-        $this->make('Somewhere Else');
-
-        $xpath = $this->xpath($this->showHtml($photoless));
-
-        $this->assertSame(
-            1,
-            $xpath->query('//*[@data-stage-panel][@data-offset="0"]')->length,
-            'a destination with no photo must still be centred in the fan'
-        );
-
-        /*
-         * Backdrop layers are per SLIDE, not per active slide -- there is one for
-         * every destination in the fan that has a photo, and the script reveals
-         * the active one. Two destinations here, one of them photoless, so exactly
-         * one backdrop layer renders.
-         */
-        $this->assertSame(
-            1,
-            $xpath->query('//*[@data-stage-backdrop]')->length,
-            'the photoless destination contributes no backdrop layer, and the one '
-            .'that has a photo contributes exactly one'
-        );
-
-        $this->assertGreaterThan(
-            0,
-            $xpath->query('//*[@data-destination-stage]//a[@data-stage-link]')->length,
-            'the photoless destination must still be reachable'
-        );
     }
 
     /**
      * A single destination gets no pager and no chevrons.
      *
-     * A one-item carousel is motion with no information: the dots cannot go
-     * anywhere, the arrows have no neighbour, and autoplay would spin on the same
-     * picture forever.
+     * A one-item fan is motion with no information: the dots cannot go anywhere and
+     * the arrows have no neighbour.
      */
     #[Test]
     public function a_single_destination_has_no_pager_and_no_chevrons(): void
     {
         $only = $this->make('The Only One');
 
-        $xpath = $this->xpath($this->get(route('destinations.index'))->assertOk()->getContent());
+        $xpath = $this->xpath($this->showHtml($only));
 
         $this->assertSame(1, $xpath->query('//*[@data-stage-panel]')->length);
 
@@ -684,15 +792,24 @@ class DestinationCarouselTest extends TestCase
         );
 
         $this->assertSame(0, $xpath->query('//*[@data-stage-chevron]')->length);
+
+        // And the page itself is still fully usable.
+        $this->assertSame(1, $xpath->query('//h1')->length);
+        $this->assertStringContainsString('data-destination-map', $xpath->document->saveHTML());
     }
 
     /**
-     * An empty catalogue renders an explanation, not an empty arc.
+     * An empty catalogue still renders the page -- just not a fan of nothing.
+     *
+     * The empty state lives on the destination page, so it is reached through a
+     * destination that exists while no featured one does.
      */
     #[Test]
-    public function an_empty_catalogue_renders_a_message_not_an_empty_fan(): void
+    public function an_empty_fan_renders_the_page_without_an_empty_arc(): void
     {
-        $xpath = $this->xpath($this->get(route('destinations.index'))->assertOk()->getContent());
+        $hidden = $this->make('Hidden Place', ['is_featured' => false]);
+
+        $xpath = $this->xpath($this->showHtml($hidden));
 
         $this->assertSame(
             0,
@@ -700,72 +817,69 @@ class DestinationCarouselTest extends TestCase
             'an empty catalogue must not render a fan of nothing'
         );
 
+        $this->assertSame(
+            0,
+            $xpath->query('//*[@data-stage-chevron]')->length,
+            'there is no neighbour to link to'
+        );
+
+        // The destination's own content is unaffected.
+        $this->assertSame(1, $xpath->query('//h1')->length);
         $this->assertStringContainsString(
-            'No destinations to show yet',
-            $this->get(route('destinations.index'))->assertOk()->getContent()
+            'data-destination-map',
+            $xpath->document->saveHTML(),
+            'losing the fan must not take the map with it'
         );
     }
 
     /**
-     * A cache entry written by an older deploy degrades to a miss, not a 500.
+     * A stale or poisoned cache entry degrades to a miss, not a 500.
      *
      * The cache driver is the database, so entries are serialised and SURVIVE A
      * DEPLOY. Caching a Collection of `CarouselSlide` objects therefore wrote a
      * payload naming classes a later deploy may rename or reshape, and
      * unserialising one yields `__PHP_Incomplete_Class` -- which, behind a strict
-     * `Collection` return type, became a TypeError and took down every
-     * destinations page with nothing in the log but a class name.
+     * `Collection` return type, became a TypeError and took down the page.
      *
      * Three shapes are planted here, all of which a visitor could be served:
      * objects from the previous class shape, a string from an unrelated key, and
-     * an array of rows missing the `slug` the rehydrator keys on. Each must fall
-     * back to a fresh query rather than throw.
+     * an array of rows missing the `slug` the rehydrator keys on.
      */
     #[Test]
     public function a_stale_or_poisoned_cache_entry_degrades_to_a_miss(): void
     {
         $destination = $this->make('Aguinaldo Shrine');
+        $this->make('Corregidor Island');
 
         $key = 'destinations.carousel.v2';
+        $carousel = \App\Domain\Destinations\DestinationCarousel::class;
 
         // 1. What the previous implementation stored: objects, not arrays.
         cache()->put($key, collect([$destination]), 600);
 
-        $this->assertNotEmpty(
-            app(\App\Domain\Destinations\DestinationCarousel::class)->items(),
-            'a cache entry holding objects must not be trusted but must also not throw'
-        );
+        $this->assertNotEmpty(app($carousel)->items());
 
         // 2. Something unrelated entirely.
         cache()->put($key, 'not a collection at all', 600);
 
-        $this->assertNotEmpty(
-            app(\App\Domain\Destinations\DestinationCarousel::class)->items()
-        );
+        $this->assertNotEmpty(app($carousel)->items());
 
         // 3. Arrays, but rows without the field the rehydrator keys on.
         cache()->put($key, [['name' => 'No slug here']], 600);
 
-        $this->assertNotEmpty(
-            app(\App\Domain\Destinations\DestinationCarousel::class)->items()
-        );
+        $this->assertNotEmpty(app($carousel)->items());
 
-        // And the good path still works, with the correct destination in it.
+        // And the good path still works.
         cache()->forget($key);
 
-        $this->assertSame(
-            ['Aguinaldo Shrine'],
-            $this->panelNames(
-                $this->get(route('destinations.index'))->assertOk()->getContent()
-            )
-        );
+        $this->assertContains('Aguinaldo Shrine', $this->panelNames($this->showHtml($destination)));
     }
 
     /**
-     * The cache stores scalars, not objects.
+     * The cached carousel is an array, not an object graph.
      *
-     * The actual mechanism of the above, asserted directly so the fix cannot be
-     * undone by someone "simplifying" the presenter back to caching a Collection.
+     * The mechanism of the above, asserted directly so the fix cannot be undone by
+     * someone "simplifying" the presenter back to caching a Collection.
      */
     #[Test]
     public function the_cached_carousel_is_an_array_not_an_object_graph(): void
@@ -780,55 +894,68 @@ class DestinationCarouselTest extends TestCase
             $cached,
             'the cached carousel must be an array of scalar rows. An object graph '
             .'outlives the class that built it across a deploy and unserialises to '
-            .'__PHP_Incomplete_Class, which 500s every destinations page.'
+            .'__PHP_Incomplete_Class, which 500s the page.'
         );
 
         $this->assertIsArray($cached[0]);
         $this->assertArrayHasKey('slug', $cached[0]);
 
-        // No object instances anywhere in the payload.
         foreach ($cached[0] as $value) {
             $this->assertIsNotObject($value);
         }
     }
 
     /**
-     * Every field the template reads off the script actually exists on it.
+     * The script reads exactly the panel fields the markup renders.
      *
-     * This caught a real bug and is here because of it. The caption bound
-     * `activeSlide().regionLabel` while `activeSlide()` returned an object keyed
-     * `region`. The chip rendered its server-rendered text on load and then went
-     * EMPTY the moment Alpine took over -- a mismatch with no error, invisible to
-     * any assertion about rendered HTML, and only visible as one missing word in a
-     * browser.
-     *
-     * So the two sides are compared directly: each `activeSlide().<field>` in the
-     * template must be a key the script's `panelData` really sets.
+     * The caption used to bind `activeSlide().regionLabel` while the script
+     * returned an object keyed `region`, and the chip went blank the moment Alpine
+     * took over -- no error, invisible to any assertion about rendered HTML. The
+     * caption is static now, but the panel data the live region reads off is still
+     * a template/script contract, so it is compared directly.
      */
     #[Test]
-    public function every_field_the_template_reads_off_the_script_exists_on_it(): void
+    public function the_script_reads_fields_the_panels_actually_render(): void
     {
-        $caption = (string) file_get_contents(
-            resource_path('views/components/destinations/carousel-caption.blade.php')
-        );
+        $destination = $this->make('Aguinaldo Shrine');
+        $this->make('Corregidor Island');
 
-        preg_match_all('/activeSlide\(\)\.(\w+)/', $caption, $read);
-
-        $this->assertNotEmpty(
-            $read[1],
-            'the caption reads no fields off activeSlide(), so this guard is '
-            .'checking nothing -- keep it in step with the template'
-        );
+        $xpath = $this->xpath($this->showHtml($destination));
 
         $script = (string) file_get_contents(resource_path('js/hero-carousel.js'));
 
+        // Every dataset key the script reads must be rendered on the panel.
+        preg_match_all('/panel\.dataset\.(\w+)/', $script, $read);
+
+        $this->assertNotEmpty($read[1], 'the script reads no dataset fields, so this guard checks nothing');
+
+        /*
+         * `dataset.camelCase` maps to `data-kebab-case`, NOT to a lowercased
+         * attribute name. `panel.dataset.stageName` reads `data-stage-name`, so a
+         * plain `strtolower` comparison asks for `data-stagename` and reports a
+         * panel that is plainly correct as missing.
+         */
+        $rendered = [];
+
+        foreach ($xpath->query('//*[@data-stage-panel]')->item(0)->attributes as $attribute) {
+            $rendered[] = strtolower($attribute->name);
+        }
+
         foreach (array_unique($read[1]) as $field) {
-            $this->assertMatchesRegularExpression(
-                '/\b'.preg_quote($field, '/').'\s*:/',
-                $script,
-                "the caption binds activeSlide().{$field}, but the script's "
-                ."panelData never sets a `{$field}` key. It will render empty as "
-                .'soon as Alpine takes over, with no error anywhere.'
+            // Kebab-case FIRST, then lowercase. Doing it the other way round
+            // lowercases away the capitals the regex is looking for, and
+            // 'stageName' comes out as 'stagename' -- which is the same class of
+            // silent mismatch this test exists to catch.
+            $attribute = 'data-'.strtolower(
+                preg_replace('/(?<!^)[A-Z]/', '-$0', $field)
+            );
+
+            $this->assertContains(
+                $attribute,
+                $rendered,
+                "the script reads panel.dataset.{$field}, which maps to "
+                ."`{$attribute}`, but no panel renders it. It will read undefined "
+                .'and go blank as soon as Alpine takes over, with no error anywhere.'
             );
         }
     }
@@ -849,14 +976,10 @@ class DestinationCarouselTest extends TestCase
         /*
          * Comments stripped first. The explanatory comment above the registration
          * contains the literal string "Alpine.start()", so a naive strpos found it
-         * in the PROSE at byte 330 and reported the correct ordering as reversed.
-         * Searching source that explains itself needs the prose taken out first.
+         * in the PROSE and reported the correct ordering as reversed. Searching
+         * source that explains itself needs the prose taken out first.
          */
-        $code = (string) preg_replace(
-            ['#/\*.*?\*/#s', '#//[^\n]*#'],
-            '',
-            $source
-        );
+        $code = (string) preg_replace(['#/\*.*?\*/#s', '#//[^\n]*#'], '', $source);
 
         $register = strpos($code, "Alpine.data('heroCarousel'");
         $start = strpos($code, 'Alpine.start()');
@@ -870,13 +993,11 @@ class DestinationCarouselTest extends TestCase
             .'resolves and the carousel silently does nothing'
         );
 
-        // And the entry that carries it is a real import, so it cannot be
-        // tree-shaken. A previous version shipped a 0.00 kB bundle because the
-        // component was an unused export.
         $this->assertMatchesRegularExpression(
             "/^import heroCarousel from '\.\/hero-carousel';/m",
             $code,
-            'hero-carousel.js must be imported by app.js so it is bundled'
+            'hero-carousel.js must be imported by app.js so it is bundled. A '
+            .'standalone entry is what produced a 0.00 kB bundle once already.'
         );
     }
 }

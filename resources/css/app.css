@@ -544,20 +544,30 @@
         position: relative;
         width: 100%;
         max-width: 62rem;
-        height: 16rem;
+        /*
+         * The height is the BORDER box -- Tailwind v4 sets border-box globally --
+         * and the padding-block is the room the stage-level caption and the pager
+         * occupy. The cards position against the content box, so the two numbers
+         * have to be reasoned about together: `padding-block` subtracted from
+         * `height` is what the active card's 84% is taken from.
+         *
+         * base  32rem total - 10rem padding = 22rem content -> card ~296px tall
+         * lg    42rem total - 12rem padding = 30rem content -> card ~403px tall
+         *
+         * Setting these independently is how the first version rendered cards
+         * barely taller than their own aspect ratio demanded: 20rem of border box
+         * minus 14rem of padding left a 6rem content box and an 80px card.
+         */
+        height: 32rem;
         margin-inline: auto;
+        padding-block: 5rem;
         perspective: 1100px;
-    }
-
-    @media (width >= 40rem) {
-        .tm-fan {
-            height: 20rem;
-        }
     }
 
     @media (width >= 64rem) {
         .tm-fan {
-            height: 26rem;
+            height: 42rem;
+            padding-block: 6rem;
         }
     }
 
@@ -663,48 +673,29 @@
         }
     }
 
-    /*
-     * The entrance wash.
-     *
-     * The reference flashes white between slides to mask a client-side route swap.
-     * This app is server-rendered and the panels are links, so there is no swap to
-     * mask; what is left is a short lift on load so the stage does not simply
-     * appear. Deliberately ONE wash for the whole stage, not per-slide.
-     *
-     * `forwards` is what makes it safe: without it the animation reverts to the
-     * element's own opacity (1) only after it finishes, and a reduced-motion
-     * override that skips the animation entirely would leave the panel sitting
-     * over the title.
-     */
-    @keyframes tm-wash {
-        0% {
-            opacity: 0.4;
-        }
-
-        100% {
-            opacity: 0;
-        }
-    }
-
-    [data-wash] {
-        animation: tm-wash 600ms var(--ease-out) forwards;
-    }
-
     @media (prefers-reduced-motion: reduce) {
         /*
-         * No arc and no slide -- panels cross-fade in place instead. Shortening
-         * the 620ms transform would still be motion; the reference's arc is
-         * carried entirely by the transforms, so they are removed rather than
-         * accelerated. What survives is the state change itself.
+         * No arc and no slide -- the panels cross-fade in place instead.
+         *
+         * Shortening the 620ms transform would still be motion, and the fan's
+         * whole depth cue is carried by the transforms, so they are removed rather
+         * than accelerated. What survives is the state change itself.
          */
         .tm-fan-panel {
             transition: opacity 150ms linear;
             transform: translate(-50%, -50%);
         }
 
-        [data-wash] {
-            animation: none;
-            opacity: 0;
+        @media (width >= 64rem) {
+            [data-offset='-1'],
+            [data-offset='2'] {
+                transform: translate(-50%, -50%) translateY(6%);
+            }
+
+            [data-offset='-2'],
+            [data-offset='1'] {
+                transform: translate(-50%, -50%) translateY(6%);
+            }
         }
     }
     .tm-no-scrollbar {

@@ -1,13 +1,12 @@
 /**
- * The destinations carousel.
+ * The destinations fan on a destination page.
  *
- * Registered as an Alpine component so both `/destinations` and every
- * `/destinations/{slug}` get identical behaviour from one definition, and so it
- * loads through app.js rather than as a per-page Vite entry. The previous
- * arrangement used a separate `@vite(['resources/js/stage.js'])` entry, which is
- * exactly the shape that produced a 0.00 kB bundle once already: a standalone
- * entry whose export nobody imported got tree-shaken to nothing and the carousel
- * shipped dead with every test green.
+ * Registered as an Alpine component in app.js rather than loaded as a per-page
+ * Vite entry. A standalone entry is what produced a 0.00 kB bundle once already:
+ * an export nobody imported got tree-shaken to nothing and the carousel shipped
+ * dead with every test green. Registering it after `Alpine.start()` has the same
+ * effect more quietly -- `x-data="heroCarousel()"` never resolves, the panels
+ * render, and the script never attaches.
  *
  * WHAT ACTUALLY MOVES THE FAN
  * ============================
@@ -28,16 +27,20 @@
  * advance a re-index rather than a re-layout. No image reloads, so there is
  * something for the transition to interpolate.
  *
+ * THERE IS NO AUTOPLAY. It ran on `/destinations` and was dropped when the
+ * carousel moved to the destination page alone: this is a page someone has
+ * arrived at, the copy beneath the fan is all about one place, and a timer that
+ * keeps shifting the fan under someone reading it is worse than no timer. With no
+ * autoplay there is nothing to pause, so the pause control went too -- a dead
+ * control is worse than an absent one.
+ *
  * NOT COVERED BY ANY TEST. There is no browser automation in this project, so the
- * choreography, the swipe threshold and the autoplay timing below have never been
- * run. See AGENTS.md.
+ * choreography, the swipe threshold and the reduced-motion path below have never
+ * been run. See AGENTS.md.
  */
 
 /** How far a pointer must travel before a drag counts as a swipe. */
 const SWIPE_THRESHOLD = 56;
-
-/** How long after an interaction ends before autoplay resumes, in ms. */
-const RESUME_DELAY = 2000;
 
 /**
  * A new index is not accepted until this many ms have passed.
@@ -52,23 +55,17 @@ export default function heroCarousel() {
         count: 0,
         index: 0,
         busy: false,
-
-        /** Set once the visitor has driven the carousel themselves. */
-        engaged: false,
-
-        paused: false,
         announcement: '',
         panelData: [],
         reduce: false,
 
-        timer: null,
-        resumeTimer: null,
+        panels: [],
 
         /**
          * Read the initial state out of the server-rendered attributes.
          *
-         * `data-stage-active` is the index derived from the URL on the server, so
-         * a cold load already lands on the right panel and a shared link replays
+         * `data-stage-active` is the index derived from the URL on the server, so a
+         * cold load already lands on the right panel and a shared link replays
          * correctly. Seeding from the DOM rather than from PHP again keeps one
          * source of truth for the starting index.
          */
@@ -78,9 +75,6 @@ export default function heroCarousel() {
             this.count = Number(root.dataset.stageCount || 0);
             this.index = Number(root.dataset.stageActive || 0);
 
-            this.interval = Number(root.dataset.stageInterval || 3600);
-            this.autoplay = root.dataset.stageAutoplay === '1';
-
             this.reduce =
                 window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ??
                 false;
@@ -88,29 +82,17 @@ export default function heroCarousel() {
             this.panels = [...root.querySelectorAll('[data-stage-panel]')];
 
             /*
-             * `regionLabel`, matching the field name the caption binds to
-             * (`activeSlide().regionLabel`) and the CarouselSlide accessor it comes
-             * from. It was `region` here while the caption read `regionLabel`, so
-             * the chip rendered its server-rendered text on load and then went
-             * EMPTY the moment Alpine took over -- a mismatch visible only once the
-             * script ran, and only as a missing word.
+             * The panel names the live region announces on a change. The caption is
+             * deliberately NOT read here: it is this page's h1 and stays put, so
+             * advancing the fan must not make the screen reader claim the page is
+             * now about somewhere else.
              */
             this.panelData = this.panels.map((panel) => ({
                 name: panel.dataset.stageName ?? '',
                 regionLabel: panel.dataset.stageRegion ?? '',
             }));
 
-            // The caption follows the index, and it is the only thing a screen
-            // reader hears on a change -- the panels carry no alt text on purpose.
             this.announce();
-
-            if (this.autoplay && !this.reduce) {
-                this.start(1500);
-            }
-
-            document.addEventListener('visibilitychange', () => {
-                document.hidden ? this.pause('hidden') : this.resume('hidden');
-            });
 
             this.bindSwipe();
         },
@@ -118,14 +100,14 @@ export default function heroCarousel() {
         /**
          * The signed offset of panel `i` from the active one.
          *
-         * Clamped by the caller (the CSS and the `data-far` binding), not here, so
-         * the same number drives position and reachability consistently.
+         * Not clamped here: the CSS and the `data-far` binding both use the raw
+         * value, so clamping in only one place is how they would disagree.
          */
         offsetOf(i) {
             return i - this.index;
         },
 
-        /** The slide the caption describes. */
+        /** The panel the fan is currently centred on. */
         activeSlide() {
             return this.panelData[this.index] ?? { name: '', regionLabel: '' };
         },
@@ -149,10 +131,6 @@ export default function heroCarousel() {
                 return;
             }
 
-            // Touching the carousel at all stops the timer permanently. A visitor
-            // who has driven it themselves did not ask to be driven.
-            this.engaged = true;
-
             this.index = target;
             this.announce();
 
@@ -161,11 +139,6 @@ export default function heroCarousel() {
             setTimeout(() => {
                 this.busy = false;
             }, this.reduce ? SETTLE_MS / 3 : SETTLE_MS);
-
-            // Re-arm autoplay after the slide, unless they are driving it.
-            if (this.autoplay && !this.reduce) {
-                this.resume('manual');
-            }
         },
 
         next() {
@@ -176,115 +149,20 @@ export default function heroCarousel() {
             this.go(this.index - 1);
         },
 
-        /**
-         * Jump to the first slide, without a transition.
-         *
-         * Only used at the end of the collection. Autoplay stops at the last slide
-         * because there is no wrap-around -- wrapping sends a panel from far-left
-         * to near-right in one step, which is a visible pop. Rather than let the
-         * loop die silently, this cuts back to the start with the transition
-         * suppressed for one frame.
+        /*
+         * Hover and focus handling, kept because the markup binds them -- but
+         * deliberately inert now that there is no autoplay to interrupt. Removing
+         * them from the template would be tidier; they are here so the bindings do
+         * not throw "is not a function" if the markup is reused as-is.
          */
-        restart() {
-            this.panels.forEach((panel) => {
-                panel.style.transition = 'none';
-            });
-
-            this.index = 0;
-            this.announce();
-
-            // Read layout once so the suppressed transition is committed before it
-            // is restored. Without this the browser coalesces both writes and the
-            // panels visibly slide the whole way back.
-            void this.$el.offsetWidth;
-
-            this.panels.forEach((panel) => {
-                panel.style.transition = '';
-            });
-        },
-
-        start(delay = 0) {
-            this.clear();
-
-            this.timer = setTimeout(() => {
-                // At the end, cut back rather than advance past the last slide.
-                if (this.index >= this.count - 1) {
-                    this.restart();
-                }
-
-                this.next();
-
-                this.timer = setInterval(() => {
-                    if (this.index >= this.count - 1) {
-                        this.restart();
-
-                        return;
-                    }
-
-                    this.next();
-                }, this.interval);
-            }, delay);
-        },
-
-        pause() {
-            this.clear();
-
-            this.paused = true;
-        },
-
-        /**
-         * Resume after a delay, and never after the visitor has taken over.
-         *
-         * `engaged` is checked here rather than by cancelling the timer at each
-         * call site, because it is the condition that matters: once someone has
-         * pressed an arrow, no hover, focus or visibility event should put the
-         * carousel back under automatic control.
-         */
-        resume() {
-            if (!this.autoplay || this.reduce || this.engaged) {
-                return;
-            }
-
-            this.paused = false;
-
-            this.clear();
-
-            this.resumeTimer = setTimeout(() => {
-                this.start(0);
-            }, RESUME_DELAY);
-        },
-
-        toggle() {
-            if (this.paused) {
-                this.paused = false;
-
-                this.clear();
-                this.start(RESUME_DELAY);
-
-                return;
-            }
-
-            this.pause();
-        },
-
-        clear() {
-            if (this.timer) {
-                clearTimeout(this.timer);
-                clearInterval(this.timer);
-                this.timer = null;
-            }
-
-            if (this.resumeTimer) {
-                clearTimeout(this.resumeTimer);
-                this.resumeTimer = null;
-            }
-        },
+        pause() {},
+        resume() {},
 
         /**
          * Swipe, via pointer events so touch, pen and mouse share one path.
          *
-         * The threshold is deliberate: a swipe is a committed gesture, and a
-         * 10px wobble while reaching for the dots should not flip the slide.
+         * The threshold is deliberate: a swipe is a committed gesture, and a 10px
+         * wobble while reaching for the dots should not flip the slide.
          *
          * `pointercancel` is handled alongside `pointerup` because a gesture
          * interrupted by a scroll never fires `up`; without it `startX` stays

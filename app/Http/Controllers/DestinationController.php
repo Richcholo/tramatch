@@ -45,30 +45,7 @@ class DestinationController extends Controller
             ->onEachSide(1)
             ->withQueryString();
 
-        /*
-         * The shared carousel, centred on the first destination in canonical order.
-         *
-         * Autoplay IS on here. This is the browse surface: someone has not arrived
-         * anywhere yet, so a slow advance is a suggestion to keep looking. It comes
-         * with the mandatory pause control -- a self-starting loop longer than five
-         * seconds without one fails WCAG 2.2.2.
-         *
-         * `?slide=<slug>` centres a specific destination so a link can point at
-         * "the fan, showing X" and be bookmarkable.
-         */
-        $carousel = app(DestinationCarousel::class);
-        $activeSlug = $request->filled('slide')
-            ? $request->string('slide')->toString()
-            : null;
-
-        return view('destinations.index', [
-            'destinations' => $destinations,
-            'locations' => $locations,
-            'carouselSlides' => $carousel->slides($activeSlug),
-            'carouselActiveIndex' => $carousel->activeIndex($activeSlug),
-            'carouselNeighbours' => $carousel->neighbours($activeSlug),
-            'carouselAutoplay' => true,
-        ]);
+        return view('destinations.index', compact('destinations', 'locations'));
     }
 
     public function show(Destination $destination): View
@@ -84,18 +61,15 @@ class DestinationController extends Controller
         ]);
 
         /*
-         * The shared carousel, with THIS destination centred.
+         * The destinations fan, with THIS destination centred.
          *
-         * `activeIndex` is derived from the route, which is what makes a hard page
-         * load land in exactly the same visual state as an in-page advance -- so
-         * deep links, Back/Forward and a shared link all replay correctly. The
-         * order comes from the same presenter the index uses, so the fan here is
-         * the index fan with the index shifted and the two cannot drift.
+         * `activeIndex` is derived from the route, so a cold load already lands on
+         * the right panel and a shared link replays correctly.
          *
-         * Autoplay is off here. This is a destination someone has arrived at, not
-         * a surface they are browsing, and a timer that keeps swapping the
-         * backdrop out from under someone reading the description is worse than no
-         * timer.
+         * The carousel lives on THIS page only -- `/destinations` is back to its
+         * search-and-grid listing. The presenter is still what supplies the order,
+         * so the fan is deterministic rather than depending on insertion order, and
+         * so the neighbours are the same slides the fan shows.
          */
         $carousel = app(DestinationCarousel::class);
 
@@ -103,7 +77,6 @@ class DestinationController extends Controller
             'carouselSlides' => $carousel->slides($destination->slug),
             'carouselActiveIndex' => $carousel->activeIndex($destination->slug),
             'carouselNeighbours' => $carousel->neighbours($destination->slug),
-            'carouselAutoplay' => false,
             'destination' => $destination,
             'openState' => $this->openState($destination),
             'hoursLabel' => $this->hoursLabel($destination),
