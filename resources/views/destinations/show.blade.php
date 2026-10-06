@@ -61,6 +61,34 @@
             </div>
         </section>
 
+        {{-- Directly under the hero, and as wide as the container allows. It has
+             been in three places: here, full-bleed across the page with the hero
+             (two attempts, both abandoned -- see AGENTS.md), and in a narrow
+             column beside the location map.
+
+             Back here because the map column left half the page empty on a wide
+             screen, and the map was the wrong neighbour anyway: it put the photos
+             at 40% of the container, far smaller than they need to be.
+
+             Full container width, NOT full-bleed, and the difference is the whole
+             point. Going edge to edge needs `100vw`, which measures the viewport
+             including the vertical scrollbar and lands off-centre by half a
+             scrollbar -- that is what made the earlier attempts look broken. The
+             container's content box is ~1504px and needs no such arithmetic. If
+             this ever wants to truly touch the screen edges, the scrollbar width
+             has to be accounted for rather than clipped away.
+
+             Consequence, stated plainly: at ~1504px against a typical 1080-1170px
+             upload this box upscales ~1.3-1.4x, so the photos render soft on a
+             wide screen. That is the trade for "as large as possible", and it is
+             the one the earlier capped versions avoided. The real fix is resizing
+             uploads, which needs GD or Imagick -- absent from both the CLI and
+             XAMPP.
+
+             Kept as a partial rather than inlined, so the markup and the
+             gallery.js hooks stay in one file. --}}
+        @include('destinations.partials.carousel', ['destination' => $destination])
+
         <div class="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
             <section class="space-y-8">
                 <div>
@@ -219,46 +247,23 @@
                     @endif
                 </div>
 
-                {{--
-                    02 / Location, and the carousel beside it.
+                <div class="rounded-[2rem] bg-island-white p-6 shadow-sm ring-1 ring-boracay-light sm:p-8">
+                    <p class="text-xs font-bold uppercase tracking-[0.28em] text-boracay-dark">
+                        02 / Location
+                    </p>
 
-                    The two are paired in a nested two-column grid rather than the
-                    page's main 1.2fr / 0.8fr split. The wider column is on the
-                    LEFT deliberately: the location card reads left-to-right, and
-                    the map is the taller of the two, so putting it in the wide
-                    track keeps its 28rem height from leaving a long gap beside a
-                    short photo strip.
+                    <div
+                        data-destination-map
+                        data-lat="{{ $destination->latitude }}"
+                        data-lng="{{ $destination->longitude }}"
+                        data-name="{{ $destination->name }}"
+                        class="mt-6 h-[28rem] rounded-[1.5rem] bg-boracay-light"
+                    ></div>
 
-                    Stacked on mobile, location first. It is the more useful of the
-                    two for "can I get there", and the map is the element that
-                    degrades worst in a narrow column.
-
-                    The carousel must stay OUT of the top-level flow: it is
-                    `h-80 sm:h-96` against the map's 28rem, and its controls are
-                    absolutely positioned within it, so a full-width slot made it
-                    a short band floating under a tall hero.
-                --}}
-                <div class="grid gap-8 lg:grid-cols-[1.4fr_1fr] lg:items-start">
-                    <div class="rounded-[2rem] bg-island-white p-6 shadow-sm ring-1 ring-boracay-light sm:p-8">
-                        <p class="text-xs font-bold uppercase tracking-[0.28em] text-boracay-dark">
-                            02 / Location
-                        </p>
-
-                        <div
-                            data-destination-map
-                            data-lat="{{ $destination->latitude }}"
-                            data-lng="{{ $destination->longitude }}"
-                            data-name="{{ $destination->name }}"
-                            class="mt-6 h-[28rem] rounded-[1.5rem] bg-boracay-light"
-                        ></div>
-
-                        <p class="mt-4 text-xs text-benguet-charcoal/50">
-                            {{ $destination->latitude }},
-                            {{ $destination->longitude }}
-                        </p>
-                    </div>
-
-                    @include('destinations.partials.carousel', ['destination' => $destination])
+                    <p class="mt-4 text-xs text-benguet-charcoal/50">
+                        {{ $destination->latitude }},
+                        {{ $destination->longitude }}
+                    </p>
                 </div>
             </section>
 

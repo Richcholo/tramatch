@@ -453,32 +453,27 @@ class DestinationGalleryTest extends TestCase
     }
 
     /**
-     * Both blocks are inset cards with rounded corners, and neither is capped.
+     * Both blocks are inset cards at the container width, and neither is capped.
      *
-     * The layout went through three versions and this pins the one that is live.
+     * The layout has been through four versions and this pins the one that is live.
      * Carousel above the hero as inset cards; then hero-first full-bleed via
      * `width: 100vw`, which came out off-centre by half a scrollbar and was
-     * described as "not smooth"; then full-bleed via negative margins, which was
-     * aligned but too wide for the page. Now back to inset cards, with the
-     * carousel moved down beside the location map so it is a supporting element
-     * rather than a band under the hero.
-     *
-     * On the radii being asserted as different on purpose: the hero is a
-     * standalone band at the top of the page and takes the page's 2rem card
-     * radius. The carousel is paired with the map card, which is itself
-     * 1.5rem-inset, so it matches that. They are not meant to be equal.
+     * described as "not smooth"; then full-bleed via negative margins, aligned but
+     * too wide for the page; then down beside the location map, which left half the
+     * page empty and shrank the photos to 40% of the container. Now back under the
+     * hero at full container width.
      *
      * The cap assertion carries a decision with a known cost, recorded so the cost
-     * is visible rather than rediscovered: the carousel's column is roughly 40-45%
-     * of a 1600px container, and uploads are stored verbatim with no resize at
-     * typically 1080-1170px wide, so that column is NARROWER than the photo and the
-     * browser downscales. The photos are sharp there. The full-width layouts upscaled
-     * and were the soft ones, which is the opposite of what the width argument
-     * assumed. If this ever fails on the cap assertion, read the note before
-     * "fixing" it: re-adding a cap is a design change, not a bug.
+     * is visible rather than rediscovered as a bug. The container's content box is
+     * roughly 1504px on a 1600px viewport, while uploads are stored verbatim with no
+     * resize at typically 1080-1170px wide, so this box UPSCALES about 1.3-1.4x and
+     * the photos are soft on a wide screen. Narrower versions were implemented and
+     * reverted more than once, each time sharp and each time judged too small. If
+     * this ever fails on the cap assertion, read the note before "fixing" it:
+     * adding a cap is a design change to raise, not a bug.
      *
-     * The object-fit assertions are independent of all of that -- cover is correct
-     * at any size, and "try another object-fit" remains the wrong fix for an upscale
+     * The object-fit assertions are independent of all that -- cover is correct at
+     * any size, and "try another object-fit" remains the wrong fix for an upscale
      * because no object-fit value prevents one.
      */
     #[Test]
@@ -535,32 +530,28 @@ class DestinationGalleryTest extends TestCase
         $hero = $classesAt('//main//section[.//h1]');
 
         /*
-         * Both are inset cards again, inside the max-w-[1600px] container.
+         * Both are inset cards again, inside the max-w-[1600px] container, and
+         * they now share a radius.
          *
-         * The rounded corners are the tell: three layouts were tried (inset cards,
-         * full-bleed via 100vw, full-bleed via negative margins) and this is
-         * back to the first. `rounded-[2rem]` on the hero and `rounded-[1.5rem]`
-         * on the carousel, the latter matching the map card it now sits beside.
+         * The rounded corners are the tell: three layouts have been tried (inset
+         * cards, full-bleed via 100vw, full-bleed via negative margins) plus a
+         * move down beside the location map, and this is back to the first.
          *
-         * The radii are deliberately DIFFERENT. The hero is a standalone band at
-         * the top of the page and takes the page's 2rem card radius; the carousel
-         * is a supporting element paired with the map, which is itself a
-         * 1.5rem-inset card, so it matches that instead. Asserting they differ is
-         * how this stays true through a tidy-up.
+         * The radii are asserted EQUAL now, where they were deliberately different.
+         * The carousel spent a while at 1.5rem to match the map card beside it,
+         * and 2rem when it sat directly under the hero. It is back under the hero,
+         * so it matches the hero -- two adjacent media blocks at one radius read as
+         * a single unit, which is the intent. A mismatch here would mean the layout
+         * moved without the radius following.
          */
-        $this->assertContains(
-            'rounded-[2rem]',
-            $hero,
-            'the hero is not a rounded inset card again, so the original layout '
-            .'has not been restored'
-        );
-
-        $this->assertContains(
-            'rounded-[1.5rem]',
-            $carousel,
-            'the carousel no longer uses the smaller radius that matches the map '
-            .'card it sits beside'
-        );
+        foreach (['carousel' => $carousel, 'hero' => $hero] as $name => $list) {
+            $this->assertContains(
+                'rounded-[2rem]',
+                $list,
+                'the '.$name.' is not a rounded inset card, so the layout has drifted '
+                .'from "both blocks are inset cards at the container width"'
+            );
+        }
 
         // And no escape mechanism crept back onto either of them.
         foreach (['carousel' => $carousel, 'hero' => $hero] as $name => $list) {
@@ -604,21 +595,21 @@ class DestinationGalleryTest extends TestCase
     }
 
     /**
-     * The hero comes first, and the carousel sits beside the location map.
+     * The carousel sits directly under the hero, before everything else.
      *
      * The order matters for more than looks: the hero carries the page's <h1>, so
      * a carousel rendered first hands a screen reader and the tab order the photo
      * strip before the destination's name.
      *
-     * The position is the layout that was asked for. The carousel has been in
-     * three places -- above the hero, full-bleed under it, and now in a column
-     * beside the location map -- and the move was specifically to get it away
-     * from the top of the page. Asserted structurally (the carousel and the map
-     * share an ancestor that is a two-column grid) rather than by index, because
-     * an "element 400" assertion breaks the moment anything is inserted above.
+     * The position has changed several times -- above the hero, full-bleed under
+     * it, beside the location map, and now back here at full width -- so this
+     * asserts ADJACENCY to the hero rather than an index. An index assertion
+     * breaks the moment anything is inserted above, and would not have caught the
+     * carousel drifting down into the content, which is exactly the move that was
+     * made and then undone.
      */
     #[Test]
-    public function the_carousel_sits_beside_the_location_map_and_after_the_hero(): void
+    public function the_carousel_sits_directly_under_the_hero(): void
     {
         $destination = $this->destination([
             'image_url' => 'https://images.example.com/hero.jpg',
@@ -645,11 +636,9 @@ class DestinationGalleryTest extends TestCase
 
         $carousel = $xpath->query('//*[@data-gallery]')->item(0);
         $hero = $xpath->query('//main//section[.//h1]')->item(0);
-        $map = $xpath->query('//*[@data-destination-map]')->item(0);
 
         $this->assertNotNull($carousel, 'the carousel is missing from the page');
         $this->assertNotNull($hero, 'the hero is missing from the page');
-        $this->assertNotNull($map, 'the map is missing from the page');
 
         // Source order, read off the parse order the DOM preserves rather than off
         // a class: visual order can differ from DOM order, and it is the DOM a
@@ -663,52 +652,20 @@ class DestinationGalleryTest extends TestCase
         );
 
         /*
-         * Sibling of the map, not merely near it. The location card is a div and
-         * the map sits inside it, so the shared ancestor has to be the grid holding
-         * both columns -- found by walking up from the map until the carousel is
-         * inside.
+         * DIRECTLY under it -- sibling, and the next element along.
+         *
+         * The adjacency is the point, not just the order. The carousel sat below
+         * the location map for a while, which is still "after the hero" and still
+         * in the right sequence, but it is not what was asked for: it put the
+         * photos at 40% of the container and left half the page empty. Comparing
+         * nextElementSibling catches that; comparing document order alone does not.
          */
-        $column = $map;
-
-        while ($column !== null) {
-            if ($xpath->query('.//*[@data-gallery]', $column)->length > 0) {
-                break;
-            }
-
-            $column = $column->parentNode;
-        }
-
-        $this->assertNotNull(
-            $column,
-            'the carousel shares no ancestor with the map, so they are not in the '
-            .'same row and the carousel has been moved back out of the location section'
-        );
-
-        $classes = preg_split(
-            '/\s+/',
-            trim($column->getAttribute('class')),
-            -1,
-            PREG_SPLIT_NO_EMPTY
-        );
-
-        // And it must be a two-column grid, or they stack instead of pairing up.
-        // The ratio matters too: the map is the taller element at h-[28rem], so it
-        // takes the wider column and the short photo strip takes the rest.
-        $this->assertContains(
-            'lg:grid-cols-[1.4fr_1fr]',
-            $classes,
-            'the map and carousel are no longer a 1.4fr / 1fr pair (got: '
-            .$column->getAttribute('class').'), so they stack, or the map has given '
-            .'up the wider column'
-        );
-
-        // Left alone: on a narrow column the carousel's scroll-snap track measures
-        // to the column, so the dots and arrows step by that width. Nothing to
-        // assert, but it is why goTo() re-reads the track width rather than caching.
-        $this->assertTrue(
-            (bool) preg_grep('/^lg:items-start$/', $classes),
-            'the location grid no longer pins items to the top, so the shorter '
-            .'carousel stretches to the map\'s height and leaves dead space under it'
+        $this->assertSame(
+            $carousel,
+            $hero->nextElementSibling,
+            'the carousel is not the element immediately after the hero, so it has '
+            .'drifted down the page again. It belongs directly beneath the hero, at '
+            .'the full container width.'
         );
     }
 

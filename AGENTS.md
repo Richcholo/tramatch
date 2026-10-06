@@ -955,13 +955,13 @@ migration.
   the accepted cost in its own docblock, and still pins `object-cover` on both
   images. Its failure message on the cap assertion points at that note so the
   next person does not read it as a bug.
-- **The destination page's hero is an inset card at the top and the carousel
-  lives beside the location map. Two full-bleed attempts failed; do not redo
-  either.** The carousel has been in three places: above the hero, full-bleed
-  under it, and now in a column beside `02 / Location`. It is a partial,
-  `destinations/partials/carousel`, because it is referenced from inside the
-  location grid and one file keeps the no-JS fallback and the script's hooks from
-  drifting.
+- **The destination page's hero and carousel are adjacent inset cards at the
+  container width. Four layouts have been tried; do not redo the first three.**
+  The carousel has been: above the hero; hero-first full-bleed via `100vw`;
+  full-bleed via negative margins; down beside `02 / Location`; and is now back
+  directly under the hero at full width. It is a partial,
+  `destinations/partials/carousel` — one file keeps the no-JS fallback and the
+  `gallery.js` hooks from drifting apart.
   **Attempt 1 — `width: 100vw` + `margin-inline: calc(50% - 50vw)`.** Landed
   off-centre by roughly half a scrollbar: `100vw` measures the viewport
   *including* the vertical scrollbar, so the block is ~15px too wide; centring on
@@ -969,34 +969,32 @@ migration.
   `body` only took **one**. One edge visibly short, the hero's background showing
   where the image was cut. That is what "it doesn't look smooth" was — a
   misalignment, not a preference.
-  **Attempt 2 — negative margins** (`-mx-5 sm:-mx-8 lg:-mx-12` on a shared
-  wrapper, the inverse of `<main>`'s `px-5 sm:px-8 lg:px-12`). Aligned and with no
-  arithmetic to get wrong, but too wide for the page: a short photo band under a
-  tall hero read as a strip rather than as the place itself.
-  So the width is now whatever the container gives it. **Never put a `100vw` or a
+  **Attempt 2 — negative margins** (`-mx-5 sm:-mx-8 lg:-mx-12`, the inverse of
+  `<main>`'s `px-5 sm:px-8 lg:px-12`). Aligned, no arithmetic to get wrong, but
+  too wide for the page.
+  **Attempt 3 — beside the location map.** Left half the page empty on a wide
+  screen *and* shrank the photos to ~40% of the container. The dead space was the
+  give-away: the aside beside it is shorter than the left column, so the whole
+  right half of the viewport sat empty.
+  So the width is whatever the container gives it. **Never put a `100vw` or a
   `-mx-*` on either block**, and note that *any* `overflow-*` on an ancestor inside
   the container silently defeats the attempt.
-  **The radii differ on purpose:** hero `rounded-[2rem]` (the page's card radius),
-  carousel `rounded-[1.5rem]` (matching the map card it sits beside).
-  `lg:items-start` on that grid keeps the short carousel from stretching to the
-  map's 28rem.
-  **Softness inverted here, and that is the useful part.** The carousel's column is
-  ~40–45% of the container — *narrower* than a typical 1080–1170px upload — so it
-  downscales and is sharp. The full-width layouts were the soft ones. `max-w-5xl`
-  was implemented and reverted twice; if the cap assertion ever fails, that is a
-  design change to raise, not a bug. The root fix is still resizing uploads, which
-  needs GD or Imagick — absent from both the CLI and XAMPP.
-  **DOM order must keep matching visual order.** The hero carries the `<h1>`, so a
-  carousel rendered first hands a screen reader and the tab order the photo strip
-  before the destination's name.
-  Guarded by `both_blocks_are_inset_cards_with_rounded_corners` (radii, no cap, no
-  escape mechanism), `the_carousel_sits_beside_the_location_map_and_after_the_hero`
-  (shared ancestor is a `1.4fr / 1fr` grid, order via `compareDocumentPosition`),
-  `the_wrapper_around_the_two_blocks_does_not_clip_them` (walks every ancestor to
-  `<main>` for overflow utilities), and
-  `the_viewport_unit_full_bleed_is_not_reintroduced` (no `100vw` anywhere in the
-  two views, no `body` clip — comments stripped first, since both views document
-  that `100vw` was tried).
+  **The radii match on purpose:** both `rounded-[2rem]`, so the two adjacent media
+  blocks read as one unit. They were `2rem` / `1.5rem` while the carousel sat beside
+  the map card; that difference went with the move.
+  **Softness: accepted, and it is the trade.** ~1504px against a typical
+  1080–1170px upload is a ~1.3–1.4× upscale, so the photos are soft on a wide
+  screen. Narrower versions were implemented and reverted more than once, each
+  time sharp and each time judged too small. If the cap assertion fails, that is a
+  design change to raise, not a bug. The root fix is resizing uploads, which needs
+  GD or Imagick — absent from both the CLI and XAMPP.
+  **The carousel must stay the hero's `nextElementSibling`.** Order alone is not
+  enough: it was still "after the hero" while sitting below the map, which is what
+  let that regression through. `the_carousel_sits_directly_under_the_hero`
+  compares `nextElementSibling` *and* `compareDocumentPosition` — the first
+  catches drift, the second catches the carousel moving above the `<h1>`, which
+  would hand a screen reader and the tab order the photo strip before the
+  destination's name.
 - **`overflow-x: clip` on `body` is not available as a fallback.** It came and
   went with the `100vw` attempt. If it is ever wanted, `hidden` is the wrong value:
   **`hidden` creates a scroll container**, making `position: sticky` resolve against

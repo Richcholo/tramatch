@@ -10,41 +10,50 @@
     is not a carousel, and a hero plus one picture reads as a mistake rather than
     a feature.
 
-    Lives beside the location map rather than under the hero. It has been in
-    three places: under the hero, then full-bleed across the page with the hero,
-    and now in a narrow column next to the map. What ruled the full-bleed versions
-    out was not taste -- the `100vw` one was off-centre by half a scrollbar
-    (see AGENTS.md), and even the corrected version left a short photo band under
-    a tall hero, which read as a strip rather than as the place itself. Beside the
-    map it is a supporting element at the size it actually wants.
+    Lives directly under the hero at the full container width. It has been in
+    four places: here, full-bleed across the page with the hero (two attempts, both
+    abandoned -- see AGENTS.md), and in a narrow column beside the location map.
+    The map column was tried last and left half the page empty on a wide screen,
+    while shrinking the photos to 40% of the container.
 
-    It is a partial purely because of that move: it is now referenced from inside
-    the location card's grid, and keeping the markup in one file is what stops the
-    no-JS fallback and the script's hooks from drifting apart.
+    It is a partial rather than inlined so the markup and the gallery.js hooks stay
+    in one file; when it was inline, the no-JS fallback and the script's selectors
+    could drift apart silently.
 
     @param  \App\Models\Destination  $destination
 --}}
 @if ($destination->images->count() > 1)
     {{--
-        No max-width, and that is deliberate with a known cost. This column is
-        roughly 40-45% of a 1600px container on a wide screen, while admin photos
-        are stored verbatim by DestinationController::storeUploadedImage() with no
-        resize and are typically 1080-1170px phone shots. It is narrower than the
-        photo, so this box downscales and stays sharp -- the opposite of the
-        full-width versions, which upscaled.
+        Full container width, deliberately, with a known cost recorded here so it
+        is not rediscovered as a bug.
+
+        The container's content box is roughly 1504px on a 1600px viewport, while
+        admin photos are stored verbatim by
+        DestinationController::storeUploadedImage() with no resize and are typically
+        1080-1170px phone shots. So the browser scales each photo up by about
+        1.3-1.4x and it renders soft on a wide screen. A narrower version of this
+        was implemented and reverted more than once, each time sharp and each time
+        judged too small. The real fix is resizing the uploads, which needs GD or
+        Imagick -- absent from both the CLI and XAMPP.
+
+        NO `max-w`, and NO `100vw`. Full-bleed was tried twice: `width: 100vw`
+        landed off-centre by half a scrollbar (100vw includes the vertical
+        scrollbar, and the 50vw centring split the excess across both edges while
+        the clip took only one), and a negative-margin version was aligned but too
+        wide for the page. The container width needs no such arithmetic.
 
         object-cover is correct and must stay: it crops without distorting.
-        object-fill would stretch the aspect ratio, and object-contain would
-        letterbox a tall strip.
+        object-fill would stretch the aspect ratio; object-contain would letterbox
+        a strip this wide.
 
-        The 1.5rem radius matches the map card beside it, so the two columns read
-        as a pair rather than as an unrelated strip dropped next to a panel.
+        2rem radius, matching the hero directly above it, so the two read as one
+        media block rather than two unrelated cards.
     --}}
     <section
         data-gallery
         aria-roledescription="carousel"
         aria-label="More photos of {{ $destination->name }}"
-        class="relative overflow-hidden rounded-[1.5rem] bg-island-white shadow-sm ring-1 ring-boracay-light"
+        class="relative overflow-hidden rounded-[2rem] bg-island-white shadow-sm ring-1 ring-boracay-light"
     >
         <ul
             data-gallery-track
@@ -66,7 +75,7 @@
                     <img
                         src="{{ $galleryImage->path }}"
                         alt="{{ $index === 0 ? $destination->name : $destination->name.' — photo '.($index + 1) }}"
-                        class="h-64 w-full object-cover sm:h-80"
+                        class="h-80 w-full object-cover sm:h-96 lg:h-[30rem]"
                         loading="lazy"
                     >
                 </li>
