@@ -636,9 +636,15 @@ the exact bug in a form that looks correct in a template. That guard was
 falsified with a two-slide binding, and **the first version of it did not catch
 it**, which is why it asserts the invariant now.
 
-- **It is stage-level, never a child of a panel** (a caption inside a panel is
-  clipped by that panel's `overflow: hidden`), and `pointer-events: none` keeps
-  the centre panel clickable through the text on top of it.
+- **It is stage-level, never a child of a panel, and it sits BELOW THE FAN
+  IN FLOW, between the fan and the pager** (a caption inside a panel is
+  clipped by that panel's `overflow: hidden`). It used to be absolutely
+  positioned over the lower third of the photographs, which was the
+  reported "text clashes with the images" — no scrim carries a headline
+  over a full-brightness photograph without reading as a band across it.
+  The `pointer-events: none` that went with the overlap went with it:
+  nothing is under the caption any more, so there is nothing to click
+  through and the text is selectable like any other caption.
 - **IT IS AN `h2` AND NEVER AN `h1`.** The page's heading is on the ground above.
 - **The name and the province are two block-level spans**, so the heading breaks
   onto exactly two lines.
@@ -682,6 +688,16 @@ it**, which is why it asserts the invariant now.
   `a_one_photograph_destination_has_no_chevrons_and_no_pager` pins the other case —
   a destination whose owner has uploaded nothing has **no** chevrons, which is the
   normal state, not a missing feature.
+- **THE CHEVRON `disabled` BINDING IS A PLAIN BOOLEAN, AND THAT IS A
+  TRAP WITH A SCAR.** It was once written as
+  `index === 0 ? true : count - 1` with its twin
+  `index >= 0 ? true : count`, and the stage shipped **two permanently
+  disabled chevrons with the suite green**: `index >= 0` is always true,
+  and `count - 1` is a positive NUMBER, which Alpine treats as truthy
+  when it is bound to `disabled` — a truthy non-boolean disables a
+  button. The expression is now `$side === 'prev' ? 'index === 0' :
+  'index === count - 1'`, asserted verbatim by the test. Any ternary
+  with a non-boolean arm in a `x-bind:disabled` is this bug again.
 - **THE FAN IS DRAGGABLE**, and four pieces of it are load-bearing, each failing
   silently on its own:
   - **`touch-action: pan-y`** on `.tm-fan`. Without it a swipe on a phone is a coin
@@ -705,9 +721,18 @@ it**, which is why it asserts the invariant now.
   `transform`, and the transition applies to the **resolved** value, so a cancel is
   just setting it back to `0px`. No `@property` registration and no frame juggling.
   A **6px dead zone** keeps a tap from counting as a gesture, and a **distance**
-  threshold (15% of the fan, floor 48px) commits an advance rather than a velocity
-  — a flick has one pointer event and a drag has thirty, and they must not disagree
-  about the same physical distance.
+  threshold commits an advance rather than a velocity — a flick has one pointer
+  event and a drag has thirty, and they must not disagree about the same
+  physical distance. **The threshold is a fifth of the PANEL in front of you
+  (floored at 48px, capped at 120px), not a share of the fan's width.** It was
+  once 15% of the fan, which was defensible while the fan was capped at 68rem
+  and is not now that the stage fills the page: at a 1500px fan that is 225px
+  of travel before a release commits, which is exactly the "hard to grab" the
+  stage was reported as. A threshold that grows with the empty space around
+  the photographs grows with the wrong thing. Resistance is `* 0.75`,
+  deliberately light — heavier makes a swipe feel like wading once the
+  threshold is panel-sized, and `cursor: grab` on the fan is what tells a
+  visitor the photographs can be pulled at all.
   `the_fan_is_draggable_and_the_gesture_has_the_parts_that_make_it_usable` pins all
   four.
 - **THE PAGER SITS ON THE TEAL**, not on the paper: its dots are Island White and
@@ -722,9 +747,16 @@ it**, which is why it asserts the invariant now.
   `DestinationController::STAGE_INTERVAL_MS` is **7000**, not the customary four
   seconds: the stage's own motion is 620ms of panel travel plus an 800ms backdrop
   cross-fade, and a shorter dwell reads as an interruption rather than as rhythm.
-- **HOLD REASONS, NOT A BOOLEAN** — `held` is a list, because hover and focus
-  overlap and a single flag makes whichever fired last the only one that counts.
-  A hidden tab also stops it.
+- **HOLD REASONS, NOT A BOOLEAN** — `held` is a list, and only FOCUS
+  and DRAG belong to it. Hover used to hold it too, and that was the
+  reported "it doesn't auto-play": the stage is the whole opening
+  screen, so a desktop visitor's pointer is over it for exactly as long
+  as they are reading it, and a timer held for the entire dwell is a
+  timer that never fires while anyone is watching. The pause control is
+  the WCAG 2.2.2 mechanism for stopping content that moves without being
+  asked — it is always in the accessibility tree and always visible —
+  and that is where the decision belongs, not under the visitor's cursor
+  by accident. A hidden tab also stops it.
 - **THERE IS NO `x-cloak` RULE IN `app.css`**, so the pause/play glyph swap is CSS
   keyed off `aria-pressed` — the attribute the control needs anyway — rather than
   `x-show`, which would paint both glyphs for a frame. `element.hidden` on the

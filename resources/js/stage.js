@@ -65,12 +65,21 @@ export default function destinationStage() {
         /**
          * WHY autoplay is held, as reasons rather than a boolean.
          *
-         * Hover and focus can overlap -- a keyboard user's focus lands inside the
-         * stage and their pointer is over it too -- so a single `hovering` flag
-         * makes whichever event fires last the only one that counts, and the
-         * slideshow resumes under a keyboard user who has not moved the pointer.
-         * A set means both have to be released.
+         * Only FOCUS holds it now. Hover used to as well, and that
+         * was the reported "it doesn't auto-play": the stage is the
+         * whole opening screen, so a desktop visitor's pointer is over
+         * it for exactly as long as they are reading it, and a timer
+         * held for the entire dwell is a timer that never fires while
+         * anyone is watching. The pause control is the WCAG 2.2.2
+         * mechanism for stopping content that moves without being
+         * asked -- it is always in the accessibility tree and always
+         * visible -- and that is where the decision belongs, not
+         * under the visitor's cursor by accident.
+         *
+         * A set rather than a boolean, so that reasons can in
+         * principle overlap and each is released on its own.
          */
+        held: [],
         held: [],
 
         announcement: '',
@@ -337,11 +346,27 @@ init() {
          * event and the drag has thirty. So a fast flick is judged on the ground it
          * covered, like everything else.
          *
-         * 15% of the fan's own width, with a floor, so the threshold scales with
-         * the panel and feels the same on a phone and on a desktop.
+         * A FIFTH OF THE PANEL IN FRONT OF YOU, floored and capped.
+         *
+         * THE THRESHOLD IS MEASURED OFF THE PANEL, NOT THE FAN. It used
+         * to be 15% of the fan's own width, which was defensible while
+         * the fan was capped at 68rem and stopped being so the moment
+         * the stage was allowed to fill the page: at a 1500px fan that
+         * is 225px of travel before a release commits, which is exactly
+         * the "hard to grab" the stage was reported as. A threshold that
+         * grows with the empty space AROUND the photographs grows with
+         * the wrong thing -- the gap between panels is not part of the
+         * gesture.
+         *
+         * The panel, by contrast, is the thing being grabbed. A fifth of
+         * it is a deliberate swipe and no more, and the floor and cap
+         * keep it between 48px and 120px whatever `--u` has grown to.
          */
         dragThreshold() {
-            return Math.max(48, (this.fan ? this.fan.offsetWidth : 640) * 0.15);
+            const panel = this.panels[this.index];
+            const width = panel ? panel.offsetWidth : 320;
+
+            return clamp(width * 0.2, 48, 120);
         },
 
         /**
@@ -438,10 +463,11 @@ init() {
              * A 6px dead zone before the drag counts.
              *
              * Without it a plain tap is a zero-pixel drag: it flickers the
-             * `is-dragging` class, changes the cursor, takes the autoplay hold and
-             * releases it again, and on a touch screen competes with the browser's
-             * own tap gesture. Six pixels is below the tap threshold on every
-             * platform that has one, so a tap is never mistaken for a drag.
+             * `is-dragging` class, changes the cursor, takes the autoplay hold
+             * and releases it again, and on a touch screen competes with the
+             * browser's own tap gesture. Six pixels is below the tap threshold
+             * on every platform that has one, so a tap is never mistaken
+             * for a drag.
              */
             if (!this.dragging && Math.abs(delta) < 6) {
                 return;
@@ -453,17 +479,21 @@ init() {
             }
 
             /*
-             * THE FAN IS THE ONLY THING THAT TRACKS THE POINTER. Every panel keeps
-             * its formation and its own `data-offset` for the whole gesture, so a
-             * release into an advance hands the movement to the CSS transition
-             * from a known origin instead of from wherever the pointer left off.
+             * THE FAN IS THE ONLY THING THAT TRACKS THE POINTER. Every panel
+             * keeps its formation and its own `data-offset` for the whole
+             * gesture, so a release into an advance hands the movement to the
+             * CSS transition from a known origin instead of from wherever the
+             * pointer left off.
              *
-             * `* 0.55` is RESISTANCE, not physics: the fan follows about half the
-             * pointer's travel, which keeps the gesture legible while making it
-             * impossible to pull a panel so far that a cancelled drag reads as a
-             * throw.
+             * `* 0.75` is RESISTANCE, not physics: the fan follows three
+             * quarters of the pointer's travel, which keeps the gesture
+             * legible while making it impossible to pull a panel so far that
+             * a cancelled drag reads as a throw. It is deliberately light --
+             * heavier resistance makes a swipe feel like wading, and with the
+             * threshold now measured off the panel rather than the fan there
+             * is no need to soak up distance here.
              */
-            this.dragDelta = delta * 0.55;
+            this.dragDelta = delta * 0.75;
 
             this.fan.style.setProperty('--tm-drag-x', `${this.dragDelta}px`);
         },

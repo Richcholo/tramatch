@@ -908,10 +908,18 @@
          * under a swipe and what stops the browser from waiting to see whether a
          * touch is a scroll before delivering any pointermove at all. Without it a
          * swipe on a phone is a coin toss between a scroll and a carousel.
+         *
+         * The cursor says the fan is grabbable, which is the one thing
+         * a drag needs that nothing else on the page can communicate:
+         * the panels are links, so without this the stage's own
+         * control reads as a row of destinations rather than as
+         * something that can be pulled. `is-dragging` takes it over
+         * with `grabbing` while a gesture is underway.
          */
         transform: translate3d(var(--tm-drag-x, 0px), 0, 0);
         transition: transform 260ms var(--ease-out);
         touch-action: pan-y;
+        cursor: grab;
     }
 
     /*
@@ -1147,28 +1155,51 @@
     /* --- the caption ------------------------------------------------------- */
 
     /*
-     * Stage-level, never a child of a panel: a caption inside a panel is clipped
-     * by that panel's `overflow: hidden`, and a panel painted above the copy
-     * occludes it. The z-index below is what guarantees no panel ever covers this.
+     * BELOW THE FAN, ON THE TEAL -- NOT ON TOP OF THE PHOTOGRAPHS.
      *
-     * `pointer-events: none` so the centre panel -- which is a link -- stays
-     * clickable through the text sitting on top of it.
+     * This used to be `position: absolute` with `bottom: 118u`,
+     * which painted the kicker, the name, the standfirst and the
+     * micro-label row over the LOWER THIRD of the panels. That was
+     * the reported "text clashes with the images", and it is not a
+     * scrim problem: there is no scrim dark enough to carry a
+     * headline over a full-brightness photograph without looking
+     * like a band across it.
+     *
+     * So the caption is IN FLOW now, between the fan and the pager.
+     * It is the ordinary editorial arrangement -- a figure, then its
+     * caption -- and it puts every word on the ground rather than on
+     * a photograph. What it sits over is the backdrop wash, which is
+     * `brightness(0.18)`, i.e. near-black: the caption reads as
+     * ink on the theatre's own ground.
+     *
+     * It is still stage-level and never a child of a panel, and that
+     * half of the old note still holds: a caption inside a panel is
+     * clipped by that panel's `overflow: hidden`, and a panel painted
+     * above the copy occludes it.
+     *
+     * The `pointer-events: none` is gone with the overlap. It existed
+     * so the centre panel -- a link -- stayed clickable through the
+     * text sitting on top of it. Nothing is under the caption any
+     * more, so there is nothing to click through, and the text is
+     * selectable like any other caption.
+     *
+     * `padding-block` separates it from the fan's box above. The fan
+     * is 660u tall and the panels are 570u centred in it, so there
+     * is already 45u of teal under the lowest panel; the 10u here is
+     * the caption's own breathing room on top of that.
+     *
+     * `is-settling` still fades and rises the copy out while the
+     * panels travel, which is the right signal for a change in
+     * flight even though the copy is no longer over the motion.
      */
     .tm-stage__caption {
-        position: absolute;
+        position: relative;
         z-index: 40;
-        inset-inline: 0;
-        /*
-         * Clears the pager strip, which is 44px of control plus 56u of padding --
-         * 118u is that plus a margin. Too small and the caption's micro-label row
-         * sits on the dots.
-         */
-        bottom: calc(118 * var(--u));
         display: flex;
         justify-content: center;
+        padding-block: calc(10 * var(--u)) 0;
         padding-inline: calc(24 * var(--u));
         text-align: center;
-        pointer-events: none;
         transition:
             opacity 450ms var(--ease-out),
             transform 450ms var(--ease-out);

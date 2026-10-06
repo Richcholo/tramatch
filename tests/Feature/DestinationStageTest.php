@@ -1958,9 +1958,18 @@ class DestinationStageTest extends TestCase
              * Disabled AT THE ENDS, from the script, not by not rendering. The
              * opening slide is index 0, so prev must be inert on arrival and next
              * must be live.
+             *
+             * Asserted as the plain boolean it now is. This expression was
+             * once `index === 0 ? true : count - 1` with its twin
+             * `index >= 0 ? true : count`, and the test asserted THAT, so
+             * the stage shipped two permanently disabled chevrons with the
+             * suite green: `index >= 0` is always true, and `count - 1` is
+             * a positive NUMBER, which Alpine treats as truthy when it is
+             * bound to `disabled`. A truthy non-boolean disables a button.
+             * The stage rendered two arrows and neither could be clicked.
              */
             $this->assertStringContainsString(
-                $side === 'prev' ? 'index === 0 ? true : count - 1' : 'index >= 0 ? true : count',
+                $side === 'prev' ? 'index === 0' : 'index === count - 1',
                 (string) $chevron->getAttribute('x-bind:disabled'),
                 "the {$side} chevron is not disabled at the ends"
             );

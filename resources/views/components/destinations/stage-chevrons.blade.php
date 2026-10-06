@@ -30,15 +30,34 @@
 
 @if (($stageCount ?? 0) > 1)
     <div class="tm-stage__chevrons">
-        @foreach (['prev' => 'Previous', 'next' => 'Next'] as $side => $word)
-            <button
-                type="button"
-                data-stage-chevron="{{ $side }}"
-                x-on:click="{{ $side === 'prev' ? 'prev()' : 'next()' }}"
-                x-bind:disabled="index {{ $side === 'prev' ? '===' : '>=' }} 0 ? true : {{ $side === 'prev' ? 'count - 1' : 'count' }}"
-                x-bind:aria-hidden="{{ $side === 'prev' ? 'index === 0' : 'index === count - 1' }}"
-                aria-label="{{ $word }} photograph"
-                class="tm-stage__chevron tm-stage__chevron--{{ $side }} tm-stage__chevron--{{ $side }}-on"
+@foreach (['prev' => 'Previous', 'next' => 'Next'] as $side => $word)
+    @php
+        /*
+         * The disabled state and the aria-hidden state are the same
+         * question -- is there anywhere to go -- so it is answered
+         * once and used for both. The previous chevron runs out at
+         * the first photograph and the next one at the last.
+         *
+         * This is a plain boolean expression on purpose. It was once
+         * written as `index === 0 ? true : count - 1`, with its
+         * next-side twin as `index >= 0 ? true : count`, and BOTH
+         * chevrons were permanently disabled: `index >= 0` is always
+         * true, and `count - 1` is a positive NUMBER, which Alpine
+         * treats as truthy when it is bound to `disabled`. A truthy
+         * non-boolean disables a button. The stage rendered two
+         * arrows and neither could ever be clicked.
+         */
+        $atEnd = $side === 'prev' ? 'index === 0' : 'index === count - 1';
+    @endphp
+    <button
+        type="button"
+        data-stage-chevron="{{ $side }}"
+        x-on:click="{{ $side === 'prev' ? 'prev()' : 'next()' }}"
+        x-bind:disabled="{{ $atEnd }}"
+        x-bind:aria-hidden="{{ $atEnd }}"
+        aria-label="{{ $word }} photograph"
+        class="tm-stage__chevron tm-stage__chevron--{{ $side }} tm-stage__chevron--{{ $side }}-on"
+    >
             >
                 <svg viewBox="0 0 24 24" aria-hidden="true" class="tm-stage__chevron-glyph">
                     <path

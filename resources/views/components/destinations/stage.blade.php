@@ -84,10 +84,8 @@
             @keydown.arrow-right.prevent="next()"
             @keydown.home.prevent="go(0)"
             @keydown.end.prevent="go(count - 1)"
-            @mouseenter="hold('hover')"
-            @mouseleave="release('hover')"
-            @focusin="hold('focus')"
-            @focusout="release('focus')"
+             @focusin="hold('focus')"
+             @focusout="release('focus')"
             class="tm-stage"
         >
             {{--

@@ -6,9 +6,15 @@
     long name loses its ends; and a panel painted above the copy occludes it. Its
     z-index against the fan is what guarantees no panel ever covers this.
 
-    `pointer-events-none` so the panels underneath stay hoverable and clickable
-    through the text area. The centre panel is a link and the caption sits right
-    on top of it.
+    BELOW THE FAN, NOT ON TOP OF IT. The caption is in
+    flow between the fan and the pager, so every word sits on the
+    theatre's own ground rather than over a photograph. It used to
+    be absolutely positioned over the lower third of the panels,
+    which was the reported "text clashes with the images", and no
+    scrim carries a headline over a full-brightness photograph
+    without reading as a band across it. The `pointer-events-none`
+    that went with the overlap went with it: nothing is under the
+    caption any more, so there is nothing to click through.
 
     =========================================================================
     EVERY FIELD IS READ OFF ONE SLIDE. NEVER TWO.
@@ -32,7 +38,7 @@
 
     ALWAYS AN `h2`, NEVER AN `h1`. On a destination page the document heading is
     the page heading, on the sand, ABOVE this stage; on `/destinations` it is
-    "Destinations" in the page header. This is a caption over photographs. An `h1`
+    "Destinations" in the page header. This is a caption under photographs. An `h1`
     here would either duplicate the page's heading or, worse, become the page's
     heading and describe a photograph of somewhere the reader is not.
 
