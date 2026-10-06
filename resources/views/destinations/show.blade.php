@@ -10,65 +10,23 @@
 
     <div class="space-y-10">
         {{--
-            The two full-bleed media blocks, hero first and the carousel beneath
-            it, stacked flush with no gap between them.
+            The hero.
 
-            They used to sit in the opposite order -- carousel above hero -- and
-            both were inset cards with rounded corners inside a max-w-[1600px]
-            container. The request was for the main photo first and for both to
-            run the full width of the screen, because the narrow container was
-            what constrained what an admin could usefully supply.
+            An inset card again, inside the max-w-[1600px] container, with its
+            rounded corners back. Three layouts were tried for the hero and the
+            carousel: carousel above hero as inset cards; both full-bleed via
+            width:100vw, which came out off-centre by half a scrollbar; and both
+            full-bleed via negative margins, which was aligned but too wide for
+            the page. This is the original inset treatment, and the carousel now
+            lives down in the content beside the location map rather than beside
+            the hero at all.
 
-            They live in one wrapper so the pair stays together and so the page's
-            own spacing cannot insert a gap between them.
-
-            THE WRAPPER PULLS THE GUTTERS BACK WITH NEGATIVE MARGINS, and the two
-            blocks underneath carry NO width class at all. This replaced a first
-            attempt that used .tm-full-bleed -- `width: 100vw` plus
-            `margin-inline: calc(50% - 50vw)` -- and that is the version which
-            "did not look smooth".
-
-            Why it looked wrong, and it is worth writing down because the
-            arithmetic is subtle:
-
-            100vw includes the vertical scrollbar, so the block is wider than the
-            area it can occupy. The page's own body had to carry `overflow-x:
-            clip` to swallow the ~15px overshoot, which clipped the RIGHT edge.
-            But `margin-inline: calc(50% - 50vw)` centres the block on 50vw, so
-            the overshoot was split across both sides and only one was clipped.
-            The result was a band that was off-centre by roughly half a
-            scrollbar and visibly not reaching the edges -- the photos looked
-            cropped short on one side, and the hero's dark background showed a
-            sliver where the image was cut. Not a styling nit; a misaligned band.
-
-            The negative margins cannot have that problem: they cancel exactly the
-            padding the container already applied (`px-5 sm:px-8 lg:px-12`, the
-            same values the layout uses), so the blocks sit flush to the content
-            edges and go no further. No viewport units, no scrollbar arithmetic,
-            no overshoot to clip, and `.tm-full-bleed` is now unused.
-
-            The wrapper must also carry NO overflow rule. An overflow-clip here
-            looked harmless and was part of the same problem: the wrapper is inside
-            max-w-[1600px], so clipping at it cuts the blocks back to the
-            container width and you get a band that is neither full-bleed nor
-            inset. `the_wrapper_around_the_two_blocks_does_not_clip_them` walks
-            every ancestor up to <main> and fails on any overflow utility.
-
-            Consequence, unchanged from before and still the accepted trade: the
-            blocks are now ~1504px on a 1600px viewport rather than the full
-            1900px+ of the viewport, which is *less* upscaling of an uploaded
-            photo than the 100vw version did, but it stops short of the screen
-            edges on a wide monitor.
-
-            Source order matches visual order deliberately. The hero carries the
-            page's <h1>, so putting the carousel first in the DOM would hand a
-            screen reader and the tab order the photo strip before the title.
+            No viewport units here and nothing to clip. The one thing worth not
+            re-adding is a width class: anything that widens this block has to
+            account for the container's padding, and a `100vw` in particular is
+            off-centre because it includes the vertical scrollbar.
         --}}
-        {{-- Must match the layout's <main> padding exactly: px-5 sm:px-8
-             lg:px-12. Changing one and not the other leaves a seam on one side
-             and an overhang on the other. --}}
-        <div class="-mx-5 sm:-mx-8 lg:-mx-12">
-            <section class="relative overflow-hidden bg-volcanic-teal text-white">
+        <section class="relative overflow-hidden rounded-[2rem] bg-volcanic-teal text-white shadow-xl">
                 @if ($destination->image_url)
                 <img
                     src="{{ $destination->image_url }}"
@@ -102,94 +60,6 @@
                 </div>
             </div>
         </section>
-
-        {{--
-            The carousel.
-
-            Rendered as a plain row of images that JavaScript then upgrades, so a
-            JS failure cannot make a destination's photos disappear. Every image is
-            in the HTML with a real src and alt from the start; the carousel script
-            only hides all but the current one and wires up the controls.
-
-            Only rendered at all when there is more than one photo. A single extra
-            photo is not a carousel, and a hero plus one picture reads as a mistake
-            rather than a feature.
-        --}}
-        @if ($destination->images->count() > 1)
-            {{--
-                Flush below the hero, and the same width as it, both of which come
-                from the wrapper's negative margins rather than from a width class
-                here. See the note on the wrapper above for why this is not
-                .tm-full-bleed.
-
-                No max-width, and that is a decision with a known cost, so it is
-                written down rather than left to be "tidied" either way. This block
-                is as wide as the container's content box -- roughly 1504px on a
-                1600px viewport -- while admin photos are stored verbatim by
-                DestinationController::storeUploadedImage() with no resize and are
-                typically 1080-1170px phone shots. So the browser scales each photo
-                up by roughly 1.3-1.4x and it renders soft.
-
-                The alternative was max-w-5xl (1024px) on both this and the hero,
-                which was sharp and also consistent -- but the owner judged a
-                narrower media pair the wrong look for the page, twice. Their
-                call, taken.
-
-                object-cover is correct and must stay: it crops without
-                distorting. object-fill would stretch the aspect ratio and
-                object-contain would letterbox a ~3.9:1 strip.
-
-                The real fix is to resize the uploads so there are enough pixels
-                for the box, which also makes srcset possible. There is no GD and
-                no Imagick here -- checked on the CLI and under XAMPP -- so that
-                needs an extension enabled on the host plus a backfill of the
-                existing photos.
-            --}}
-            <section
-                data-gallery
-                aria-roledescription="carousel"
-                aria-label="Photos of {{ $destination->name }}"
-                class="relative overflow-hidden bg-island-white"
-            >
-                <ul
-                    data-gallery-track
-                    class="tm-no-scrollbar flex snap-x snap-mandatory overflow-x-auto scroll-smooth"
-                >
-                    @foreach ($destination->images as $index => $galleryImage)
-                        <li
-                            data-gallery-slide
-                            class="w-full shrink-0 snap-center"
-                            {{-- aria-hidden on the ones JS is hiding, so a screen
-                                 reader is not offered four copies of the same
-                                 place. Removed entirely by the script when it
-                                 takes over. --}}
-                            @if ($index > 0) aria-hidden="true" @endif
-                            role="group"
-                            aria-roledescription="slide"
-                            aria-label="{{ $index + 1 }} of {{ $destination->images->count() }}"
-                        >
-                            <img
-                                src="{{ $galleryImage->path }}"
-                                alt="{{ $index === 0 ? $destination->name : $destination->name.' — photo '.($index + 1) }}"
-                                class="h-80 w-full object-cover sm:h-96"
-                                loading="lazy"
-                            >
-                        </li>
-                    @endforeach
-                </ul>
-
-                {{-- Controls are absent without JS, and that is deliberate: a
-                     button that does nothing is worse than no button. The script
-                     inserts them once it is running.
-
-                     bottom-2.5 rather than bottom-0: sitting flush against the
-                     crop's bottom edge looked cramped, and 0.625rem is the 10px
-                     lift asked for. The container keeps p-4, so the buttons sit
-                     10px up with their own padding still around them. --}}
-                <div data-gallery-controls class="absolute inset-x-0 bottom-2.5 flex items-center justify-center gap-2 p-4"></div>
-            </section>
-        @endif
-        </div>
 
         <div class="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
             <section class="space-y-8">
@@ -349,23 +219,46 @@
                     @endif
                 </div>
 
-                <div class="rounded-[2rem] bg-island-white p-6 shadow-sm ring-1 ring-boracay-light sm:p-8">
-                    <p class="text-xs font-bold uppercase tracking-[0.28em] text-boracay-dark">
-                        02 / Location
-                    </p>
+                {{--
+                    02 / Location, and the carousel beside it.
 
-                    <div
-                        data-destination-map
-                        data-lat="{{ $destination->latitude }}"
-                        data-lng="{{ $destination->longitude }}"
-                        data-name="{{ $destination->name }}"
-                        class="mt-6 h-[28rem] rounded-[1.5rem] bg-boracay-light"
-                    ></div>
+                    The two are paired in a nested two-column grid rather than the
+                    page's main 1.2fr / 0.8fr split. The wider column is on the
+                    LEFT deliberately: the location card reads left-to-right, and
+                    the map is the taller of the two, so putting it in the wide
+                    track keeps its 28rem height from leaving a long gap beside a
+                    short photo strip.
 
-                    <p class="mt-4 text-xs text-benguet-charcoal/50">
-                        {{ $destination->latitude }},
-                        {{ $destination->longitude }}
-                    </p>
+                    Stacked on mobile, location first. It is the more useful of the
+                    two for "can I get there", and the map is the element that
+                    degrades worst in a narrow column.
+
+                    The carousel must stay OUT of the top-level flow: it is
+                    `h-80 sm:h-96` against the map's 28rem, and its controls are
+                    absolutely positioned within it, so a full-width slot made it
+                    a short band floating under a tall hero.
+                --}}
+                <div class="grid gap-8 lg:grid-cols-[1.4fr_1fr] lg:items-start">
+                    <div class="rounded-[2rem] bg-island-white p-6 shadow-sm ring-1 ring-boracay-light sm:p-8">
+                        <p class="text-xs font-bold uppercase tracking-[0.28em] text-boracay-dark">
+                            02 / Location
+                        </p>
+
+                        <div
+                            data-destination-map
+                            data-lat="{{ $destination->latitude }}"
+                            data-lng="{{ $destination->longitude }}"
+                            data-name="{{ $destination->name }}"
+                            class="mt-6 h-[28rem] rounded-[1.5rem] bg-boracay-light"
+                        ></div>
+
+                        <p class="mt-4 text-xs text-benguet-charcoal/50">
+                            {{ $destination->latitude }},
+                            {{ $destination->longitude }}
+                        </p>
+                    </div>
+
+                    @include('destinations.partials.carousel', ['destination' => $destination])
                 </div>
             </section>
 

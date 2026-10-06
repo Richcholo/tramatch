@@ -453,33 +453,36 @@ class DestinationGalleryTest extends TestCase
     }
 
     /**
-     * The carousel is the same width as the hero, and that width is uncapped.
+     * Both blocks are inset cards with rounded corners, and neither is capped.
      *
-     * This asserts a decision with a known cost, and it is here so the cost is
-     * visible rather than rediscovered.
+     * The layout went through three versions and this pins the one that is live.
+     * Carousel above the hero as inset cards; then hero-first full-bleed via
+     * `width: 100vw`, which came out off-centre by half a scrollbar and was
+     * described as "not smooth"; then full-bleed via negative margins, which was
+     * aligned but too wide for the page. Now back to inset cards, with the
+     * carousel moved down beside the location map so it is a supporting element
+     * rather than a band under the hero.
      *
-     * The page container runs to max-w-[1600px], so both blocks render ~1504px
-     * wide, while uploads are stored verbatim with no resize and are typically
-     * 1080-1170px wide. That is a 1.3-1.4x upscale, so the photos render soft on
-     * wide screens. There is a sharp version: max-w-5xl (1024px) on both, which
-     * was implemented and then reverted. The owner judged the narrower pair the
-     * wrong look and asked twice for the carousel to match the hero instead.
+     * On the radii being asserted as different on purpose: the hero is a
+     * standalone band at the top of the page and takes the page's 2rem card
+     * radius. The carousel is paired with the map card, which is itself
+     * 1.5rem-inset, so it matches that. They are not meant to be equal.
      *
-     * So the honest state is: consistent and full width, knowingly soft. The real
-     * fix is resizing the uploads so a 1504px box has enough pixels, which also
-     * makes srcset possible -- and that needs GD or Imagick, which are absent
-     * from both the CLI and XAMPP.
+     * The cap assertion carries a decision with a known cost, recorded so the cost
+     * is visible rather than rediscovered: the carousel's column is roughly 40-45%
+     * of a 1600px container, and uploads are stored verbatim with no resize at
+     * typically 1080-1170px wide, so that column is NARROWER than the photo and the
+     * browser downscales. The photos are sharp there. The full-width layouts upscaled
+     * and were the soft ones, which is the opposite of what the width argument
+     * assumed. If this ever fails on the cap assertion, read the note before
+     * "fixing" it: re-adding a cap is a design change, not a bug.
      *
-     * If this test fails on the cap assertion, read the note above before
-     * "fixing" it: re-adding the cap is a real option, but it is a design change
-     * the owner rejected twice, not a bug.
-     *
-     * The object-fit assertions are unaffected by any of that -- cover is correct
-     * at any width, and "try another object-fit" remains the wrong fix for an
-     * upscale because no object-fit value prevents one.
+     * The object-fit assertions are independent of all of that -- cover is correct
+     * at any size, and "try another object-fit" remains the wrong fix for an upscale
+     * because no object-fit value prevents one.
      */
     #[Test]
-    public function the_carousel_matches_the_hero_and_neither_is_capped(): void
+    public function both_blocks_are_inset_cards_with_rounded_corners(): void
     {
         // image_url set deliberately: without it the hero renders a gradient div
         // instead of an <img>, and the object-fit assertions would have nothing
@@ -532,37 +535,51 @@ class DestinationGalleryTest extends TestCase
         $hero = $classesAt('//main//section[.//h1]');
 
         /*
-         * Neither block carries a width class: both get their width from the
-         * wrapper's negative margins, which is what replaced the 100vw approach.
-         * So the property worth pinning is that neither is constrained in its own
-         * right, and that they agree.
+         * Both are inset cards again, inside the max-w-[1600px] container.
+         *
+         * The rounded corners are the tell: three layouts were tried (inset cards,
+         * full-bleed via 100vw, full-bleed via negative margins) and this is
+         * back to the first. `rounded-[2rem]` on the hero and `rounded-[1.5rem]`
+         * on the carousel, the latter matching the map card it now sits beside.
+         *
+         * The radii are deliberately DIFFERENT. The hero is a standalone band at
+         * the top of the page and takes the page's 2rem card radius; the carousel
+         * is a supporting element paired with the map, which is itself a
+         * 1.5rem-inset card, so it matches that instead. Asserting they differ is
+         * how this stays true through a tidy-up.
          */
-        foreach (['carousel' => $carousel, 'hero' => $hero] as $name => $list) {
-            $this->assertSame(
-                [],
-                preg_grep('/^max-w-/', $list),
-                'the '.$name.' has a max-width again. max-w-5xl was implemented and '
-                .'reverted twice; if a cap is wanted, raise it rather than '
-                .'reintroducing it here -- see the note on this test.'
-            );
+        $this->assertContains(
+            'rounded-[2rem]',
+            $hero,
+            'the hero is not a rounded inset card again, so the original layout '
+            .'has not been restored'
+        );
 
+        $this->assertContains(
+            'rounded-[1.5rem]',
+            $carousel,
+            'the carousel no longer uses the smaller radius that matches the map '
+            .'card it sits beside'
+        );
+
+        // And no escape mechanism crept back onto either of them.
+        foreach (['carousel' => $carousel, 'hero' => $hero] as $name => $list) {
             $this->assertNotContains(
                 'tm-full-bleed',
                 $list,
                 'the '.$name.' is using .tm-full-bleed again. It was '
                 .'width:100vw + margin-inline:calc(50% - 50vw), which lands '
-                .'roughly half a scrollbar off-centre. Use the wrapper.'
+                .'roughly half a scrollbar off-centre. Both blocks are inset cards.'
+            );
+
+            $this->assertSame(
+                [],
+                preg_grep('/^-?m?x-/', $list),
+                'the '.$name.' carries a horizontal margin again. The full-bleed '
+                .'attempt cancelled the container padding with -mx-* and that '
+                .'version was abandoned too; these are plain inset cards.'
             );
         }
-
-        // Also compared against each other, because the real requirement is that
-        // they match.
-        $this->assertSame(
-            preg_grep('/^max-w-/', $carousel),
-            preg_grep('/^max-w-/', $hero),
-            'the carousel and the hero must resolve to the same width, or one of '
-            .'them reads as a mistake against the other'
-        );
 
         foreach ([
             'carousel photo' => '//*[@data-gallery-track]//img',
@@ -587,19 +604,21 @@ class DestinationGalleryTest extends TestCase
     }
 
     /**
-     * The hero comes first and the carousel sits beneath it.
+     * The hero comes first, and the carousel sits beside the location map.
      *
-     * They used to be the other way round -- carousel above hero -- and the order
-     * was asked to be flipped. This is the one property here that no amount of
-     * styling asserts: both blocks can be correct, full-bleed and matching, and
-     * still be in the wrong order.
-     *
-     * It matters for more than looks. The hero carries the page's <h1>, so a
-     * carousel rendered first hands a screen reader and the tab order the photo
+     * The order matters for more than looks: the hero carries the page's <h1>, so
+     * a carousel rendered first hands a screen reader and the tab order the photo
      * strip before the destination's name.
+     *
+     * The position is the layout that was asked for. The carousel has been in
+     * three places -- above the hero, full-bleed under it, and now in a column
+     * beside the location map -- and the move was specifically to get it away
+     * from the top of the page. Asserted structurally (the carousel and the map
+     * share an ancestor that is a two-column grid) rather than by index, because
+     * an "element 400" assertion breaks the moment anything is inserted above.
      */
     #[Test]
-    public function the_hero_is_rendered_before_the_carousel(): void
+    public function the_carousel_sits_beside_the_location_map_and_after_the_hero(): void
     {
         $destination = $this->destination([
             'image_url' => 'https://images.example.com/hero.jpg',
@@ -626,13 +645,15 @@ class DestinationGalleryTest extends TestCase
 
         $carousel = $xpath->query('//*[@data-gallery]')->item(0);
         $hero = $xpath->query('//main//section[.//h1]')->item(0);
+        $map = $xpath->query('//*[@data-destination-map]')->item(0);
 
         $this->assertNotNull($carousel, 'the carousel is missing from the page');
         $this->assertNotNull($hero, 'the hero is missing from the page');
+        $this->assertNotNull($map, 'the map is missing from the page');
 
-        // Source order, read off the parse order the DOM preserves, rather than
-        // off a class or a flex property -- visual order can differ from DOM
-        // order, and it is the DOM a screen reader and the tab order follow.
+        // Source order, read off the parse order the DOM preserves rather than off
+        // a class: visual order can differ from DOM order, and it is the DOM a
+        // screen reader and the tab order follow.
         $this->assertSame(
             DOMNode::DOCUMENT_POSITION_FOLLOWING,
             $hero->compareDocumentPosition($carousel)
@@ -640,42 +661,90 @@ class DestinationGalleryTest extends TestCase
             'the carousel must come after the hero in the DOM, so the <h1> in the '
             .'hero is reached before the photo strip'
         );
+
+        /*
+         * Sibling of the map, not merely near it. The location card is a div and
+         * the map sits inside it, so the shared ancestor has to be the grid holding
+         * both columns -- found by walking up from the map until the carousel is
+         * inside.
+         */
+        $column = $map;
+
+        while ($column !== null) {
+            if ($xpath->query('.//*[@data-gallery]', $column)->length > 0) {
+                break;
+            }
+
+            $column = $column->parentNode;
+        }
+
+        $this->assertNotNull(
+            $column,
+            'the carousel shares no ancestor with the map, so they are not in the '
+            .'same row and the carousel has been moved back out of the location section'
+        );
+
+        $classes = preg_split(
+            '/\s+/',
+            trim($column->getAttribute('class')),
+            -1,
+            PREG_SPLIT_NO_EMPTY
+        );
+
+        // And it must be a two-column grid, or they stack instead of pairing up.
+        // The ratio matters too: the map is the taller element at h-[28rem], so it
+        // takes the wider column and the short photo strip takes the rest.
+        $this->assertContains(
+            'lg:grid-cols-[1.4fr_1fr]',
+            $classes,
+            'the map and carousel are no longer a 1.4fr / 1fr pair (got: '
+            .$column->getAttribute('class').'), so they stack, or the map has given '
+            .'up the wider column'
+        );
+
+        // Left alone: on a narrow column the carousel's scroll-snap track measures
+        // to the column, so the dots and arrows step by that width. Nothing to
+        // assert, but it is why goTo() re-reads the track width rather than caching.
+        $this->assertTrue(
+            (bool) preg_grep('/^lg:items-start$/', $classes),
+            'the location grid no longer pins items to the top, so the shorter '
+            .'carousel stretches to the map\'s height and leaves dead space under it'
+        );
     }
 
     /**
      * No viewport-unit full-bleed, and no body clip to hide its overshoot.
      *
-     * This is a guard against re-introducing the approach that shipped and had to
-     * be taken back out. `.tm-full-bleed` was `width: 100vw` plus
-     * `margin-inline: calc(50% - 50vw)`, and it produced a band that was off-centre
-     * by roughly half a scrollbar: 100vw includes the vertical scrollbar, the
-     * excess got split across both edges by the 50vw centring, and body's
+     * A guard against re-introducing the approach that shipped and had to be
+     * taken back out. `.tm-full-bleed` was `width: 100vw` plus
+     * `margin-inline: calc(50% - 50vw)`, and it produced a band off-centre by
+     * roughly half a scrollbar: 100vw includes the vertical scrollbar, the excess
+     * got split across both edges by the 50vw centring, and body's
      * `overflow-x: clip` only took one of them. One edge visibly short, and the
-     * hero's background showing through where the image was cut. It read as
-     * "not smooth" and it was a misalignment, not a preference.
+     * hero's background showing through where the image was cut. It read as "not
+     * smooth" and it was a misalignment, not a preference.
      *
-     * The blocks now pull the container's own padding back with negative margins
-     * and carry no width class, so there is no arithmetic to get wrong. Both
-     * halves of the old mechanism are asserted absent, because either one alone
-     * reintroduces the problem: a body clip without a 100vw block is pointless,
-     * and a 100vw block without it would push a horizontal scrollbar onto every
-     * destination page.
+     * Both halves are asserted absent, because either alone reintroduces it: a
+     * body clip with no 100vw block does nothing, and a 100vw block with no clip
+     * pushes a horizontal scrollbar onto the page.
+     *
+     * Note `assertSame(0, preg_match(...))`, not `assertFalse`: preg_match returns
+     * int 0 on no match and assertFalse is strict, so it fails on a correct
+     * absence. That bit me while writing this.
      */
     #[Test]
     public function the_viewport_unit_full_bleed_is_not_reintroduced(): void
     {
         $stylesheet = (string) file_get_contents(resource_path('css/app.css'));
 
-        // assertSame(0, ...) rather than assertFalse: preg_match returns int 0
-        // on no match, and assertFalse is strict, so it fails on a correct
-        // absence. Matches only an actual rule, so the comment recording why
-        // this was removed does not trip it.
+        // Matches only an actual rule, so the comment recording why this was
+        // removed does not trip it.
         $this->assertSame(
             0,
             preg_match('/^\s*\.tm-full-bleed\s*\{[^}]*\}/ms', $stylesheet),
             '.tm-full-bleed is back. It was width:100vw + margin-inline:calc(50% - 50vw), '
             .'which is off-centre by half a scrollbar because 100vw includes the '
-            .'scrollbar. Use negative margins against the container padding instead.'
+            .'scrollbar. The blocks are inset cards inside the container.'
         );
 
         $this->assertSame(
@@ -687,36 +756,33 @@ class DestinationGalleryTest extends TestCase
             .'break the itinerary editor\'s sticky save bar.'
         );
 
-        // The mechanism that replaced it: negative margins matching the layout's
-        // own padding. Asserted because a mismatch between the two sets of values
-        // leaves a seam on one side and an overhang on the other -- which is the
-        // same class of bug, quieter.
-        $layout = (string) file_get_contents(resource_path('views/layouts/app.blade.php'));
-
+        /*
+         * Nothing in the markup reintroduces it either.
+         *
+         * Stripped of Blade comments first, because both destination views carry a
+         * comment explaining that 100vw was tried and removed. Asserting on the raw
+         * text would match that explanation and fail on a page that is correct --
+         * which is what happened when this was written.
+         *
+         * Deliberately NO assertion about negative margins. The blocks are inset
+         * again, in the container, with their rounded corners, and the carousel now
+         * lives beside the location map rather than under the hero -- so the `-mx-*`
+         * mechanism that briefly replaced 100vw is gone too. Pinning it would be
+         * pinning a layout that has since been changed on purpose.
+         */
         foreach ([
-            ['px-5', '-mx-5'],
-            ['sm:px-8', 'sm:-mx-8'],
-            ['lg:px-12', 'lg:-mx-12'],
-        ] as [$padding, $margin]) {
-            $this->assertStringContainsString(
-                $padding,
-                $layout,
-                'the layout no longer uses '.$padding.' on <main>, so the '
-                .'destination page\'s '.$margin.' no longer cancels anything and '
-                .'the hero will overhang on one side'
-            );
-        }
+            resource_path('views/destinations/show.blade.php'),
+            resource_path('views/destinations/partials/carousel.blade.php'),
+        ] as $view) {
+            $markup = (string) file_get_contents($view);
+            $markup = preg_replace('/\{\{--.*?--\}\}/s', '', $markup);
 
-        $page = (string) file_get_contents(
-            resource_path('views/destinations/show.blade.php')
-        );
-
-        foreach (['-mx-5', 'sm:-mx-8', 'lg:-mx-12'] as $margin) {
-            $this->assertStringContainsString(
-                $margin,
-                $page,
-                'the destination page no longer uses '.$margin.', so the hero and '
-                .'carousel are inset by the container padding again'
+            $this->assertSame(
+                0,
+                preg_match('/\b100vw\b/', (string) $markup),
+                basename($view).' uses a 100vw width again, which lands off-centre by '
+                .'half a scrollbar because 100vw includes the vertical scrollbar. '
+                .'The blocks are inset cards inside the container.'
             );
         }
     }

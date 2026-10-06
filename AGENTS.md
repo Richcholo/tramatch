@@ -955,49 +955,53 @@ migration.
   the accepted cost in its own docblock, and still pins `object-cover` on both
   images. Its failure message on the cap assertion points at that note so the
   next person does not read it as a bug.
-- **The destination page's hero and carousel break out of the container with
-  negative margins, hero first. Do NOT reintroduce `100vw`.**
-  They used to be inset cards with `rounded-[2rem]`, and the carousel came
-  *before* the hero. Now the main photo is first, the carousel sits beneath it
-  flush, and both cancel the container's own padding via
-  `-mx-5 sm:-mx-8 lg:-mx-12` on their shared wrapper — the exact inverse of the
-  layout's `<main>` `px-5 sm:px-8 lg:px-12`. Neither block carries a width class.
-  **The `100vw` attempt shipped and had to be taken back out.** It was
-  `width: 100vw` + `margin-inline: calc(50% - 50vw)` with `overflow-x: clip` on
-  `body` to swallow the overshoot. `100vw` measures the viewport *including* the
-  vertical scrollbar, so the block is ~15px too wide; centring on `50vw` splits
-  that excess across **both** edges while the clip only took **one**. The band
-  ended up off-centre by roughly half a scrollbar — visibly short on one side,
-  with the hero's background showing where the image was cut. That is what "it
-  doesn't look smooth" was: a misalignment, not a preference.
-  Negative margins have no such arithmetic. Exact cancellation, nothing to clip.
-  The wrapper must also carry **no overflow rule** — `overflow-x-clip` was on it
-  briefly, and since the wrapper sits *inside* `max-w-[1600px]` that cut the
-  blocks back to the container width, giving a band that was neither full-bleed
-  nor inset.
-  **DOM order must keep matching visual order.** The hero carries the `<h1>`, so
-  a carousel rendered first hands a screen reader and the tab order the photo
-  strip before the destination's name.
-  Guarded by `the_hero_is_rendered_before_the_carousel` (order, via
-  `compareDocumentPosition`), `the_wrapper_around_the_two_blocks_does_not_clip_them`
-  (walks every ancestor to `<main>`), and
-  `the_viewport_unit_full_bleed_is_not_reintroduced` (asserts the utility and the
-  `body` clip are both gone, and that the negative margins still match the
-  layout's padding).
-- **Softness, unchanged and still accepted.** The blocks are the container's
-  content box — roughly 1504px on a 1600px viewport — while
-  `DestinationController::storeUploadedImage()` stores uploads **verbatim** with
-  no resize, and they are typically 1080–1170px phone shots. So the browser
-  scales each photo up ~1.3–1.4× and it renders soft. `max-w-5xl` (1024px) on
-  both was implemented and reverted twice: sharp *and* consistent, but the owner
-  judged the narrower pair the wrong look. The real fix is resizing the uploads,
-  which needs GD or Imagick — absent from both the CLI and XAMPP.
-- **`overflow-x: clip` must never be used on `body` for any reason.** It came and
-  went with `.tm-full-bleed`. If it is ever wanted again, note that `hidden` is
-  the wrong value: **`hidden` creates a scroll container**, which makes
-  `position: sticky` resolve against `body` instead of the viewport — silently
-  breaking the itinerary editor's sticky save bar and the discover deck's sticky
-  header. `clip` clips without establishing a scrollport.
+- **The destination page's hero is an inset card at the top and the carousel
+  lives beside the location map. Two full-bleed attempts failed; do not redo
+  either.** The carousel has been in three places: above the hero, full-bleed
+  under it, and now in a column beside `02 / Location`. It is a partial,
+  `destinations/partials/carousel`, because it is referenced from inside the
+  location grid and one file keeps the no-JS fallback and the script's hooks from
+  drifting.
+  **Attempt 1 — `width: 100vw` + `margin-inline: calc(50% - 50vw)`.** Landed
+  off-centre by roughly half a scrollbar: `100vw` measures the viewport
+  *including* the vertical scrollbar, so the block is ~15px too wide; centring on
+  `50vw` split that excess across **both** edges while the `overflow-x: clip` on
+  `body` only took **one**. One edge visibly short, the hero's background showing
+  where the image was cut. That is what "it doesn't look smooth" was — a
+  misalignment, not a preference.
+  **Attempt 2 — negative margins** (`-mx-5 sm:-mx-8 lg:-mx-12` on a shared
+  wrapper, the inverse of `<main>`'s `px-5 sm:px-8 lg:px-12`). Aligned and with no
+  arithmetic to get wrong, but too wide for the page: a short photo band under a
+  tall hero read as a strip rather than as the place itself.
+  So the width is now whatever the container gives it. **Never put a `100vw` or a
+  `-mx-*` on either block**, and note that *any* `overflow-*` on an ancestor inside
+  the container silently defeats the attempt.
+  **The radii differ on purpose:** hero `rounded-[2rem]` (the page's card radius),
+  carousel `rounded-[1.5rem]` (matching the map card it sits beside).
+  `lg:items-start` on that grid keeps the short carousel from stretching to the
+  map's 28rem.
+  **Softness inverted here, and that is the useful part.** The carousel's column is
+  ~40–45% of the container — *narrower* than a typical 1080–1170px upload — so it
+  downscales and is sharp. The full-width layouts were the soft ones. `max-w-5xl`
+  was implemented and reverted twice; if the cap assertion ever fails, that is a
+  design change to raise, not a bug. The root fix is still resizing uploads, which
+  needs GD or Imagick — absent from both the CLI and XAMPP.
+  **DOM order must keep matching visual order.** The hero carries the `<h1>`, so a
+  carousel rendered first hands a screen reader and the tab order the photo strip
+  before the destination's name.
+  Guarded by `both_blocks_are_inset_cards_with_rounded_corners` (radii, no cap, no
+  escape mechanism), `the_carousel_sits_beside_the_location_map_and_after_the_hero`
+  (shared ancestor is a `1.4fr / 1fr` grid, order via `compareDocumentPosition`),
+  `the_wrapper_around_the_two_blocks_does_not_clip_them` (walks every ancestor to
+  `<main>` for overflow utilities), and
+  `the_viewport_unit_full_bleed_is_not_reintroduced` (no `100vw` anywhere in the
+  two views, no `body` clip — comments stripped first, since both views document
+  that `100vw` was tried).
+- **`overflow-x: clip` on `body` is not available as a fallback.** It came and
+  went with the `100vw` attempt. If it is ever wanted, `hidden` is the wrong value:
+  **`hidden` creates a scroll container**, making `position: sticky` resolve against
+  `body` instead of the viewport — silently breaking the itinerary editor's sticky
+  save bar and the discover deck's sticky header. `clip` clips without a scrollport.
 - **`.tm-no-scrollbar` hides the carousel's scrollbar without stopping it
   scrolling.** Separate from `.tm-drag-rail`, which already hid one, because that
   class also sets `cursor: grab` — wrong for the carousel, which is driven by
