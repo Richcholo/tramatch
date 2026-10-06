@@ -46,30 +46,68 @@ class DestinationCarousel
     /**
      * Every slide in canonical order. The single source of truth.
      *
+     * THE CACHE HOLDS ARRAYS, NOT OBJECTS, and that is deliberate.
+     *
+     * The cache driver here is `database` (AGENTS.md: sessions, cache and queue
+     * all use the DB driver), so entries are PHP-serialised and SURVIVE A DEPLOY.
+     * Caching a Collection of `CarouselSlide` objects therefore writes a payload
+     * naming classes that a later deploy may rename, reshape or remove, and
+     * unserialising one yields `__PHP_Incomplete_Class`. Because `items()` had a
+     * strict `Collection` return type, that became a TypeError -- a hard 500 on
+     * every destinations page, from a cache entry, with nothing in the log but a
+     * class name.
+     *
+     * Arrays of scalars cannot rot that way: a shape change simply produces values
+     * the rehydrator ignores. And the `is_array` guard turns anything unexpected
+     * into a cache MISS rather than an exception, so a poisoned entry degrades to
+     * one extra query.
+     *
      * @return \Illuminate\Support\Collection<int, CarouselSlide>
      */
     public function items(): \Illuminate\Support\Collection
     {
-        return $this->cache->remember(
-            self::CACHE_KEY,
-            now()->addMinutes(10),
-            function (): \Illuminate\Support\Collection {
-                $destinations = Destination::query()
-                    // sort_order first, then name. The name is what makes this
-                    // deterministic: sort_order defaults to 0 for every existing
-                    // row, so without a secondary key two requests could disagree
-                    // on the order and the two fans would not match.
-                    ->orderBy('sort_order')
-                    ->orderBy('name')
-                    ->where('is_active', true)
-                    ->where('is_featured', true)
-                    ->get(['name', 'slug', 'province', 'municipality', 'image_url']);
+        $cached = $this->cache->get(self::CACHE_KEY);
 
-                return $destinations
-                    ->map(fn (Destination $d) => CarouselSlide::fromDestination($d))
-                    ->values();
+        if (is_array($cached)) {
+            $slides = collect($cached)
+                ->filter(fn ($row) => is_array($row) && isset($row['slug']))
+                ->map(fn (array $row) => CarouselSlide::fromArray($row))
+                ->values();
+
+            if ($slides->isNotEmpty()) {
+                return $slides;
             }
-        );
+        }
+
+        return $this->rebuild();
+    }
+
+    /**
+     * Query the catalogue and prime the cache.
+     *
+     * @return \Illuminate\Support\Collection<int, CarouselSlide>
+     */
+    private function rebuild(): \Illuminate\Support\Collection
+    {
+        $destinations = Destination::query()
+            // sort_order first, then name. The name is what makes this
+            // deterministic: sort_order defaults to 0 for every existing row, so
+            // without a secondary key two requests could disagree on the order
+            // and the two fans would not match.
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->where('is_active', true)
+            ->where('is_featured', true)
+            ->get(['name', 'slug', 'province', 'municipality', 'image_url']);
+
+        $rows = $destinations
+            ->map(fn (Destination $d) => CarouselSlide::fromDestination($d)->toArray())
+            ->values()
+            ->all();
+
+        $this->cache->put(self::CACHE_KEY, $rows, now()->addMinutes(10));
+
+        return collect($rows)->map(fn (array $row) => CarouselSlide::fromArray($row));
     }
 
     /**

@@ -43,6 +43,35 @@ final readonly class CarouselSlide implements \Illuminate\Contracts\Support\Arra
     }
 
     /**
+     * Rebuild from the cached array form.
+     *
+     * The pair of this and `toArray()`. `DestinationCarousel` caches ARRAYS
+     * rather than objects, because the cache driver is the database and a
+     * serialised object payload outlives the class that produced it: renaming or
+     * reshaping `CarouselSlide` would leave entries that unserialize to
+     * `__PHP_Incomplete_Class` and 500 every destinations page. Scalars cannot rot
+     * that way.
+     *
+     * `url` is deliberately NOT rebuilt from the cached row -- it is derived from
+     * the slug by `route()`, so a cached absolute URL would go stale the moment
+     * APP_URL changed, which is exactly the class of bug the AGENTS.md deploy
+     * notes warn about.
+     */
+    public static function fromArray(array $row): self
+    {
+        $slug = (string) ($row['slug'] ?? '');
+
+        return new self(
+            slug: $slug,
+            name: (string) ($row['name'] ?? ''),
+            province: (string) ($row['province'] ?? ''),
+            municipality: (string) ($row['municipality'] ?? ''),
+            imageUrl: (string) ($row['imageUrl'] ?? ''),
+            url: $slug === '' ? '#' : route('destinations.show', $slug),
+        );
+    }
+
+    /**
      * The chip label: the finest place name that is actually populated.
      */
     public function regionLabel(): string

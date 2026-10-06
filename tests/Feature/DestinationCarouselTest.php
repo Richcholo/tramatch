@@ -707,6 +707,92 @@ class DestinationCarouselTest extends TestCase
     }
 
     /**
+     * A cache entry written by an older deploy degrades to a miss, not a 500.
+     *
+     * The cache driver is the database, so entries are serialised and SURVIVE A
+     * DEPLOY. Caching a Collection of `CarouselSlide` objects therefore wrote a
+     * payload naming classes a later deploy may rename or reshape, and
+     * unserialising one yields `__PHP_Incomplete_Class` -- which, behind a strict
+     * `Collection` return type, became a TypeError and took down every
+     * destinations page with nothing in the log but a class name.
+     *
+     * Three shapes are planted here, all of which a visitor could be served:
+     * objects from the previous class shape, a string from an unrelated key, and
+     * an array of rows missing the `slug` the rehydrator keys on. Each must fall
+     * back to a fresh query rather than throw.
+     */
+    #[Test]
+    public function a_stale_or_poisoned_cache_entry_degrades_to_a_miss(): void
+    {
+        $destination = $this->make('Aguinaldo Shrine');
+
+        $key = 'destinations.carousel.v2';
+
+        // 1. What the previous implementation stored: objects, not arrays.
+        cache()->put($key, collect([$destination]), 600);
+
+        $this->assertNotEmpty(
+            app(\App\Domain\Destinations\DestinationCarousel::class)->items(),
+            'a cache entry holding objects must not be trusted but must also not throw'
+        );
+
+        // 2. Something unrelated entirely.
+        cache()->put($key, 'not a collection at all', 600);
+
+        $this->assertNotEmpty(
+            app(\App\Domain\Destinations\DestinationCarousel::class)->items()
+        );
+
+        // 3. Arrays, but rows without the field the rehydrator keys on.
+        cache()->put($key, [['name' => 'No slug here']], 600);
+
+        $this->assertNotEmpty(
+            app(\App\Domain\Destinations\DestinationCarousel::class)->items()
+        );
+
+        // And the good path still works, with the correct destination in it.
+        cache()->forget($key);
+
+        $this->assertSame(
+            ['Aguinaldo Shrine'],
+            $this->panelNames(
+                $this->get(route('destinations.index'))->assertOk()->getContent()
+            )
+        );
+    }
+
+    /**
+     * The cache stores scalars, not objects.
+     *
+     * The actual mechanism of the above, asserted directly so the fix cannot be
+     * undone by someone "simplifying" the presenter back to caching a Collection.
+     */
+    #[Test]
+    public function the_cached_carousel_is_an_array_not_an_object_graph(): void
+    {
+        $this->make('Aguinaldo Shrine');
+
+        app(\App\Domain\Destinations\DestinationCarousel::class)->items();
+
+        $cached = cache()->get('destinations.carousel.v2');
+
+        $this->assertIsArray(
+            $cached,
+            'the cached carousel must be an array of scalar rows. An object graph '
+            .'outlives the class that built it across a deploy and unserialises to '
+            .'__PHP_Incomplete_Class, which 500s every destinations page.'
+        );
+
+        $this->assertIsArray($cached[0]);
+        $this->assertArrayHasKey('slug', $cached[0]);
+
+        // No object instances anywhere in the payload.
+        foreach ($cached[0] as $value) {
+            $this->assertIsNotObject($value);
+        }
+    }
+
+    /**
      * Every field the template reads off the script actually exists on it.
      *
      * This caught a real bug and is here because of it. The caption bound
