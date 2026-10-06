@@ -4,22 +4,11 @@ import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { loadDrivingRoute } from './routing';
 import initBudgetTier from './admin-budget-tier';
-import heroCarousel from './hero-carousel';
+import initGallery from './gallery';
 import './home';
 
 window.Alpine = Alpine;
 window.L = L;
-
-/*
- * Registered BEFORE Alpine.start(). An `x-data="heroCarousel()"` in markup
- * resolves against this registry; registering afterwards leaves the expression
- * unevaluated, so the stage renders as five panels and the script never attaches.
- *
- * A component rather than a bare x-data object so both `/destinations` and every
- * `/destinations/{slug}` share one definition, and so it arrives through app.js
- * rather than a per-page Vite entry.
- */
-Alpine.data('heroCarousel', heroCarousel);
 
 Alpine.start();
 
@@ -47,6 +36,13 @@ if ('serviceWorker' in navigator) {
  * of carrying its own numbers, which is why it has to run after the DOM exists.
  */
 initBudgetTier();
+
+/*
+ * Only present on a destination page that has more than one extra photo. The
+ * server already rendered them all as a scrollable row, so this enhances rather
+ * than creates -- a JS failure leaves the photos visible.
+ */
+initGallery();
 
 if (destinationMap) {
     const lat = Number(destinationMap.dataset.lat);

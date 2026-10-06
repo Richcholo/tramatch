@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Domain\Destinations\DestinationCarousel;
 use App\Models\Destination;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -60,23 +59,7 @@ class DestinationController extends Controller
                 ->latest(),
         ]);
 
-        /*
-         * The destinations fan, with THIS destination centred.
-         *
-         * `activeIndex` is derived from the route, so a cold load already lands on
-         * the right panel and a shared link replays correctly.
-         *
-         * The carousel lives on THIS page only -- `/destinations` is back to its
-         * search-and-grid listing. The presenter is still what supplies the order,
-         * so the fan is deterministic rather than depending on insertion order, and
-         * so the neighbours are the same slides the fan shows.
-         */
-        $carousel = app(DestinationCarousel::class);
-
         return view('destinations.show', [
-            'carouselSlides' => $carousel->slides($destination->slug),
-            'carouselActiveIndex' => $carousel->activeIndex($destination->slug),
-            'carouselNeighbours' => $carousel->neighbours($destination->slug),
             'destination' => $destination,
             'openState' => $this->openState($destination),
             'hoursLabel' => $this->hoursLabel($destination),

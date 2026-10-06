@@ -149,8 +149,6 @@ class Destination extends Model
         'price_verified_at',
         'image_url',
         'is_active',
-        'sort_order',
-        'is_featured',
     ];
 
     protected function casts(): array
@@ -161,8 +159,6 @@ class Destination extends Model
             'entrance_fee' => 'decimal:2',
             'estimated_cost' => 'decimal:2',
             'is_active' => 'boolean',
-            'is_featured' => 'boolean',
-            'sort_order' => 'integer',
             'daily_hours' => 'array',
             'last_verified_at' => 'datetime',
             'price_verified_at' => 'datetime',
@@ -529,30 +525,5 @@ class Destination extends Model
     public function hasGalleryRoom(): bool
     {
         return $this->images()->count() < DestinationImage::MAX_PER_DESTINATION;
-    }
-
-    /**
-     * Forget the cached carousel order whenever a destination changes.
-     *
-     * Without this, archiving a destination leaves it in both fans for up to ten
-     * minutes -- and `show` 404s it, so a visitor could click straight from a
-     * carousel card onto a 404. That is the whole reason this hook exists.
-     *
-     * Registered here rather than in an Observer because this project has none,
-     * so an observer would mean a new directory plus a registration in
-     * AppServiceProvider for one pair of listeners.
-     *
-     * `is_active` and `is_featured` are listened for separately on purpose: both
-     * change membership, and forgetting the cache on any save is harmless anyway
-     * since the key is cheap to rebuild.
-     */
-    protected static function booted(): void
-    {
-        $forget = function (): void {
-            app(\App\Domain\Destinations\DestinationCarousel::class)->forget();
-        };
-
-        static::saved($forget);
-        static::deleted($forget);
     }
 }
