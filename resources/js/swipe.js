@@ -15,14 +15,52 @@ if (deck) {
         }
     };
 
+    /*
+     * THE FAN. The two cards behind the top one spread the way
+     * the flanking pair does on the destinations stage -- one
+     * each side of the top card, scaled down, rotated a few
+     * degrees and dimmed -- so the deck reads as a spread of
+     * places rather than a pile of them. The top card is the
+     * only one that can be swiped; the rest are the formation
+     * it leaves behind when it goes.
+     *
+     * `null` at index 0 is the top card's own resting place,
+     * and the absence of a step past index 2 is the same
+     * "only three are ever on the table" rule the old pile
+     * had: the fourth card is invisible until a swipe promotes
+     * it into the formation.
+     *
+     * The fan is only visible because the deck's frame is
+     * WIDER than the card in front -- the cards are inset from
+     * its edges -- which is the stage's own geometry. A fan
+     * whose frame is exactly as wide as its front card crops
+     * its own fan to nothing.
+     */
+    const FAN_STEPS = [
+        null,
+        { x: -14, y: 2, rotate: -4, scale: 0.93, brightness: 0.86 },
+        { x: 14, y: 4, rotate: 5, scale: 0.87, brightness: 0.74 },
+    ];
+
     const positionCards = () => {
         cards.forEach((card, index) => {
             card.style.zIndex = cards.length - index;
             card.style.pointerEvents = index === 0 ? 'auto' : 'none';
-            card.style.transform = index === 0
-                ? 'translateY(0) scale(1)'
-                : `translateY(${index * 10}px) scale(${1 - index * 0.025})`;
-            card.style.opacity = index > 2 ? '0' : '1';
+
+            const step = FAN_STEPS[index] || null;
+
+            if (!step) {
+                card.style.transform = 'translateY(0) scale(1)';
+                card.style.filter = 'none';
+                card.style.opacity = index === 0 ? '1' : '0';
+                return;
+            }
+
+            card.style.transform =
+                `translateX(${step.x}%) translateY(${step.y}%) ` +
+                `rotate(${step.rotate}deg) scale(${step.scale})`;
+            card.style.filter = `brightness(${step.brightness})`;
+            card.style.opacity = '1';
         });
     };
 
@@ -82,6 +120,22 @@ if (deck) {
 
     const activeCard = () => cards[0];
 
+    /*
+     * How far the top card must travel before a release
+     * commits to a swipe. A FIFTH OF THE CARD IN FRONT OF
+     * YOU, floored and capped -- measured off the card, never
+     * a fixed number, because the card is the thing being
+     * grabbed and its width changes with the screen. A fixed
+     * threshold is a third of the card on a phone and a
+     * gesture that means nothing on a wide one.
+     */
+    const dragThreshold = () => {
+        const card = activeCard();
+        const width = card ? card.offsetWidth : 576;
+
+        return Math.min(Math.max(width * 0.2, 48), 120);
+    };
+
     cards.forEach((card) => {
         card.addEventListener('pointerdown', (event) => {
             if (event.target.closest('button')) {
@@ -116,7 +170,7 @@ if (deck) {
             dragging = false;
             card.style.transition = 'transform 180ms ease';
 
-            if (Math.abs(currentX) > 110) {
+            if (Math.abs(currentX) > dragThreshold()) {
                 completeSwipe(currentX > 0 ? 'liked' : 'passed');
             } else {
                 card.style.transform = 'translateY(0) scale(1)';
@@ -139,6 +193,22 @@ if (deck) {
         if (event.key === 'ArrowRight') {
             completeSwipe('liked');
         }
+    });
+
+    /*
+     * THE BROWSER'S OWN DRAG IS THE ENEMY HERE, exactly as it
+     * is on the destinations stage: every card wraps a
+     * photograph, and a photograph is draggable by default,
+     * so pulling it sideways starts a native drag-and-drop --
+     * a ghost image follows the pointer, `pointercancel`
+     * fires, and the card's gesture dies halfway. `dragstart`
+     * bubbles, so this one listener on the deck cancels it
+     * for every card whatever the gesture started on. The
+     * `draggable="false"` each photograph carries is the
+     * first line of defence; this is the net under it.
+     */
+    deck.addEventListener('dragstart', (event) => {
+        event.preventDefault();
     });
 
     positionCards();

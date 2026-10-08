@@ -857,6 +857,65 @@ verified until someone sees photographs on the page, which has not happened yet.
 **Click through the whole page after any change to `stage.js`, the
 `[data-offset]` rules, the panel markup or `.tm-page`.**
 
+### The discover deck
+
+`/discover` speaks the stage's language now — one dark surface
+from the nav bar down, the two cards behind the top one fanned
+out like the stage's flanking pair — but it keeps its own job:
+one place at a time, a binary decision, the card flies off and
+the next one takes its place. It is a restyle plus a fanned
+stack, not a stage conversion: the product flow (decide on each
+place) is untouched, and **autoplay is deliberately NOT
+ported** — a timer that swipes a traveller's decisions for them
+is not a showcase, it is a loss of data.
+
+Contracts worth knowing:
+
+- **The layout's `main` is bare on this route** (`w-full` via
+  `request()->routeIs('discover.index')` in `layouts/app.blade.php`),
+  so `.tm-page` needs none of the destination page's `-mx-*`
+  bleed. Copying those classes here overruns the viewport —
+  there is no padding for them to cancel.
+- **The deck's frame is deliberately WIDER than the card**
+  (`max-w-[44rem]` frame, cards `inset-x-4 sm:inset-x-16`).
+  A horizontal fan is only visible where the frame exceeds the
+  front card — the stage's flanks show for the same reason
+  (the stage is far wider than its centre panel). A frame
+  exactly as wide as its front card crops its own fan to
+  nothing, which is why the deck is not `max-w-xl` any more.
+  `overflow-hidden` on the deck is load-bearing for the same
+  reason it is on the stage.
+- **`FAN_STEPS` in `swipe.js`** is the formation: one card
+  each side (`x: -14` / `x: 14`), rotated, scaled down and
+  dimmed through `filter: brightness(...)`. The restack animates
+  through `.tm-swipe-card`'s transition on `transform`,
+  `filter` and `opacity` — the script manages the DRAGGED
+  card's transitions inline (off while the finger is down),
+  every other card moves through the stylesheet rule.
+- **The swipe threshold is a fifth of the card** (`dragThreshold()`,
+  floored 48px, capped 120px), never a fixed pixel count —
+  a fixed 110px was a third of the card on a phone.
+- **The native-drag protection is the same three layers as the
+  stage's**: `draggable="false"` on every card photograph, a
+  `dragstart` cancel on the deck (bubbles, so it covers every
+  card), and the `pointercancel` → `dragEnd` wiring that was
+  already there. Do not ship a draggable surface in this app
+  without all three — it was fixed twice.
+- **A photo-less destination gets a typographic plate**
+  (`.tm-swipe-plate`), never the gradient it used to carry —
+  the stage's rule: a flat colour pretending to be a photograph
+  is a photograph the app does not have.
+- **The palette inverts exactly like the destination page**:
+  gold and Boracay Turquoise are the accents; `text-benguet-charcoal`,
+  `text-volcanic-teal`, `bg-palawan-sand` must not appear. The
+  exceptions are light surfaces that are the point: the count
+  pill and the reset dialog stay light chips with dark text.
+- `InteractionMarkupTest::primary_actions_carry_press_feedback`
+  pins `active:scale-[0.98]` and the "Like" label on this page —
+  keep both on the Like button when restyling.
+
+`tests/Feature/DiscoverDeckTest.php` pins all of the above.
+
 ### Destination-source crawling
 
 `destination_sources` → `destination_source_snapshots` (raw HTML on the `local`

@@ -1670,6 +1670,49 @@
         background-color: color-mix(in srgb, #b91c1c 9%, var(--color-palawan-sand));
         color: #7f1d1d;
     }
+
+    /* --- the discover deck ----------------------------------------- */
+
+    /*
+     * THE SWIPE DECK'S CARD, on the dark ground the page
+     * now is.
+     *
+     * A dark translucent surface with an inset hairline and
+     * a soft shadow, in the same family as `.tm-panel` but
+     * opaque enough to carry a photograph: the photograph
+     * is the card's own content, not a wash over the ground.
+     *
+     * The TRANSITION is the restack. The script manages the
+     * dragged card's transitions inline -- it needs them
+     * OFF while the finger is down -- but every other card
+     * animates between fan positions through this rule,
+     * which is what makes the deck re-form behind the next
+     * card instead of snapping to it.
+     */
+    .tm-swipe-card {
+        background-color: rgb(11 37 43 / 0.82);
+        box-shadow:
+            0 24px 48px rgb(0 0 0 / 0.35),
+            inset 0 0 0 1px rgb(255 255 255 / 0.15);
+        transition: transform 280ms ease, filter 280ms ease, opacity 280ms ease;
+    }
+
+    /*
+     * The plate a destination with no photograph gets.
+     * Province and municipality in type on the card's own
+     * ground, with a faint lift from below -- the same idea
+     * as the stage's typographic plate, and for the same
+     * reason: a gradient pretending to be a photograph is a
+     * photograph the app does not have.
+     */
+    .tm-swipe-plate {
+        background:
+            radial-gradient(
+                120% 90% at 50% 100%,
+                rgb(255 255 255 / 0.07),
+                rgb(11 37 43 / 0) 55%
+            );
+    }
 }
 
 .dark {
