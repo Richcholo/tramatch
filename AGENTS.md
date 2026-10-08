@@ -883,8 +883,16 @@ Contracts worth knowing:
   (the stage is far wider than its centre panel). A frame
   exactly as wide as its front card crops its own fan to
   nothing, which is why the deck is not `max-w-xl` any more.
-  `overflow-hidden` on the deck is load-bearing for the same
-  reason it is on the stage.
+  **The deck deliberately does NOT clip.** The fanned cards
+  are meant to continue past the frame into the page's own
+  padding, and a swipe has to FLY off the screen —
+  `overflow-hidden` on the deck would cut the dragged card
+  off at the frame's edge, an invisible border the gesture
+  dies against (reported verbatim as "the swiping is getting
+  cut off by an invisible border"). The page's own
+  `overflow-hidden` (on `.tm-page`) is the scroll guard, and
+  a clipping ancestor is a clipping ancestor wherever it
+  sits.
 - **`FAN_STEPS` in `swipe.js`** is the formation: one card
   each side (`x: -14` / `x: 14`), rotated, scaled down and
   dimmed through `filter: brightness(...)`. The restack animates
@@ -917,25 +925,45 @@ Contracts worth knowing:
   (`.tm-discover-backdrop`, two layers — the destinations stage's
   backdrop mechanism moved to the deck; `data-discover-backdrops`
   is the page's first child, `aria-hidden`, two `src`-less
-  layers). It cross-fades to the main photo of whichever card is
-  hovered — per card, on `mouseenter`/`mouseleave`: the script
-  paints the hidden layer with the hovered card's photograph,
-  then the two swap `is-shown`, so the ground cross-fades to the
-  photograph instead of jumping to it, and returns to the plain
-  teal when the pointer leaves. **Mouse-only on purpose**: a
-  touch has no hover to follow, and `pointerenter` would fire on
-  every swipe, reading as a flicker around the gesture. **`z-index:
-  -1`, not the stage's `0`** — this page's children are not all
+  layers). It cross-fades to the main photo of whichever card
+  the pointer is over: the script paints the hidden layer with
+  the hovered card's photograph, then the two swap `is-shown`,
+  so the ground cross-fades to the photograph instead of
+  jumping to it, and returns to the plain teal when the pointer
+  leaves. **The card under the pointer is found by HIT-TEST
+  (`mousemove` on the deck + `document.elementFromPoint`), not
+  by per-card `mouseenter`** — a swipe PROMOTES a card under a
+  stationary pointer, and no `mouseenter` ever fires for a card
+  that moved under the cursor, so the per-card wiring lost the
+  ground after every swipe ("the bg sometimes disappears").
+  `positionCards()` therefore re-runs the hit-test after every
+  re-formation. **Showing the layer is not conditional on the
+  paint**: a layer keeps its `src` after the ground fades back
+  to plain teal, so re-hovering the same card must still bring
+  the wash back — the old early return skipped the show and the
+  ground stayed blank. **Mouse-only on purpose**: a touch has no
+  hover to follow, which is why the tracking event is
+  `mousemove`, an event a touch never raises. **`z-index: -1`,
+  not the stage's `0`** — this page's children are not all
   positioned, so inside the page's `isolate`d stacking context a
   negative layer sits above the teal and below every word; a `0`
   here would put the wash on top of the words. A card with no
   photograph (the typographic plate) changes nothing: there is no
   photo to show, and fading the ground out for the length of a
   hover reads as a fault, not a feature.
+- **THE CARD IS AN OPAQUE SLAB of the page's own ground**
+  (`.tm-swipe-card`, `background-color: rgb(11 37 43)` — full
+  opacity, no alpha). The ground behind the card is a moving
+  wash, and the translucent 0.82 version let it bleed through
+  the words — the readability complaint. Opaque in the ground's
+  own colour, the card reads as a slab of the ground itself,
+  lifted by the inset hairline and the shadow: the wash shows
+  around the card, never through it.
 
 `tests/Feature/DiscoverDeckTest.php` pins all of the above
-(10 tests, including the backdrop's cross-fade mechanism and
-its behind-every-word `z-index: -1`).
+(12 tests, including the backdrop's cross-fade mechanism, its
+behind-every-word `z-index: -1`, the fly-off swipe, and the
+opaque card).
 
 ### Destination-source crawling
 

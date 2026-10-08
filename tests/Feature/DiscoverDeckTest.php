@@ -407,16 +407,26 @@ class DiscoverDeckTest extends TestCase
 
     /**
      * THE PAGE'S GROUND IS A BLURRED PHOTOGRAPH, which
-     * cross-fades to the main photo of whichever card is
-     * hovered.
+     * cross-fades to the main photo of whichever card
+     * the pointer is over.
      *
      * The destinations stage's backdrop mechanism, moved to
      * the deck: two layers, because `src` cannot be
      * cross-faded. The script paints the hidden layer with
      * the hovered card's photograph and then swaps which
-     * layer is shown. Mouse-only, and per card -- a card
-     * with no photograph (the typographic plate) changes
-     * nothing.
+     * layer is shown.
+     *
+     * The card under the pointer is found by HIT-TEST, not
+     * by per-card mouseenter: a swipe promotes a card under
+     * a stationary pointer, and no mouseenter ever fires for
+     * a card that moved under the cursor. `positionCards()`
+     * re-runs the hit-test after every swipe, so the ground
+     * follows the deck.
+     *
+     * And the layer is SHOWN even when it already holds the
+     * right photograph: a layer keeps its `src` after the
+     * ground fades back to plain teal, so re-hovering the
+     * same card must still bring the wash back.
      */
     #[Test]
     public function the_ground_cross_fades_to_the_hovered_cards_photograph(): void
@@ -447,7 +457,7 @@ class DiscoverDeckTest extends TestCase
         );
 
         $this->assertStringContainsString(
-            "card.querySelector('img')",
+            "querySelector('img')",
             $script,
             'the backdrop is not read off the card\'s own photograph'
         );
@@ -457,6 +467,17 @@ class DiscoverDeckTest extends TestCase
             $script,
             'the hidden layer is not painted with the hovered '
             .'photograph before it is shown'
+        );
+
+        $this->assertStringContainsString(
+            "incoming.getAttribute('src') !== src",
+            $script,
+            'the incoming layer is painted unconditionally. Showing '
+            .'the layer must not depend on the paint: a layer '
+            .'keeps its src after the ground fades back to plain '
+            .'teal, so re-hovering the same card has to bring '
+            .'the wash back -- an early return here is how the '
+            .'ground used to disappear'
         );
 
         $this->assertStringContainsString(
@@ -474,16 +495,42 @@ class DiscoverDeckTest extends TestCase
         );
 
         $this->assertStringContainsString(
-            "card.addEventListener('mouseenter'",
+            "deck.addEventListener('mousemove'",
             $script,
-            'the backdrop does not follow the card being hovered'
+            'the pointer is not tracked over the deck, so the '
+            .'ground cannot follow the card being hovered'
         );
 
         $this->assertStringContainsString(
-            "card.addEventListener('mouseleave'",
+            "deck.addEventListener('mouseleave'",
             $script,
             'the backdrop does not return to the plain ground when '
-            .'the pointer leaves the card'
+            .'the pointer leaves the deck'
+        );
+
+        $this->assertStringContainsString(
+            'document.elementFromPoint',
+            $script,
+            'the card under the pointer is not found by hit-test, '
+            .'so a card that moves under a stationary pointer '
+            .'never gets the ground'
+        );
+
+        $this->assertStringNotContainsString(
+            "card.addEventListener('mouseenter'",
+            $script,
+            'the backdrop is still wired per-card. A swipe promotes '
+            .'a card under a stationary pointer and no mouseenter '
+            .'fires for a card that moved under the cursor, so '
+            .'the ground disappears after every swipe'
+        );
+
+        $this->assertMatchesRegularExpression(
+            '/const positionCards = \(\) => \{[\s\S]*?syncBackdropToPointer\(\);/s',
+            $script,
+            'the hit-test is not re-run after the deck re-forms, '
+            .'so the ground is lost to the card a swipe promotes '
+            .'under the pointer'
         );
     }
 
@@ -522,6 +569,69 @@ class DiscoverDeckTest extends TestCase
             $css,
             'the shown backdrop layer does not fade to half '
             .'opacity, so the wash is either invisible or opaque'
+        );
+    }
+
+    /**
+     * A SWIPE FLIES OFF THE SCREEN, past the frame.
+     *
+     * The deck deliberately does not clip: the fanned
+     * cards are meant to continue past the frame into
+     * the page's own padding, and the dragged card has
+     * to leave the screen. `overflow-hidden` on the deck
+     * would cut it off at the frame's edge -- an
+     * invisible border the gesture dies against. The
+     * page carries the clipping that keeps a fanned card
+     * from scrolling the viewport sideways, and a
+     * clipping ancestor is a clipping ancestor wherever
+     * it sits.
+     */
+    #[Test]
+    public function a_swipe_flies_off_the_screen_rather_than_stopping_at_the_frame(): void
+    {
+        $dom = $this->dom($this->deckHtml());
+
+        $deck = $dom->query('//*[@data-swipe-deck]')->item(0);
+
+        $this->assertStringNotContainsString(
+            'overflow-hidden',
+            (string) $deck->getAttribute('class'),
+            'the deck clips its own cards, so a swipe is cut '
+            .'off at the frame\'s edge instead of flying '
+            .'off the screen'
+        );
+
+        $page = $dom->query(
+            '//*[contains(concat(" ", normalize-space(@class), " "), " tm-page ")]'
+        )->item(0);
+
+        $this->assertStringContainsString(
+            'overflow-hidden',
+            (string) $page->getAttribute('class'),
+            'the page no longer clips, so a fanned card '
+            .'would scroll the viewport sideways'
+        );
+    }
+
+    /**
+     * THE CARD IS AN OPAQUE SLAB of the page's own
+     * ground.
+     *
+     * The ground behind the card is a moving wash, so
+     * a translucent card would let the wash bleed
+     * through the words. Full opacity, in the ground's
+     * own colour: the card reads as a slab of the
+     * ground, lifted by the hairline and the shadow.
+     */
+    #[Test]
+    public function the_card_is_an_opaque_slab_of_the_ground(): void
+    {
+        $this->assertMatchesRegularExpression(
+            '/\.tm-swipe-card\s*\{[^}]*background-color:\s*rgb\(11 37 43\);/s',
+            $this->css(),
+            'the card is not opaque. The ground behind it '
+            .'is a moving wash, so a translucent card lets '
+            .'the wash bleed through the words'
         );
     }
 }

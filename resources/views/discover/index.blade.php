@@ -141,13 +141,18 @@
                 exactly as wide as its front card crops its own fan to
                 nothing.
 
-                `overflow-hidden` is therefore load-bearing. It crops
-                the fanned cards at the frame, which is the "continues
-                past the frame" the fan is reading as -- and without it
-                a fanned card pokes past the viewport on a phone and
-                the page scrolls sideways.
+                The deck deliberately does NOT clip. The fanned cards
+                are meant to continue past the frame into the page's
+                own padding, and a swipe has to FLY off the screen:
+                `overflow-hidden` here would cut the dragged card off
+                at the frame's edge -- an invisible border the gesture
+                dies against. The page itself (`.tm-page`) carries the
+                `overflow-hidden` that keeps a fanned card from
+                scrolling the viewport sideways, and that is enough:
+                a clipping ancestor is a clipping ancestor wherever
+                it sits.
             --}}
-            <div data-swipe-deck data-endpoint="{{ route('discover.swipes.store') }}" class="relative mx-auto h-[660px] w-full max-w-[44rem] touch-pan-y sm:h-[680px] overflow-hidden">
+            <div data-swipe-deck data-endpoint="{{ route('discover.swipes.store') }}" class="relative mx-auto h-[660px] w-full max-w-[44rem] touch-pan-y sm:h-[680px]">
                 @foreach ($cards as $destination)
                     <article data-swipe-card data-destination-id="{{ $destination->id }}" class="tm-swipe-card absolute inset-y-0 inset-x-4 sm:inset-x-16 flex touch-pan-y select-none cursor-grab flex-col overflow-hidden rounded-2xl active:cursor-grabbing">
                         @if ($destination->image_url)

@@ -1681,10 +1681,15 @@
      * THE SWIPE DECK'S CARD, on the dark ground the page
      * now is.
      *
-     * A dark translucent surface with an inset hairline and
-     * a soft shadow, in the same family as `.tm-panel` but
-     * opaque enough to carry a photograph: the photograph
-     * is the card's own content, not a wash over the ground.
+     * OPAQUE, deliberately. The ground behind the card
+     * is a moving wash -- a blurred photograph
+     * cross-fading behind everything -- and a
+     * translucent card would let it bleed through the
+     * words, which is unreadable. The card is the
+     * page's own solid ground colour, so it reads as a
+     * slab of the ground itself, lifted by the inset
+     * hairline and the shadow: the wash shows around
+     * the card, never through it.
      *
      * The TRANSITION is the restack. The script manages the
      * dragged card's transitions inline -- it needs them
@@ -1694,7 +1699,7 @@
      * card instead of snapping to it.
      */
     .tm-swipe-card {
-        background-color: rgb(11 37 43 / 0.82);
+        background-color: rgb(11 37 43);
         box-shadow:
             0 24px 48px rgb(0 0 0 / 0.35),
             inset 0 0 0 1px rgb(255 255 255 / 0.15);
