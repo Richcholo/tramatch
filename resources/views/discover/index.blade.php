@@ -23,6 +23,27 @@
         badges use.
     --}}
     <div class="tm-page relative isolate overflow-hidden py-10 sm:py-12">
+        {{--
+            THE BACKDROP: the page's own ground, a blurred and
+            darkened photograph behind everything, which cross-fades
+            to the main photo of whichever card the pointer is over.
+
+            Two layers, because `src` cannot be cross-faded -- it
+            can only be replaced -- so the script paints the hidden
+            layer with the hovered card's photograph first and then
+            swaps which layer is shown. That is the destinations
+            stage's backdrop mechanism, moved to the deck.
+
+            It is the page's ground, so it is the page's first
+            child and nothing else: `z-index: -1` inside the page's
+            own stacking context (`isolate` on `.tm-page`) puts it
+            above the teal and below every word.
+        --}}
+        <div data-discover-backdrops class="tm-discover-backdrops" aria-hidden="true">
+            <img data-discover-backdrop class="tm-discover-backdrop" alt="">
+            <img data-discover-backdrop class="tm-discover-backdrop" alt="">
+        </div>
+
         <header class="mb-8 border-b border-white/10 px-5 pb-6 sm:px-8 lg:px-12">
             <div class="mx-auto flex max-w-6xl flex-col justify-between gap-6 sm:flex-row sm:items-end">
             <div>

@@ -404,4 +404,124 @@ class DiscoverDeckTest extends TestCase
             'the deck still renders when there is nothing left to swipe'
         );
     }
+
+    /**
+     * THE PAGE'S GROUND IS A BLURRED PHOTOGRAPH, which
+     * cross-fades to the main photo of whichever card is
+     * hovered.
+     *
+     * The destinations stage's backdrop mechanism, moved to
+     * the deck: two layers, because `src` cannot be
+     * cross-faded. The script paints the hidden layer with
+     * the hovered card's photograph and then swaps which
+     * layer is shown. Mouse-only, and per card -- a card
+     * with no photograph (the typographic plate) changes
+     * nothing.
+     */
+    #[Test]
+    public function the_ground_cross_fades_to_the_hovered_cards_photograph(): void
+    {
+        $html = $this->deckHtml();
+        $dom = $this->dom($html);
+        $script = $this->script();
+
+        $layers = $dom->query('//*[@data-discover-backdrop]');
+
+        $this->assertSame(
+            2,
+            $layers->length,
+            'the backdrop does not carry two layers, so the '
+            .'ground cannot cross-fade between photographs'
+        );
+
+        $this->assertSame(
+            1,
+            $dom->query('//*[@data-discover-backdrops]')->length,
+            'the backdrop container is missing from the page'
+        );
+
+        $this->assertStringContainsString(
+            "[data-discover-backdrop]",
+            $script,
+            'the script does not read the backdrop layers'
+        );
+
+        $this->assertStringContainsString(
+            "card.querySelector('img')",
+            $script,
+            'the backdrop is not read off the card\'s own photograph'
+        );
+
+        $this->assertStringContainsString(
+            "incoming.setAttribute('src', src)",
+            $script,
+            'the hidden layer is not painted with the hovered '
+            .'photograph before it is shown'
+        );
+
+        $this->assertStringContainsString(
+            "incoming.classList.add('is-shown')",
+            $script,
+            'the incoming layer is not shown, so the ground never '
+            .'changes'
+        );
+
+        $this->assertStringContainsString(
+            "shownBackdrop.classList.remove('is-shown')",
+            $script,
+            'the outgoing layer is not hidden, so the ground jumps '
+            .'between photographs instead of cross-fading'
+        );
+
+        $this->assertStringContainsString(
+            "card.addEventListener('mouseenter'",
+            $script,
+            'the backdrop does not follow the card being hovered'
+        );
+
+        $this->assertStringContainsString(
+            "card.addEventListener('mouseleave'",
+            $script,
+            'the backdrop does not return to the plain ground when '
+            .'the pointer leaves the card'
+        );
+    }
+
+    /**
+     * THE BACKDROP SITS BEHIND EVERY WORD.
+     *
+     * The stage's backdrop is `z-index: 0` because every
+     * child of the stage is positioned. This page's are
+     * not, so the backdrop is `z-index: -1` inside the
+     * page's own stacking context -- a `0` here would put
+     * the wash on top of the words instead of under them.
+     */
+    #[Test]
+    public function the_backdrop_sits_behind_every_word(): void
+    {
+        $css = $this->css();
+
+        $this->assertMatchesRegularExpression(
+            '/\.tm-discover-backdrops\s*\{[^}]*z-index:\s*-1/s',
+            $css,
+            'the backdrop is not behind the page content. This '
+            .'page\'s children are not all positioned, so a '
+            .'z-index of 0 would put the wash on top of the words'
+        );
+
+        $this->assertMatchesRegularExpression(
+            '/\.tm-discover-backdrop\s*\{[^}]*filter:\s*brightness\(0\.18\) blur\(14px\)/s',
+            $css,
+            'the backdrop is not blurred and darkened, so a '
+            .'hovered photograph shows behind the page as a '
+            .'sharp second image'
+        );
+
+        $this->assertMatchesRegularExpression(
+            '/\.tm-discover-backdrop\.is-shown\s*\{[^}]*opacity:\s*0\.5/s',
+            $css,
+            'the shown backdrop layer does not fade to half '
+            .'opacity, so the wash is either invisible or opaque'
+        );
+    }
 }

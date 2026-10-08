@@ -913,8 +913,29 @@ Contracts worth knowing:
 - `InteractionMarkupTest::primary_actions_carry_press_feedback`
   pins `active:scale-[0.98]` and the "Like" label on this page —
   keep both on the Like button when restyling.
+- **THE PAGE'S GROUND IS A BLURRED, DARKENED PHOTOGRAPH**
+  (`.tm-discover-backdrop`, two layers — the destinations stage's
+  backdrop mechanism moved to the deck; `data-discover-backdrops`
+  is the page's first child, `aria-hidden`, two `src`-less
+  layers). It cross-fades to the main photo of whichever card is
+  hovered — per card, on `mouseenter`/`mouseleave`: the script
+  paints the hidden layer with the hovered card's photograph,
+  then the two swap `is-shown`, so the ground cross-fades to the
+  photograph instead of jumping to it, and returns to the plain
+  teal when the pointer leaves. **Mouse-only on purpose**: a
+  touch has no hover to follow, and `pointerenter` would fire on
+  every swipe, reading as a flicker around the gesture. **`z-index:
+  -1`, not the stage's `0`** — this page's children are not all
+  positioned, so inside the page's `isolate`d stacking context a
+  negative layer sits above the teal and below every word; a `0`
+  here would put the wash on top of the words. A card with no
+  photograph (the typographic plate) changes nothing: there is no
+  photo to show, and fading the ground out for the length of a
+  hover reads as a fault, not a feature.
 
-`tests/Feature/DiscoverDeckTest.php` pins all of the above.
+`tests/Feature/DiscoverDeckTest.php` pins all of the above
+(10 tests, including the backdrop's cross-fade mechanism and
+its behind-every-word `z-index: -1`).
 
 ### Destination-source crawling
 

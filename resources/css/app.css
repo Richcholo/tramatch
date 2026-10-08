@@ -1632,6 +1632,10 @@
         .tm-stage__caption.is-settling {
             transform: none;
         }
+
+        .tm-discover-backdrop {
+            transition: opacity 150ms linear;
+        }
     }
 
     .tm-drag-rail {
@@ -1712,6 +1716,52 @@
                 rgb(255 255 255 / 0.07),
                 rgb(11 37 43 / 0) 55%
             );
+    }
+
+    /* --- the discover backdrop: the hovered card, behind the page --- */
+
+    /*
+     * A BLURRED, DARKENED PHOTOGRAPH BEHIND THE WHOLE PAGE --
+     * the stage's backdrop, moved to the deck.
+     *
+     * Two layers, because `src` cannot be cross-faded -- it
+     * can only be replaced -- so the script paints the hidden
+     * layer with the hovered card's main photo and then swaps
+     * which layer is shown, and the ground cross-fades to the
+     * photograph instead of jumping to it.
+     *
+     * `z-index: -1` rather than the stage's `0`, because the
+     * stage's children are all positioned and this page's are
+     * not: inside the page's own stacking context (`.tm-page`
+     * carries `isolate`), a negative layer sits above the teal
+     * and below every word, which is where a ground belongs.
+     * A `z-index: 0` here would put the wash on top of the
+     * words instead of under them.
+     *
+     * Scaled PAST THE EDGE, like the stage's: `blur()` samples
+     * outside the element's box, so a 1:1 image leaves a
+     * transparent rim that shows as a hard edge.
+     */
+    .tm-discover-backdrops {
+        position: absolute;
+        inset: 0;
+        z-index: -1;
+    }
+
+    .tm-discover-backdrop {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transform: scale(1.18);
+        filter: brightness(0.18) blur(14px);
+        opacity: 0;
+        transition: opacity 800ms var(--ease-out);
+    }
+
+    .tm-discover-backdrop.is-shown {
+        opacity: 0.5;
     }
 }
 

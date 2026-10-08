@@ -211,6 +211,74 @@ if (deck) {
         event.preventDefault();
     });
 
+    /*
+     * THE BACKDROP: the page's own ground, a blurred and
+     * darkened photograph behind everything, cross-fading
+     * to the main photo of whichever card the pointer is
+     * over.
+     *
+     * Two layers, because `src` cannot be cross-faded --
+     * it can only be replaced, and a hard swap of a
+     * full-bleed blurred photograph behind the page is
+     * the single most obvious way this could look broken.
+     * The hidden layer is painted with the new photo
+     * first, then the two swap which is shown.
+     *
+     * This is mouse-only on purpose: "hovered" is a mouse
+     * concept, and a touch has no hover to follow. A
+     * touch fires pointerenter on every swipe instead,
+     * which reads as a flicker around the gesture.
+     *
+     * A card with no photograph (the typographic plate)
+     * changes nothing: there is no photo to show, and
+     * fading the ground out to plain teal for the length
+     * of a hover reads as a fault, not a feature.
+     */
+    const backdrops = Array.from(
+        document.querySelectorAll('[data-discover-backdrop]')
+    );
+
+    let shownBackdrop = null;
+
+    const showBackdrop = (photograph) => {
+        if (!photograph || backdrops.length < 2) {
+            return;
+        }
+
+        const incoming = backdrops.find((layer) => layer !== shownBackdrop);
+
+        const src = photograph.currentSrc || photograph.src;
+
+        if (!src || incoming.getAttribute('src') === src) {
+            return;
+        }
+
+        incoming.setAttribute('src', src);
+        incoming.classList.add('is-shown');
+
+        if (shownBackdrop) {
+            shownBackdrop.classList.remove('is-shown');
+        }
+
+        shownBackdrop = incoming;
+    };
+
+    const clearBackdrop = () => {
+        if (!shownBackdrop) {
+            return;
+        }
+
+        shownBackdrop.classList.remove('is-shown');
+        shownBackdrop = null;
+    };
+
+    cards.forEach((card) => {
+        const photograph = card.querySelector('img');
+
+        card.addEventListener('mouseenter', () => showBackdrop(photograph));
+        card.addEventListener('mouseleave', clearBackdrop);
+    });
+
     positionCards();
     updateCount();
 }
