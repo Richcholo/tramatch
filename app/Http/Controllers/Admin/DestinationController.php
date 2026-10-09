@@ -16,45 +16,20 @@ use Illuminate\View\View;
 
 class DestinationController extends Controller
 {
-    public function index(Request $request): View
+    public function index(): View
     {
-        $search = trim((string) $request->query('search'));
-
-        $locations = Destination::query()
-            ->get(['name', 'province', 'municipality'])
-            ->flatMap(fn (Destination $destination) => [
-                $destination->name,
-                $destination->municipality,
-                $destination->province,
-            ])
-            ->map(fn ($location) => trim($location))
-            ->filter()
-            ->unique()
-            ->sort()
-            ->values();
-
         $destinations = Destination::with('tags')
-            ->when($search !== '', function ($query) use ($search) {
-                $query->where(function ($query) use ($search) {
-                    $query->where('name', 'like', "%{$search}%")
-                        ->orWhere('province', 'like', "%{$search}%")
-                        ->orWhere('municipality', 'like', "%{$search}%")
-                        ->orWhere('description', 'like', "%{$search}%");
-                });
-            })
             ->latest()
-            ->paginate(15)
-            ->withQueryString();
+            ->paginate(15);
 
-        return view('admin.destinations.index', compact('destinations', 'locations', 'search'));
+        return view('admin.destinations.index', compact('destinations'));
     }
 
     public function create(): View
     {
         $tags = Tag::orderBy('name')->get();
-        [$provinces, $municipalities] = $this->locationOptions();
 
-        return view('admin.destinations.create', compact('tags', 'provinces', 'municipalities'));
+        return view('admin.destinations.create', compact('tags'));
     }
 
     public function store(Request $request): RedirectResponse
@@ -79,11 +54,10 @@ class DestinationController extends Controller
     {
         $tags = Tag::orderBy('name')->get();
         $selectedTags = $destination->tags->pluck('id')->all();
-        [$provinces, $municipalities] = $this->locationOptions();
 
         return view(
             'admin.destinations.edit',
-            compact('destination', 'tags', 'selectedTags', 'provinces', 'municipalities')
+            compact('destination', 'tags', 'selectedTags')
         );
     }
 
@@ -256,16 +230,4 @@ class DestinationController extends Controller
 
         return $data;
     }
-
-    private function locationOptions(): array
-    {
-        $locations = Destination::query()
-            ->get(['province', 'municipality']);
-
-        return [
-            $locations->pluck('province')->filter()->unique()->sort()->values(),
-            $locations->pluck('municipality')->filter()->unique()->sort()->values(),
-        ];
-    }
-
 }

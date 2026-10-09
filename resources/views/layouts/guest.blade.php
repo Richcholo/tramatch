@@ -18,8 +18,6 @@
 </head>
 
 <body class="min-h-screen bg-volcanic-teal text-benguet-charcoal antialiased">
-    <x-navigation-loading />
-
     <div class="fixed inset-0 overflow-hidden">
         <div class="tm-hero-art absolute inset-0 opacity-90"></div>
 

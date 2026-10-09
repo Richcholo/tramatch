@@ -1,8 +1,6 @@
 <?php
 
 use App\Http\Controllers\Admin\DestinationController as AdminDestinationController;
-use App\Http\Controllers\Admin\ReviewController as AdminReviewController;
-use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DestinationController;
@@ -146,33 +144,6 @@ Route::middleware(['auth', 'admin'])
             'destinations',
             AdminDestinationController::class
         )->except(['show']);
-
-        Route::get('/reviews', [
-            AdminReviewController::class,
-            'index',
-        ])->name('reviews.index');
-
-        Route::delete('/reviews/{review}', [
-            AdminReviewController::class,
-            'destroy',
-        ])->name('reviews.destroy');
-
-        Route::middleware('super-admin')->group(function () {
-            Route::get('/users', [
-                AdminUserController::class,
-                'index',
-            ])->name('users.index');
-
-            Route::patch('/users/{user}/make-admin', [
-                AdminUserController::class,
-                'makeAdmin',
-            ])->name('users.make-admin');
-
-            Route::patch('/users/{user}/demote-admin', [
-                AdminUserController::class,
-                'demoteAdmin',
-            ])->name('users.demote-admin');
-        });
     });
 
 require __DIR__.'/auth.php';

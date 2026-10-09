@@ -16,10 +16,6 @@ class AdminController extends Controller
             'tagCount' => Tag::count(),
             'reviewCount' => Review::count(),
             'pendingReviewCount' => Review::where('status', 'pending')->count(),
-            'recentReviews' => Review::with(['user', 'destination'])
-                ->latest()
-                ->take(5)
-                ->get(),
         ]);
     }
 }

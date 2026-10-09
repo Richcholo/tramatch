@@ -232,14 +232,42 @@ window.__tramatchPageTransitions = true;
         }
 
         scheduleNavigationLoading();
-    });
 
-    document.addEventListener('submit', (event) => {
-        if (event.defaultPrevented) {
+        const currentIsHome = isHomePath(window.location.pathname);
+        const targetIsHome = isHomePath(url.pathname);
+     
+        if (currentIsHome === targetIsHome) {
+            clearPendingTransition();
             return;
         }
 
-        scheduleNavigationLoading();
+
+
+        if (navigating) {
+            event.preventDefault();
+            return;
+        }
+
+        event.preventDefault();
+        navigating = true;
+
+        setPendingTransition();
+
+        const curtain = createCurtain();
+
+        const currentOpacity = getComputedStyle(curtain).opacity;
+
+        curtain.style.setProperty(
+            '--curtain-start-opacity',
+            currentOpacity
+        );
+
+        await animateCurtain(
+            curtain,
+            'page-curtain-entering'
+        );
+
+        window.location.assign(url.href);
     });
 
     window.addEventListener('pageshow', (event) => {
