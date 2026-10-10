@@ -24,11 +24,12 @@ class DestinationTest extends TestCase
         $response
             ->assertOk()
             ->assertSee($destination->name)
-            ->assertSee('list="destination-location-options"', false)
-            ->assertSee('value="Antipolo"', false)
-            ->assertSee('value="Rizal"', false)
-            ->assertSee('value="Antipolo Art Walk"', false)
-            ->assertDontSee('value="Old Town"', false);
+            ->assertSee('role="combobox"', false)
+            ->assertSee('role="listbox"', false)
+            ->assertSee('data-value="Antipolo"', false)
+            ->assertSee('data-value="Rizal"', false)
+            ->assertSee('data-value="Antipolo Art Walk"', false)
+            ->assertDontSee('data-value="Old Town"', false);
     }
 
     public function test_destination_pagination_shows_numbered_pages(): void
@@ -48,6 +49,42 @@ class DestinationTest extends TestCase
             ->assertSee('aria-label="Page 1"', false)
             ->assertSee('aria-label="Go to page 2"', false)
             ->assertSee('page=2', false);
+    }
+
+    public function test_destination_pagination_uses_six_items_when_requested_for_mobile(): void
+    {
+        $user = User::factory()->create();
+
+        for ($index = 1; $index <= 7; $index++) {
+            $this->createDestination("Destination {$index}", 'Rizal', 'Antipolo');
+        }
+
+        $response = $this
+            ->actingAs($user)
+            ->get(route('destinations.index', ['per_page' => 6]));
+
+        $response
+            ->assertOk()
+            ->assertSee('data-per-page="6"', false)
+            ->assertSee('per_page=6', false);
+
+        $this->assertSame(6, substr_count((string) $response->getContent(), 'data-destination-card'));
+
+        $secondPage = $this
+            ->actingAs($user)
+            ->get(route('destinations.index', ['per_page' => 6, 'page' => 2]));
+
+        $secondPage
+            ->assertOk()
+            ->assertSee('per_page=6', false);
+
+        $this->assertSame(1, substr_count((string) $secondPage->getContent(), 'data-destination-card'));
+    }
+
+    public function test_destination_pagination_rejects_unsupported_page_sizes(): void
+    {
+        $this->get(route('destinations.index', ['per_page' => 5]))
+            ->assertInvalid('per_page');
     }
 
     private function createDestination(

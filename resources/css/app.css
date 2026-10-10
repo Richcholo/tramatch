@@ -179,6 +179,1168 @@
         transform: rotate(-8deg);
     }
 
+<<<<<<< Updated upstream
+=======
+    /*
+     * =========================================================================
+     * THE DESTINATIONS STAGE
+     * =========================================================================
+     *
+     * A dark editorial theatre slab, full-bleed, on the SAME teal ground as the
+     * rest of the destination page. It is one world, not a slab on paper -- see
+     * the destination page's own note above, which explains why the Palawan Sand
+     * surface went with it.
+     *
+     * BECAUSE IT MATCHES ITS GROUND, THE SLAB IS CARRIED BY THREE THINGS rather
+     * than by its background: the blurred photographic backdrop, its own radial
+     * vignette, and the shadow below. Remove the shadow and the fan floats in a
+     * void with no edge; remove the vignette and the slab flattens into the page.
+     *
+     * =========================================================================
+     * THE UNIT. `--u`, AND WHY IT IS NOT A VIEWPORT UNIT
+     * =========================================================================
+     *
+     * `--u: calc(100cqw / 1088)`. One `--u` is 1/1088th of the stage's width, so
+     * every dimension in the fan below is written once as a number and scales as
+     * one piece. At the reference the stage is exactly 1088px wide (68rem), so
+     * `--u` resolves to 1px and the numbers in the geometry are literal pixels:
+     * a 320x570 centre panel, flanking panels 300px and 532px out.
+     *
+     * `cqw` rather than `vw` because the stage is capped at 68rem and the page
+     * container runs to 1600px. Viewport units would keep growing the fan past
+     * its cap and crop the outer panels far more than intended; container units
+     * stop at the stage's own width, which is what "a large slab" means.
+     *
+     * `.tm-stage-wrap` is the CONTAINER and `.tm-stage` is its child, which is
+     * not a detail: an element cannot resolve container query units against its
+     * OWN container -- on the container element they read the nearest ANCESTOR
+     * container, which here would be some unrelated page wrapper or nothing at
+     * all. `--u` therefore has to be declared one level below `container-type`.
+     *
+     * NO `100vw` ANYWHERE IN HERE, and this is the fourth layout attempt to say
+     * so. `width: 100vw` measures the viewport INCLUDING the vertical scrollbar,
+     * so a full-bleed block lands off-centre by about half a scrollbar and has to
+     * be clipped, which splits the error across both edges. See the note that
+     * used to sit here. The stage is a slab in the container, not a band across
+     * the screen, and it needs none of that arithmetic.
+     *
+     * =========================================================================
+     * THE FAN'S GEOMETRY, AND WHY IT IS WRITTEN THIS WAY
+     * =========================================================================
+     *
+     * `data-offset` is SIGNED and RELATIVE TO THE ACTIVE PANEL: 0 is active, -1
+     * the panel to its left, +1 to its right. Every geometric property --
+     * position, size, rotation, stacking, dimming -- is derived from it below,
+     * and the ONLY thing the script does is change the active index, which makes
+     * the browser rewrite this attribute on every panel. The CSS transition then
+     * interpolates.
+     *
+     * THAT IS WHY ADVANCING MOVES THE FAN AT ALL. An earlier version wrote each
+     * panel's offset once from PHP into a static `data-stage-offset` and never
+     * touched it again, so advancing changed which panel was "active" and never
+     * where the panels were. It looked frozen, and there was no error anywhere:
+     * the state was updating, just not the geometry. Never write an offset from
+     * PHP expecting it to survive an advance.
+     *
+     * The alternative -- re-rendering a five-element window per slide -- cannot
+     * animate at all: the panels would be new elements, nothing would be in the
+     * compositor, and there'd be nothing for a transition to interpolate. Hence
+     * "re-index, not a re-layout".
+     *
+     * THE GAPS ARE SOLVED, NOT EYEBALLED, and they are the reason the offsets are
+     * what they are. The centre panel's half-width is 160 and the flanking panel
+     * at scale 0.79 has a half-width of 126.4, so a 300px offset leaves a gap of
+     * 300 - 126.4 - 160 = 13.6px. The outer panel at scale 0.58 has a half-width
+     * of 92.8; at 536px its near edge is 443.2 and the flanking panel's far edge
+     * is 426.4, a gap of 16.8px -- which is over the 16px the composition wants,
+     * so it is at 532px and the gap is 12.8px instead. Both gaps sit in 10-16px.
+     *
+     * THE OUTER PAIR IS CROPPED ON PURPOSE, and that is what fixes the stage's
+     * width rather than the other way round. The outer panel's far edge is
+     * 532 + 92.8 = 624.8px from centre, so a stage narrower than 1250px cuts it,
+     * while the flanking pair's far edge at 426.4px needs at least 853px to stay
+     * whole. 1088px sits in that window: the outer panels run off both edges and
+     * the fan visibly continues past the frame, with the flanking pair clear of
+     * the crop.
+     *
+     * SIZE BY WIDTH, NOT BY HEIGHT, with `aspect-ratio` supplying the height. The
+     * alternative -- sizing by height and letting the width follow -- is what an
+     * earlier version did, and it made the panel's height a function of the fan's
+     * height, so `padding-block` set independently of `height` rendered an 80px
+     * card. The ratio is the panel's (320x570 is 9:16) and the width is `--u`
+     * times 320, so overflow is impossible at any stage width.
+     */
+
+/*
+     * =========================================================================
+     * THE DESTINATION PAGE
+     * =========================================================================
+     *
+     * ONE CONTINUOUS DARK SURFACE, edge to edge, from the nav bar down. The
+     * layout's own header is already `bg-volcanic-teal`, so the page continues
+     * it rather than starting a new one, and there is no Palawan Sand anywhere on
+     * this page.
+     *
+     * THAT IS THE CONSEQUENCE OF THE STAGE BECOMING THE WHOLE PAGE. It began as a
+     * dark theatre set into warm paper, with the heading and the filtered bar on
+     * the paper above it. When it was asked to be the page rather than a panel on
+     * it, the paper went with it: a sand surface under a teal one is two
+     * surfaces, and the composition only reads as one world with one ground.
+     *
+     * WHICH MEANS THE WHOLE COLOUR RULE INVERTS HERE. Gold and Boracay Turquoise
+     * were forbidden as small text because they fail on sand -- gold is 1.8:1 and
+     * turquoise 2.9:1 there. On this teal ground the same gold is 8.7:1 and the
+     * same turquoise carries white or teal text, so gold is now usable as an
+     * accent. What must not appear is the DARK palette: `text-benguet-charcoal`,
+     * `text-volcanic-teal`, `bg-palawan-sand` and `bg-island-white` are all
+     * invisible against this ground. Every rule below is a light value.
+     *
+     * `-mx-5 -my-10 sm:-mx-8` against the layout main's own
+     * `px-5 py-10 sm:px-8 lg:px-12` is EXACT CANCELLATION for this ground only.
+     * See the stage's note for why that is a background bleed and not a width.
+     * Nothing INSIDE the page may carry a `-mx-*`.
+     */
+    .tm-page {
+        background-color: var(--color-volcanic-teal);
+        background-image: radial-gradient(
+            120% 62% at 50% 0%,
+            rgb(255 255 255 / 0.07),
+            rgb(11 37 43 / 0) 62%
+        );
+    }
+
+    /*
+     * The opening screen: heading, filtered bar and stage, filling what is left of
+     * the first viewport below the nav bar.
+     *
+     * `calc(100svh - 6rem)` rather than `100svh`, because `main` begins UNDER the
+     * nav. `svh` rather than `vh` because mobile browser chrome changes the
+     * viewport height while you scroll and `vh` would make the opening jump.
+     *
+     * `min-height`, never `height`. The stage's height follows from `--u` and the
+     * composition's aspect ratio, so on a short viewport the opening grows past
+     * the screen rather than crushing the fan.
+     *
+     * `space-between` puts the heading at the top and the stage on the floor of
+     * the screen, which is what makes it read as a stage rather than as a block
+     * that happens to be tall.
+     */
+    .tm-page__opening {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: 2.5rem;
+        min-height: 100vh;
+        min-height: calc(100svh - 6rem);
+        padding-bottom: 1.5rem;
+    }
+
+    /*
+     * The dark card. ONE surface treatment for every fact on the page, so the
+     * hours, the map, the fees and the reviews read as parts of the same object
+     * rather than as five unrelated widgets.
+     *
+     * A translucent white fill with an inset hairline, NOT an opaque card: an
+     * opaque light card on this ground puts a bright rectangle in the middle of a
+     * dark page, which is the "flat colour block" the stage's panels are forbidden
+     * from being.
+     */
+    .tm-panel {
+        border-radius: 2rem;
+        background-color: rgb(255 255 255 / 0.04);
+        box-shadow: 0 0 0 1px rgb(255 255 255 / 0.09) inset;
+        padding: 1.5rem;
+    }
+
+    @media (width >= 40rem) {
+        .tm-panel {
+            padding: 2rem;
+        }
+    }
+
+    /*
+     * Section labels. Boracay Light is a pale tint of the ground's own hue, so it
+     * reads as a label without competing with the heading. Gold is reserved for
+     * the accent uses below.
+     */
+    .tm-eyebrow {
+        color: var(--color-boracay-light);
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.28em;
+        line-height: 1.2;
+        text-transform: uppercase;
+    }
+
+    /* Palawan Sand at 72% on teal is about 10:1, so this is body text. */
+    .tm-prose {
+        color: rgb(253 251 247 / 0.72);
+        line-height: 1.75;
+    }
+
+    /*
+     * The per-day hours table. Rows separated by hairlines and the day marked by a
+     * wash: on a dark ground a fill is a stronger signal than a border, and
+     * "(today)" alone is not enough to find at a glance.
+     */
+    .tm-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        border-top: 1px solid rgb(255 255 255 / 0.08);
+        padding: 0.5rem 1rem;
+        color: rgb(253 251 247 / 0.6);
+        font-size: 0.875rem;
+    }
+
+    .tm-row:first-child {
+        border-top: 0;
+    }
+
+    .tm-row--today {
+        background-color: rgb(255 255 255 / 0.08);
+        color: var(--color-island-white);
+        font-weight: 600;
+    }
+
+    .tm-row__note {
+        color: var(--color-boracay-light);
+        font-size: 0.75rem;
+        font-weight: 400;
+    }
+
+    /*
+     * Form controls. `bg-palawan-sand` here would be a white box in a dark page,
+     * and `text-benguet-charcoal` would then be the only way to make it legible
+     * -- which is the same light-fill/dark-text pairing the page just removed.
+     */
+    .tm-field {
+        width: 100%;
+        border: 0;
+        border-radius: 0.75rem;
+        background-color: rgb(255 255 255 / 0.06);
+        box-shadow: 0 0 0 1px rgb(255 255 255 / 0.14) inset;
+        padding: 0.625rem 0.875rem;
+        color: var(--color-island-white);
+        font-size: 0.875rem;
+    }
+
+    .tm-field::placeholder {
+        color: rgb(253 251 247 / 0.35);
+    }
+
+    .tm-field:focus {
+        outline: none;
+        box-shadow: 0 0 0 2px var(--color-volcanic-teal), 0 0 0 4px var(--color-boracay);
+    }
+
+    .tm-field option {
+        background-color: var(--color-volcanic-teal);
+        color: var(--color-island-white);
+    }
+
+    .tm-stage-wrap {
+        /*
+         * `width: 100%` IS LOAD-BEARING AND IT IS NOT COSMETIC.
+         *
+         * The stage sits as a flex ITEM inside `.tm-page__opening`, which is a COLUMN
+         * flex container. That makes the cross axis HORIZONTAL, and on the cross
+         * axis `margin-inline: auto` **disables the default `align-items: stretch`**:
+         * the item stops being stretched and is sized by its content, then centred.
+         *
+         * Every panel inside the stage is `position: absolute`, so the stage's
+         * content width is zero -- and shrink-to-fit of zero is zero. The whole
+         * stage therefore collapsed to `width: 0`, `--u` became `calc(100cqw / 1088)`
+         * of nothing, `.tm-fan`'s `height: calc(660 * var(--u))` resolved to `0px`,
+         * and every absolutely-positioned panel was clipped out of sight by
+         * the stage's own `overflow: hidden`.
+         *
+         * What it looked like from the outside: the panels were in the DOM, every
+         * image URL returned 200, the stylesheet was correct, and every HTTP-level
+         * test passed. The page rendered a photograph-free stage and reported
+         * nothing, because the defect was computed GEOMETRY and no test here measures
+         * any.
+         *
+         * It worked before the stage became the page because the stage was in BLOCK
+         * layout then, where `margin-inline: auto` + `max-width` does exactly what it
+         * looks like. **Any `margin-*: auto` on a flex item needs a definite width
+         * next to it.**
+         *
+         * `width: 100%` + `margin-inline: auto` is the pattern that is correct in
+         * both contexts: a definite size, then the auto margins centring whatever is
+         * left over.
+         *
+         * THERE IS NO MAX-WIDTH HERE NOW, and the `--u` cap moved with it.
+         *
+         * The stage used to be capped at 68rem so that `--u` could not exceed 1px,
+         * which kept the composition from growing past its reference on a wide page.
+         * But a capped stage on an uncapped page is a small dark object floating in
+         * a field of the same dark colour, and at a 1600px content width that is
+         * most of the screen doing nothing. It read as a layout that had not been
+         * finished.
+         *
+         * So the stage now fills its container, `--u` grows with it, and the
+         * composition scales up as one piece -- which is what `--u` was built to do.
+         * The dark background now runs to the viewport edges, while the inner
+         * content wrapper remains capped at 1504px. The stage can no longer grow
+         * without the page content around it growing first.
+         *
+         * That cap is load-bearing and it is easy to move by accident. The
+         * full-bleed page surface is separate from its bounded content wrapper,
+         * so this stage still stops at the original 1504px content width.
+         * It is asserted by `the_stage_grows_with_its_container_and_main_bounds_it`.
+         */
+        width: 100%;
+        margin-inline: auto;
+        container-type: inline-size;
+
+        /*
+         * The slab sits on a page of its own colour, so it has to be separated by
+         * depth rather than by hue. `container-type` implies `contain: layout style`
+         * but NOT paint, so this shadow is not clipped by the container.
+         */
+        box-shadow: 0 calc(28 * 1px) calc(70 * 1px) calc(-30 * 1px) rgb(0 0 0 / 0.7);
+    }
+
+    .tm-stage {
+        --u: calc(100cqw / 1088);
+        --ease-out: cubic-bezier(0.16, 0.84, 0.44, 1);
+
+        position: relative;
+        isolation: isolate;
+        overflow: hidden;
+        border-radius: 2rem;
+        background-color: var(--color-volcanic-teal);
+        padding-block: calc(34 * var(--u)) 0;
+    }
+
+    /*
+     * Narrow stages. NOT a hidden far pair -- see the note on `[data-far]`: a slot
+     * the script cannot see is a slot it will step onto, and the fan then appears
+     * frozen on a phone. The far pair is pushed further out instead, so it runs off
+     * the stage edge and the cascade still has somewhere to come from.
+     *
+     * The basis drops from 1088 to 700, which makes the CENTRE panel a larger
+     * share of a small screen (171px rather than 110px at 375px wide) at the cost
+     * of cropping the flanking pair. That is the right trade on a phone: the
+     * centre panel is the photograph being read, and the flanking pair being
+     * cropped is the same "continues past the frame" the outer pair already uses.
+     */
+    @container (width < 760px) {
+        .tm-stage {
+            --u: calc(100cqw / 700);
+        }
+    }
+
+    /* --- the backdrop: two layers, because a cross-fade needs two photos --- */
+
+    .tm-stage__backdrops {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+    }
+
+    .tm-stage__backdrop {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+
+        /*
+         * Scaled PAST THE EDGE. `blur()` samples outside the element's box, so a
+         * 1:1 image leaves a transparent rim that shows as a hard edge inside the
+         * stage.
+         */
+        transform: scale(1.18);
+        filter: brightness(0.18) blur(14px);
+        opacity: 0;
+        transition: opacity 800ms var(--ease-out);
+    }
+
+    .tm-stage__backdrop.is-shown {
+        opacity: 0.5;
+    }
+
+    /*
+     * The vignette: about a 15% lift at the centre, falling to darker at the
+     * edges. It is what stops the slab reading as a flat rectangle of teal and
+     * gives the panels a stage to sit on.
+     */
+    .tm-stage__vignette {
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        pointer-events: none;
+        background:
+            radial-gradient(
+                118% 88% at 50% 42%,
+                rgb(255 255 255 / 0.15) 0%,
+                rgb(11 37 43 / 0) 58%,
+                rgb(0 0 0 / 0.42) 100%
+            );
+    }
+
+    /* --- the fan ---------------------------------------------------------- */
+
+    .tm-fan {
+        position: relative;
+        z-index: 2;
+        height: calc(660 * var(--u));
+        perspective: calc(1600 * var(--u));
+
+        /*
+         * THE DRAG.
+         *
+         * `--tm-drag-x` is written by the script as the pointer travels, and it
+         * feeds this `transform` and nothing else. It is a plain custom property
+         * rather than a directly-assigned `transform` for two reasons: the script
+         * never has to know the fan's own geometry, and the CANCEL case gets the
+         * transition for free -- setting it back to `0px` eases home, because the
+         * transition applies to the RESOLVED `transform` value. No `@property`
+         * registration is needed for that, and no second frame has to be waited on.
+         *
+         * `translate3d` rather than `translate` so the fan is composited and the
+         * gesture does not relayout the panels on every pointermove.
+         *
+         * `touch-action: pan-y` is the load-bearing part on a touch screen. It tells
+         * the browser "you may scroll this vertically, but horizontal movement is
+         * mine", which is what stops the page from scrolling sideways out from
+         * under a swipe and what stops the browser from waiting to see whether a
+         * touch is a scroll before delivering any pointermove at all. Without it a
+         * swipe on a phone is a coin toss between a scroll and a carousel.
+         *
+         * The cursor says the fan is grabbable, which is the one thing
+         * a drag needs that nothing else on the page can communicate:
+         * the panels are links, so without this the stage's own
+         * control reads as a row of destinations rather than as
+         * something that can be pulled. `is-dragging` takes it over
+         * with `grabbing` while a gesture is underway.
+         */
+        transform: translate3d(var(--tm-drag-x, 0px), 0, 0);
+        transition: transform 260ms var(--ease-out);
+        touch-action: pan-y;
+        cursor: grab;
+
+        /*
+         * A swipe must not SELECT anything either. Selection and
+         * the native drag are the two ways a pull on a photograph
+         * becomes something other than a pull on the fan: the
+         * `dragstart` listener in the script takes the drag, and
+         * this takes the text. The province pill is the only text
+         * inside the fan, but a swipe across it is exactly the
+         * gesture the stage needs to own.
+         */
+        user-select: none;
+        -webkit-user-select: none;
+    }
+
+    /*
+     * While a gesture is actually underway -- not merely while a pointer is down,
+     * which is what `dragging` means in the script too.
+     *
+     * The transition comes off so the fan tracks the pointer rather than lagging
+     * behind it, and comes back the moment `is-dragging` is removed so a cancelled
+     * drag eases home and a committed one hands over cleanly.
+     */
+    .tm-fan.is-dragging {
+        transition: none;
+        cursor: grabbing;
+    }
+
+    .tm-fan-panel {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: calc(320 * var(--u));
+        aspect-ratio: 9 / 16;
+        transform: translate(-50%, -50%);
+
+        /*
+         * ONE transition list, and the whole fan moves as one formation. No
+         * per-panel delay: a stagger here reads as five separate cards animating
+         * rather than as one object turning.
+         *
+         * `filter` is in the list because the side panels carry a sub-pixel blur
+         * and the active one does not -- without it, the sharpness change snaps
+         * while the panels are still travelling.
+         */
+        transition:
+            left 620ms var(--ease-out),
+            width 620ms var(--ease-out),
+            transform 620ms var(--ease-out),
+            filter 620ms var(--ease-out);
+    }
+
+    .tm-fan-panel__link {
+        display: block;
+        height: 100%;
+        border-radius: 0.625rem;
+        outline-offset: 3px;
+    }
+
+    /*
+     * Beyond the reach of the fan. Present in the DOM so it can slide in, but out
+     * of sight, untabbable and unclickable.
+     *
+     * `visibility: hidden` as well as `opacity: 0` so these are genuinely removed
+     * from the accessibility tree and from hit testing.
+     *
+     * `data-far` RATHER THAN A BARE `|offset| > 2` SELECTOR, because CSS has no
+     * absolute-value comparison. And nothing hides a slot on a narrow screen --
+     * see the narrow-stage note above for why that is a bug waiting to happen.
+     */
+    [data-far] {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+    }
+
+    /* --- the active panel: flat-on, nearest, sharpest, fully opaque ------- */
+
+    [data-offset='0'] {
+        left: 50%;
+        z-index: 30;
+        filter: none;
+    }
+
+    /* --- the flanking pair ------------------------------------------------ */
+
+    [data-offset='-1'],
+    [data-offset='1'] {
+        z-index: 20;
+        filter: blur(0.4px);
+    }
+
+    [data-offset='-1'] {
+        left: calc(50% - (300 * var(--u)));
+        transform: translate(-50%, -50%) translateY(calc(8 * var(--u))) scale(0.79) rotateY(-7deg);
+    }
+
+    [data-offset='1'] {
+        left: calc(50% + (300 * var(--u)));
+        transform: translate(-50%, -50%) translateY(calc(8 * var(--u))) scale(0.79) rotateY(7deg);
+    }
+
+    /*
+     * --- the outer pair ---
+     *
+     * The rotation sign MIRRORS, so the fan opens away from the centre: on the
+     * left a negative rotateY pushes the outer (left) edge back, on the right a
+     * positive one pushes the outer (right) edge back. Both angle away from the
+     * viewer at their outside edges, which is the shallow V the composition is
+     * after.
+     */
+    [data-offset='-2'] {
+        left: calc(50% - (532 * var(--u)));
+        z-index: 10;
+        filter: blur(0.8px);
+        transform: translate(-50%, -50%) translateY(calc(14 * var(--u))) scale(0.58) rotateY(-14deg);
+    }
+
+    [data-offset='2'] {
+        left: calc(50% + (532 * var(--u)));
+        z-index: 10;
+        filter: blur(0.8px);
+        transform: translate(-50%, -50%) translateY(calc(14 * var(--u))) scale(0.58) rotateY(14deg);
+    }
+
+    /* --- the panel plate --------------------------------------------------- */
+
+    /*
+     * 10px radius, a 1px hairline that separates overlapping cards, and a soft
+     * ambient shadow. The hairline is `box-shadow` rather than `outline` or a
+     * border so it costs no layout and can be swapped for the active panel's gold
+     * hairline without the card's box moving by a pixel -- which a border would.
+     */
+    .tm-fan-card {
+        position: relative;
+        height: 100%;
+        overflow: hidden;
+        border-radius: 0.625rem;
+        background-color: var(--color-volcanic-teal);
+        box-shadow:
+            0 0 0 1px rgb(255 255 255 / 0.14),
+            0 calc(18 * var(--u)) calc(44 * var(--u)) calc(-14 * var(--u)) rgb(0 0 0 / 0.55);
+        transition: box-shadow 300ms var(--ease-out);
+    }
+
+    .tm-fan-card__image {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    /*
+     * The bottom-up scrim: transparent at the top, `rgba(11,37,43,0.85)` at the
+     * bottom. It exists because the caption sits over the lower third of the fan
+     * and text over raw photograph is text nobody can read.
+     *
+     * The second background layer is the depth tint -- "dimmed beneath a Deep
+     * Volcanic Teal overlay" -- and it is an OVERLAY rather than an opacity on the
+     * panel, so the photograph never becomes see-through and the stage does not
+     * acquire a glass look.
+     */
+    .tm-fan-card__scrim {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background:
+            linear-gradient(
+                to top,
+                rgb(11 37 43 / 0.85) 0%,
+                rgb(11 37 43 / 0.45) 26%,
+                rgb(11 37 43 / 0) 64%
+            ),
+            rgb(11 37 43 / 0);
+    }
+
+    [data-offset='-1'] .tm-fan-card__scrim,
+    [data-offset='1'] .tm-fan-card__scrim {
+        background-image:
+            linear-gradient(
+                to top,
+                rgb(11 37 43 / 0.85) 0%,
+                rgb(11 37 43 / 0.45) 26%,
+                rgb(11 37 43 / 0) 64%
+            ),
+            linear-gradient(rgb(11 37 43 / 0.25), rgb(11 37 43 / 0.25));
+    }
+
+    [data-offset='-2'] .tm-fan-card__scrim,
+    [data-offset='2'] .tm-fan-card__scrim {
+        background-image:
+            linear-gradient(
+                to top,
+                rgb(11 37 43 / 0.85) 0%,
+                rgb(11 37 43 / 0.45) 26%,
+                rgb(11 37 43 / 0) 64%
+            ),
+            linear-gradient(rgb(11 37 43 / 0.44), rgb(11 37 43 / 0.44));
+    }
+
+    /*
+     * The province pill, on the ACTIVE panel only.
+     *
+     * Keyed off the panel's own `data-offset` and living inside the panel, so it
+     * reads its province from the photograph it belongs to. There is no path by
+     * which it can show one destination's province over another's photograph --
+     * the failure a stage-level caption has to work hard to avoid.
+     *
+     * Island White on `rgba(11,37,43,0.55)`: white on teal, never white on sand,
+     * where it would be invisible.
+     */
+    .tm-fan-card__pill {
+        position: absolute;
+        top: calc(14 * var(--u));
+        left: 50%;
+        translate: -50% 0;
+        padding: calc(5 * var(--u)) calc(11 * var(--u));
+        border: 1px solid rgb(255 255 255 / 0.24);
+        border-radius: 999px;
+        background-color: rgb(11 37 43 / 0.55);
+        color: var(--color-island-white);
+        font-size: clamp(0.5625rem, calc(10 * var(--u)), 0.625rem);
+        letter-spacing: 0.14em;
+        line-height: 1;
+        text-transform: uppercase;
+        white-space: nowrap;
+        opacity: 0;
+        transition: opacity 300ms var(--ease-out);
+    }
+
+    [data-offset='0'] .tm-fan-card__pill {
+        opacity: 1;
+    }
+
+    /*
+     * The ACTIVE panel's gold hairline, at about 70%. It replaces the white
+     * hairline rather than sitting on top of it: two rings on one card is a
+     * rendering accident, not a highlight.
+     */
+    [data-offset='0'] .tm-fan-card {
+        box-shadow:
+            0 0 0 1px rgb(244 180 26 / 0.7),
+            0 calc(26 * var(--u)) calc(56 * var(--u)) calc(-16 * var(--u)) rgb(0 0 0 / 0.62);
+    }
+
+    /* --- the caption ------------------------------------------------------- */
+
+    /*
+     * BELOW THE FAN, ON THE TEAL -- NOT ON TOP OF THE PHOTOGRAPHS.
+     *
+     * This used to be `position: absolute` with `bottom: 118u`,
+     * which painted the kicker, the name, the standfirst and the
+     * micro-label row over the LOWER THIRD of the panels. That was
+     * the reported "text clashes with the images", and it is not a
+     * scrim problem: there is no scrim dark enough to carry a
+     * headline over a full-brightness photograph without looking
+     * like a band across it.
+     *
+     * So the caption is IN FLOW now, between the fan and the pager.
+     * It is the ordinary editorial arrangement -- a figure, then its
+     * caption -- and it puts every word on the ground rather than on
+     * a photograph. What it sits over is the backdrop wash, which is
+     * `brightness(0.18)`, i.e. near-black: the caption reads as
+     * ink on the theatre's own ground.
+     *
+     * It is still stage-level and never a child of a panel, and that
+     * half of the old note still holds: a caption inside a panel is
+     * clipped by that panel's `overflow: hidden`, and a panel painted
+     * above the copy occludes it.
+     *
+     * The `pointer-events: none` is gone with the overlap. It existed
+     * so the centre panel -- a link -- stayed clickable through the
+     * text sitting on top of it. Nothing is under the caption any
+     * more, so there is nothing to click through, and the text is
+     * selectable like any other caption.
+     *
+     * `padding-block` separates it from the fan's box above. The fan
+     * is 660u tall and the panels are 570u centred in it, so there
+     * is already 45u of teal under the lowest panel; the 10u here is
+     * the caption's own breathing room on top of that.
+     *
+     * `is-settling` still fades and rises the copy out while the
+     * panels travel, which is the right signal for a change in
+     * flight even though the copy is no longer over the motion.
+     */
+    .tm-stage__caption {
+        position: relative;
+        z-index: 40;
+        display: flex;
+        justify-content: center;
+        padding-block: calc(10 * var(--u)) 0;
+        padding-inline: calc(24 * var(--u));
+        text-align: center;
+        transition:
+            opacity 450ms var(--ease-out),
+            transform 450ms var(--ease-out);
+    }
+
+    /*
+     * `is-settling` is the caption's OUT state: a 6px rise on the way out, and the
+     * same 6px of travel coming back in. The stage script sets it for exactly the
+     * 620ms the panels are travelling, so the copy arrives after the fan settles
+     * rather than over the top of it.
+     */
+    .tm-stage__caption.is-settling {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+
+    .tm-stage__caption-inner {
+        max-width: calc(760 * var(--u));
+    }
+
+    /*
+     * The gold kicker. An interest tag, not a region: this app has no region
+     * column and the province already appears twice in this caption.
+     */
+    .tm-stage__kicker {
+        color: var(--color-philippine-gold);
+        font-size: clamp(0.625rem, calc(11 * var(--u)), 0.6875rem);
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        line-height: 1.2;
+        text-transform: uppercase;
+    }
+
+    /*
+     * The name, then the province, as exactly two lines. Two block-level spans
+     * rather than one string the browser wraps where it likes -- the province can
+     * never end up trailing onto a third line under a long name.
+     *
+     * Playfair Display 600, uppercase, 0.95 leading, slightly negative tracking,
+     * scaled off `--u` so it shrinks with the stage instead of overflowing it.
+     */
+    .tm-stage__name {
+        margin-top: calc(10 * var(--u));
+        color: var(--color-island-white);
+        font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
+        font-size: clamp(2rem, calc(72 * var(--u)), 4.75rem);
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        line-height: 0.95;
+        text-transform: uppercase;
+    }
+
+    .tm-stage__name-line {
+        display: block;
+    }
+
+    /* 64px of hairline, sand at 45%. */
+    .tm-stage__divider {
+        display: block;
+        width: calc(64 * var(--u));
+        height: 1px;
+        margin: calc(18 * var(--u)) auto calc(14 * var(--u));
+        background-color: rgb(253 251 247 / 0.45);
+    }
+
+    .tm-stage__place {
+        color: var(--color-boracay-light);
+        font-size: clamp(0.625rem, calc(12 * var(--u)), 0.75rem);
+        font-weight: 600;
+        letter-spacing: 0.14em;
+        line-height: 1.4;
+        text-transform: uppercase;
+    }
+
+    .tm-stage__standfirst {
+        margin-top: calc(10 * var(--u));
+        color: rgb(253 251 247 / 0.9);
+        font-size: clamp(0.875rem, calc(21 * var(--u)), 1.5rem);
+        line-height: 1.45;
+        text-wrap: balance;
+    }
+
+    /* --- the micro-label row ---------------------------------------------- */
+
+    /*
+     * ON THE TEAL, not on the sand. The pager sits at the bottom of the stage
+     * slab for the same reason the caption does: its dots are Island White, and
+     * Island White on Palawan Sand is invisible. The slab extends to include the
+     * pager strip, which is also the ordinary editorial arrangement -- the
+     * controls belong to the stage, not to the page it sits on.
+     */
+    .tm-stage__metrics {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: center;
+        gap: 0 calc(10 * var(--u));
+        margin-top: calc(16 * var(--u));
+    }
+
+    .tm-stage__metric {
+        display: inline-flex;
+        align-items: center;
+        gap: calc(6 * var(--u));
+    }
+
+    .tm-stage__metric-label {
+        color: rgb(253 251 247 / 0.55);
+        font-size: clamp(0.5625rem, calc(10 * var(--u)), 0.6875rem);
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+    }
+
+    .tm-stage__metric-value {
+        color: var(--color-island-white);
+        font-size: clamp(0.625rem, calc(12 * var(--u)), 0.8125rem);
+        font-weight: 600;
+        letter-spacing: 0.06em;
+
+        /*
+         * Tabular numerals. The script counts these numbers up, and a number that
+         * changes width while it changes is worse than one that does not animate.
+         */
+        font-variant-numeric: tabular-nums;
+    }
+
+    .tm-stage__metric-value--gold {
+        color: var(--color-philippine-gold);
+    }
+
+    .tm-stage__metric-dot {
+        width: 3px;
+        height: 3px;
+        border-radius: 999px;
+        background-color: rgb(253 251 247 / 0.45);
+    }
+
+    /*
+     * The three-step budget indicator. It RANKS the tier and is `aria-hidden`,
+     * because the tier's meaning is carried by the word beside it -- nothing here
+     * is communicated by position or colour alone.
+     */
+    .tm-stage__steps {
+        display: inline-flex;
+        gap: calc(3 * var(--u));
+    }
+
+    .tm-stage__steps > span {
+        width: calc(5 * var(--u));
+        height: calc(5 * var(--u));
+        border-radius: 999px;
+        border: 1px solid rgb(253 251 247 / 0.45);
+    }
+
+    .tm-stage__steps > span[data-on] {
+        background-color: rgb(253 251 247 / 0.8);
+        border-color: rgb(253 251 247 / 0.8);
+    }
+
+    /* --- the chevrons ------------------------------------------------------ */
+
+    /*
+     * Pinned to the stage's left and right EDGES at its vertical middle, which is
+     * where a thumb expects them and keeps them off the photographs.
+     *
+     * 44px box, so the control does not crowd a 320px panel.
+     */
+    .tm-stage__chevrons {
+        position: absolute;
+        z-index: 40;
+        inset: 0 calc(12 * var(--u));
+        pointer-events: none;
+    }
+
+    .tm-stage__chevron {
+        position: absolute;
+        top: 50%;
+        display: flex;
+        width: 44px;
+        height: 44px;
+        align-items: center;
+        justify-content: center;
+        translate: 0 -50%;
+        border-radius: 999px;
+        background-color: rgb(255 255 255 / 0.08);
+        box-shadow: 0 0 0 1px rgb(255 255 255 / 0.24) inset;
+        color: var(--color-island-white);
+        pointer-events: auto;
+        transition:
+            background-color 200ms var(--ease-out),
+            box-shadow 200ms var(--ease-out),
+            scale 120ms var(--ease-out);
+    }
+
+    .tm-stage__chevron--prev {
+        left: 0;
+    }
+
+    .tm-stage__chevron--next {
+        right: 0;
+    }
+
+    /*
+     * Hover fills with Boracay Turquoise at 18% and rings in the same colour. NO
+     * GLOW: a drop-shadow or a coloured box-shadow spread here would put a
+     * light-source effect on a flat card, and the stage has exactly one light
+     * source, the vignette.
+     */
+    .tm-stage__chevron:hover {
+        background-color: rgb(0 168 150 / 0.18);
+        box-shadow: 0 0 0 1px var(--color-boracay) inset;
+    }
+
+    .tm-stage__chevron:active {
+        scale: 0.96;
+    }
+
+    .tm-stage__chevron-glyph {
+        width: 24px;
+        height: 24px;
+    }
+
+    /* --- the pager --------------------------------------------------------- */
+
+    .tm-stage__pager {
+        position: relative;
+        z-index: 40;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: calc(16 * var(--u));
+        padding-block: calc(26 * var(--u)) calc(30 * var(--u));
+        transition: opacity 450ms var(--ease-out);
+    }
+
+    /*
+     * Out for the duration of a slide change, back in about 450ms after the fan
+     * settles -- the same `settled` flag the caption uses, so the two cannot
+     * disagree about when the stage finished moving.
+     */
+    .tm-stage__pager.is-swapping {
+        opacity: 0;
+    }
+
+    .tm-stage__dots {
+        display: flex;
+        align-items: center;
+        gap: calc(8 * var(--u));
+    }
+
+    .tm-stage__dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background-color: rgb(255 255 255 / 0.3);
+        transition: background-color 200ms var(--ease-out);
+    }
+
+    .tm-stage__dot:hover {
+        background-color: rgb(255 255 255 / 0.6);
+    }
+
+    .tm-stage__dot.is-active {
+        background-color: var(--color-island-white);
+    }
+
+    /* 24px glyph in a 44px hit area, with the chevrons' ghost ring. */
+    .tm-stage__pause {
+        display: flex;
+        width: 44px;
+        height: 44px;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        background-color: rgb(255 255 255 / 0.08);
+        box-shadow: 0 0 0 1px rgb(255 255 255 / 0.24) inset;
+        color: var(--color-island-white);
+        transition:
+            background-color 200ms var(--ease-out),
+            box-shadow 200ms var(--ease-out),
+            scale 120ms var(--ease-out);
+    }
+
+    .tm-stage__pause:hover {
+        background-color: rgb(0 168 150 / 0.18);
+        box-shadow: 0 0 0 1px var(--color-boracay) inset;
+    }
+
+    .tm-stage__pause:active {
+        scale: 0.96;
+    }
+
+    .tm-stage__pause-glyph {
+        width: 24px;
+        height: 24px;
+        fill: currentcolor;
+    }
+
+    /*
+     * The icon swap is CSS keyed off `aria-pressed`, which is the attribute the
+     * control needs anyway. NOT `x-show`: `x-show` toggles the `hidden` ATTRIBUTE
+     * and there is no `x-cloak` rule in this stylesheet, so an `x-show` pair paints
+     * both glyphs for a frame before Alpine initialises. Driving it from the state
+     * attribute means the server-rendered markup shows the correct glyph from the
+     * first paint, with no JavaScript involved.
+     */
+    .tm-stage__pause[aria-pressed='true'] [data-icon='pause'],
+    .tm-stage__pause[aria-pressed='false'] [data-icon='play'] {
+        display: none;
+    }
+
+    /*
+     * THE TYPOGRAPHIC PLATE: what a panel shows when its destination has no
+     * photograph at all.
+     *
+     * Photographs reach this app only through an admin upload, so a catalogue
+     * without any is the NORMAL state -- which makes this the first thing most
+     * visitors will see, not an edge case. It has to carry the panel on its own.
+     *
+     * It is set in type on a lifted ground so it reads as a title card in the
+     * theatre rather than as a broken photograph. Nothing here imitates a photo:
+     * no image, no empty `src` (which a browser renders as a broken-image glyph),
+     * and no flat colour pretending to be one behind a scrim.
+     */
+    .tm-fan-card__type {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        gap: 8px;
+        padding: calc(20 * var(--u));
+        background: linear-gradient(160deg, rgb(0 79 82 / 0.5), rgb(11 37 43 / 0.92));
+    }
+
+    .tm-fan-card__type-kicker {
+        color: var(--color-philippine-gold);
+        font-size: clamp(0.5rem, calc(10 * var(--u)), 0.625rem);
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        line-height: 1.2;
+        text-transform: uppercase;
+    }
+
+    .tm-fan-card__type-name {
+        color: var(--color-island-white);
+        font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
+        font-size: clamp(1.25rem, calc(26 * var(--u)), 1.75rem);
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        line-height: 1.1;
+        text-wrap: balance;
+    }
+
+    .tm-fan-card__type-place {
+        color: var(--color-boracay-light);
+        font-size: clamp(0.5rem, calc(10 * var(--u)), 0.6875rem);
+        font-weight: 600;
+        letter-spacing: 0.14em;
+        line-height: 1.3;
+        text-transform: uppercase;
+    }
+
+    .tm-stage__empty {
+        padding: calc(60 * var(--u));
+        color: rgb(253 251 247 / 0.7);
+        text-align: center;
+    }
+
+    /*
+     * =========================================================================
+     * REDUCED MOTION: A FLAT STACK, NOT A FASTER ARC
+     * =========================================================================
+     *
+     * The fan's entire depth cue is carried by its transforms, so under
+     * `prefers-reduced-motion` they are removed rather than shortened -- a 620ms
+     * arc at 200ms is still an arc, and still motion. Every panel collapses onto
+     * the centre at the active panel's size and depth, and only the opacity
+     * change survives, which is a cross-fade and nothing else.
+     *
+     * The `settled` delay drops to zero in the script too, so the caption is not
+     * left waiting 620ms for panels that are no longer travelling.
+     */
+    @media (prefers-reduced-motion: reduce) {
+        .tm-fan-panel {
+            left: 50% !important;
+            transform: translate(-50%, -50%);
+            filter: none;
+            transition: opacity 150ms linear;
+
+            /*
+             * Everything except the active panel fades out, and the panels are all
+             * in the same place, so the incoming one fades in over the outgoing
+             * one. That is a cross-fade.
+             *
+             * The alternative -- leaving them all opaque and stacking them by
+             * z-index -- is a HARD SWAP wearing a fade: the incoming panel covers
+             * the outgoing one completely, so the outgoing one's opacity never
+             * becomes visible and the transition is decoration.
+             */
+            opacity: 0;
+        }
+
+        [data-offset='0'] {
+            opacity: 1;
+        }
+
+        .tm-stage__backdrop {
+            transform: none;
+            transition: opacity 150ms linear;
+        }
+
+        .tm-stage__caption {
+            transition: opacity 150ms linear;
+        }
+
+        .tm-stage__caption.is-settling {
+            transform: none;
+        }
+
+        .tm-discover-backdrop {
+            transition: opacity 150ms linear;
+        }
+    }
+
+>>>>>>> Stashed changes
     .tm-drag-rail {
         cursor: grab;
         scrollbar-width: none;

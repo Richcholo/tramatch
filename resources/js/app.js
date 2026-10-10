@@ -3,6 +3,13 @@ import './swipe';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { loadDrivingRoute } from './routing';
+<<<<<<< Updated upstream
+=======
+import initBudgetTier from './admin-budget-tier';
+import destinationStage from './stage';
+import './destination-search';
+import './destination-pagination';
+>>>>>>> Stashed changes
 import './home';
 
 window.Alpine = Alpine;

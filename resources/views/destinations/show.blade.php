@@ -1,4 +1,5 @@
 <x-app-layout>
+<<<<<<< Updated upstream
     <x-slot name="header">
         <a
             href="{{ route('destinations.index') }}"
@@ -15,6 +16,56 @@
                     src="{{ $destination->image_url }}"
                     alt="{{ $destination->name }}"
                     class="absolute inset-0 h-full w-full object-cover opacity-55"
+=======
+    {{--
+        /*
+         * THE WHOLE PAGE IS THE STAGE'S WORLD.
+         *
+         * One continuous Deep Volcanic Teal surface, edge to edge, from the nav
+         * bar down. The layout's header is already `bg-volcanic-teal`, so this
+         * continues it instead of starting a new one -- there is no colour change
+         * between the logo and the destination's name, and no Palawan Sand
+         * anywhere on this page.
+         *
+         * The stage began as a dark theatre set into warm paper, and the heading
+         * and the filtered bar sat on that paper above it. Asked to make the whole
+         * page that layout, the paper went with the slab: a sand surface under a
+         * teal one is two surfaces, and this only reads as one world with one
+         * ground. Everything below -- the fees, the hours, the map, the reviews,
+         * the form -- is now on the same surface, in the same light-on-dark
+         * language, and the stage is its opening rather than a panel on it.
+         *
+         * `main` is full-width on this route. `-mx-5 -my-10 sm:-mx-8` against
+         * its own `px-5 py-10 sm:px-8 lg:px-12` cancels the gutters so this
+         * background reaches the viewport edges; the inner wrapper keeps the
+         * page content at its original width. This is a BACKGROUND BLEED, not a
+         * `100vw` width -- that measures the viewport including the vertical
+         * scrollbar and lands a full-bleed block off-centre by about half a
+         * scrollbar.
+         *
+         * The `header` SLOT IS NOT USED HERE, and was not on the previous version
+         * of this page either: it renders a bordered strip above `main`, on the
+         * layout shell, which is now the same colour as the page and so has
+         * nothing left to separate. The back link sits on the page with
+         * everything else.
+         */
+    --}}
+    <div class="tm-page -mx-5 -my-10 px-5 py-10 sm:-mx-8 sm:px-8 lg:-mx-12 lg:px-12">
+        {{--
+        THE OPENING SCREEN. Heading, filtered bar and stage, filling what is
+        left of the first viewport below the nav bar.
+
+        THE HEADING IS ISLAND WHITE, not the teal it is named for. Deep Volcanic
+        Teal on Deep Volcanic Teal is 1:1 and the old heading simply vanished
+        when the ground changed -- which is the whole reason this page's colour
+        rule has to be re-derived rather than copied from the stage.
+        --}}
+        <section class="tm-page__opening mx-auto w-full max-w-[1504px]">
+            <div>
+                <a
+                    href="{{ route('destinations.index') }}"
+                    class="text-sm font-semibold text-boracay-light transition hover:text-island-white"
+>>>>>>> Stashed changes
                 >
             @else
                 <div class="absolute inset-0 bg-gradient-to-br from-boracay via-cyan-500 to-volcanic-teal"></div>
@@ -44,7 +95,12 @@
             </div>
         </section>
 
+<<<<<<< Updated upstream
         <div class="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
+=======
+        {{-- THE FACTS. Same surface, same light-on-dark language, below the fold. --}}
+        <div class="mx-auto mt-16 grid w-full max-w-[1504px] gap-8 lg:grid-cols-[1.2fr_0.8fr]">
+>>>>>>> Stashed changes
             <section class="space-y-8">
                 <div>
                     <p class="text-xs font-bold uppercase tracking-[0.28em] text-boracay-dark">

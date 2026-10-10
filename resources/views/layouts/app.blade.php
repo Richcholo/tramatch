@@ -162,7 +162,8 @@
     <main @class([
         'relative z-10',
         'w-full' => request()->routeIs('discover.index'),
-        'mx-auto max-w-[1600px] px-5 py-10 sm:px-8 lg:px-12' => ! request()->routeIs('discover.index'),
+        'w-full px-5 py-10 sm:px-8 lg:px-12' => request()->routeIs('destinations.show'),
+        'mx-auto max-w-[1600px] px-5 py-10 sm:px-8 lg:px-12' => ! request()->routeIs('discover.index') && ! request()->routeIs('destinations.show'),
     ])>
         @if (session('status'))
             <div class="mb-8 rounded-2xl border border-boracay bg-boracay-light p-4 text-benguet-charcoal">

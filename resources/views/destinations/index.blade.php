@@ -21,26 +21,55 @@
         <section class="rounded-[1.5rem] border border-boracay-light bg-palawan-sand">
             <form
                 method="GET"
+                autocomplete="off"
+                data-destination-filter-form
                 class="grid gap-5 p-6 sm:grid-cols-3 sm:items-center sm:p-8"
             >
+                <input type="hidden" name="per_page" value="{{ $perPage }}">
+
                 <label class="block">
                     <span class="text-[0.65rem] font-bold uppercase tracking-[0.25em] text-benguet-charcoal/60">
                         Location or destination
                     </span>
 
-                    <input
-                        id="destination-search"
-                        name="search"
-                        list="destination-location-options"
-                        value="{{ request('search') }}"
-                        placeholder="Search or enter a location"
-                        class="mt-3 w-full border-0 border-b border-boracay-light bg-transparent px-0 pb-3 text-sm text-volcanic-teal placeholder:text-benguet-charcoal/40 focus:border-boracay focus:ring-0"
-                    >
-                    <datalist id="destination-location-options">
-                        @foreach ($locations as $location)
-                            <option value="{{ $location }}"></option>
-                        @endforeach
-                    </datalist>
+                    <div class="relative mt-3">
+                        <input
+                            id="destination-search"
+                            name="search"
+                            type="search"
+                            autocomplete="off"
+                            value="{{ request('search') }}"
+                            placeholder="Search or enter a location"
+                            role="combobox"
+                            aria-autocomplete="list"
+                            aria-controls="destination-location-options"
+                            aria-expanded="false"
+                            data-destination-search
+                            class="w-full border-0 border-b border-boracay-light bg-transparent px-0 pb-3 text-sm text-volcanic-teal placeholder:text-benguet-charcoal/40 focus:border-boracay focus:ring-0"
+                        >
+                        <div
+                            id="destination-location-options"
+                            role="listbox"
+                            aria-label="Locations"
+                            data-destination-suggestions
+                            class="absolute left-0 right-0 top-full z-30 mt-1 max-h-64 overflow-y-auto rounded-xl border border-boracay-light bg-palawan-sand py-2 shadow-xl"
+                            hidden
+                        >
+                            @foreach ($locations as $location)
+                                <div
+                                    id="destination-location-option-{{ $loop->index }}"
+                                    role="option"
+                                    tabindex="-1"
+                                    aria-selected="false"
+                                    data-location-option
+                                    data-value="{{ $location }}"
+                                    class="w-full cursor-pointer px-4 py-2 text-left text-sm text-volcanic-teal transition hover:bg-boracay-light aria-selected:bg-boracay-light"
+                                >
+                                    {{ $location }}
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
                 </label>
 
                 <label class="block">
@@ -80,9 +109,9 @@
             </form>
         </section>
 
-        <div class="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+        <div class="grid gap-5 md:grid-cols-2 lg:grid-cols-3" data-responsive-destinations data-per-page="{{ $perPage }}">
             @forelse ($destinations as $index => $destination)
-                <article class="group overflow-hidden rounded-[1.5rem] border border-boracay-light bg-palawan-sand">
+                <article data-destination-card class="group overflow-hidden rounded-[1.5rem] border border-boracay-light bg-palawan-sand">
                     <a
                         href="{{ route('destinations.show', $destination) }}"
                         class="block"
