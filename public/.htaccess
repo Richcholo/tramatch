@@ -1,3 +1,50 @@
+# ---------------------------------------------------------------------------
+# Never serve application source or framework internals.
+#
+# DUPLICATED IN THE ROOT .htaccess ON PURPOSE. Which file the server reads
+# depends on the deployment layout: with the application root one level above
+# public_html and public_html a symlink to public/, this file is the only one
+# inside the document root and so the only one applied. With the application
+# root inside public_html/, the root .htaccess is read first. Both copies refuse
+# the same paths so the answer is identical either way.
+#
+# It exists because of what actually happened: a failed `php artisan
+# storage:link` leaves a REAL public/storage/ directory behind, and a stale
+# config cache once pointed storage_path at it. That made storage/logs/
+# laravel.log -- containing the database password and APP_KEY -- readable at
+# https://<domain>/storage/logs/laravel.log for several hours.
+#
+# The real storage subdirectories are denied by name rather than all of
+# /storage, so a correct public/storage -> ../storage/app/public symlink keeps
+# serving uploaded files. Listing logs and private as well as app/framework is
+# deliberate: if someone ever points public/storage at the whole storage/
+# directory instead of app/public, the log is still refused.
+# ---------------------------------------------------------------------------
+<IfModule mod_rewrite.c>
+    RedirectMatch 404 ^/(app|bootstrap|config|database|deploy|routes|tests|vendor)(/|$)
+    RedirectMatch 404 ^/storage/(app|framework|logs|private|testing)(/|$)
+</IfModule>
+
+# Manifests, lockfiles and environment files, wherever they end up.
+#
+# \.sh is in this list because the queue worker is the one file in this project
+# that gets copied to a path the cron entry points at, and the natural place to
+# put it is the document root. Nothing denies a stray file there: the rules above
+# only cover named directories, and the front-controller rule further down has
+# `!-f`, so an existing file is served as-is. A copy of queue-worker.sh sitting
+# next to index.php was therefore readable at /queue-worker.sh, disclosing the
+# deployment layout and log paths. It holds no secrets, which is not the same as
+# being fine to publish.
+<FilesMatch "(^\.env|\.env\.(example|production|backup)|composer\.(json|lock)|package(-lock)?\.json|phpunit\.xml|\.sh$|(^|/)\.gitignore)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
 <IfModule mod_rewrite.c>
     <IfModule mod_negotiation.c>
         Options -MultiViews -Indexes

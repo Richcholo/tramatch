@@ -1,0 +1,688 @@
+/**
+ * Itinerary editor.
+ *
+ * Everything here works on DOM the Blade view already rendered: one row per
+ * stop, carrying hidden inputs named items[<key>][...]. Because a row is keyed
+ * by its database id rather than its position, reordering a day only means
+ * rewriting the sort_order inputs, never renumbering field names.
+ *
+ * A key the browser invents is negative (see ItineraryEditor). That is how a
+ * stop the traveller just added survives being dragged around before it is
+ * saved for the first time.
+ *
+ * The day window, the lunch block and the travel gap are NOT reimplemented
+ * here. Reflow asks the server for them, so an edited day is laid out by the
+ * same rules that generated it.
+ */
+
+const TIME_PATTERN = /^\d{2}:\d{2}$/;
+
+function toMinutes(value) {
+    if (!TIME_PATTERN.test(value ?? '')) {
+        return null;
+    }
+
+    const [hours, minutes] = value.split(':').map(Number);
+
+    return hours * 60 + minutes;
+}
+
+function fromMinutes(total) {
+    const clamped = Math.max(0, Math.min(24 * 60 - 1, total));
+
+    return `${String(Math.floor(clamped / 60)).padStart(2, '0')}:${String(clamped % 60).padStart(2, '0')}`;
+}
+
+function rowFields(row, field) {
+    return row.querySelector(`[data-field="${field}"]`);
+}
+
+/**
+ * FLIP, without a library.
+ *
+ * GSAP is already a dependency but it is bundled into app.js, and this file is
+ * a separate Vite entry. Importing it here would duplicate ~70 KB into a second
+ * chunk for what amounts to one transform per moved row. The Web Animations API
+ * does exactly this natively.
+ *
+ * Measured with getBoundingClientRect rather than offsetTop because rows sit in
+ * a scrollable page and only the rect accounts for that.
+ */
+function prefersReducedMotion() {
+    return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+}
+
+/** Row positions before a DOM change, so they can be animated back from. */
+function captureTops(list, exclude) {
+    const tops = new Map();
+
+    for (const row of list.querySelectorAll('[data-stop]')) {
+        if (row === exclude) {
+            continue;
+        }
+
+        tops.set(row, row.getBoundingClientRect().top);
+    }
+
+    return tops;
+}
+
+function playFlip(before) {
+    if (prefersReducedMotion() || typeof Element.prototype.animate !== 'function') {
+        return;
+    }
+
+    for (const [row, wasAt] of before) {
+        if (!row.isConnected) {
+            continue;
+        }
+
+        const delta = wasAt - row.getBoundingClientRect().top;
+
+        if (Math.abs(delta) < 1) {
+            continue;
+        }
+
+        row.animate(
+            [
+                { transform: `translateY(${delta}px)` },
+                { transform: 'translateY(0)' },
+            ],
+            {
+                // Matches the hamburger: quick out, gentle settle. Deliberately
+                // no overshoot -- a row bouncing past its resting place reads
+                // as a mistake rather than as polish.
+                duration: 220,
+                easing: 'cubic-bezier(0.2, 0, 0, 1)',
+            },
+        );
+    }
+}
+
+function initItineraryEditor(root) {
+    const form = root.querySelector('[data-editor-form]');
+    const readView = root.querySelector('[data-editor-read]');
+    const editView = root.querySelector('[data-editor-edit]');
+    const dialog = root.querySelector('[data-add-dialog]');
+    const notice = root.querySelector('[data-editor-notice]');
+
+    if (!form || !readView || !editView || !dialog) {
+        return;
+    }
+
+    const scheduleUrl = form.dataset.scheduleUrl;
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content ?? '';
+
+    let editing = false;
+    let dirty = false;
+    let nextKey = -1;
+
+    const lists = () => [...editView.querySelectorAll('[data-stop-list]')];
+
+    function say(message, tone = 'info') {
+        if (!notice) {
+            return;
+        }
+
+        notice.textContent = message ?? '';
+        notice.dataset.tone = message ? tone : 'info';
+        notice.hidden = !message;
+    }
+
+    function markDirty() {
+        dirty = true;
+    }
+
+    /* ---------------------------------------------------------------- order */
+
+    function renumber(list) {
+        [...list.querySelectorAll('[data-stop]')].forEach((row, index) => {
+            rowFields(row, 'sort-order').value = String(index + 1);
+        });
+
+        updateArrows(list);
+    }
+
+    function updateArrows(list) {
+        const rows = [...list.querySelectorAll('[data-stop]')];
+
+        rows.forEach((row, index) => {
+            row.querySelector('[data-move="up"]').disabled = index === 0;
+            row.querySelector('[data-move="down"]').disabled = index === rows.length - 1;
+        });
+    }
+
+    function move(row, offset) {
+        const list = row.closest('[data-stop-list]');
+        const sibling = offset < 0 ? row.previousElementSibling : row.nextElementSibling;
+
+        if (!sibling) {
+            return;
+        }
+
+        const before = captureTops(list, row);
+
+        if (offset < 0) {
+            list.insertBefore(row, sibling);
+        } else {
+            list.insertBefore(sibling, row);
+        }
+
+        renumber(list);
+        playFlip(before);
+        markDirty();
+
+        // Stay on the arrow the traveller pressed, so holding space or Enter
+        // walks the row down the day. Only hand over to the handle when that
+        // arrow just hit the end of the list and disabled itself.
+        const pressed = row.querySelector(`[data-move="${offset < 0 ? 'up' : 'down'}"]`);
+        const focusTarget = pressed && !pressed.disabled ? pressed : row.querySelector('[data-drag-handle]');
+
+        focusTarget?.focus();
+    }
+
+    /* ------------------------------------------------------------- reflow */
+
+    function draftPayload() {
+        const items = {};
+        const data = new FormData(form);
+
+        for (const [name, value] of data.entries()) {
+            const match = /^items\[(-?\d+)\]\[(\w+)\]$/.exec(name);
+
+            if (!match) {
+                continue;
+            }
+
+            items[match[1]] ??= {};
+            items[match[1]][match[2]] = value;
+        }
+
+        return { items };
+    }
+
+    function applyTimes(dayId) {
+        const list = editView.querySelector(`[data-stop-list][data-day-id="${dayId}"]`);
+        const card = list?.closest('[data-day-card]');
+        const button = card?.querySelector('[data-reflow]');
+
+        button?.setAttribute('aria-busy', 'true');
+
+        fetch(scheduleUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                'X-CSRF-TOKEN': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: JSON.stringify(draftPayload()),
+        })
+            .then((response) => response.json().then((body) => ({ ok: response.ok, body })))
+            .then(({ ok, body }) => {
+                if (!ok) {
+                    say(body?.message ?? 'Those times could not be recomputed.', 'error');
+
+                    return;
+                }
+
+                const slots = body.days?.[String(dayId)] ?? {};
+                let latest = 0;
+
+                Object.entries(slots).forEach(([key, slot]) => {
+                    const row = list.querySelector(`[data-stop][data-key="${key}"]`);
+
+                    if (!row) {
+                        return;
+                    }
+
+                    rowFields(row, 'start-time').value = slot.start_time;
+                    rowFields(row, 'end-time').value = slot.end_time;
+
+                    latest = Math.max(latest, toMinutes(slot.end_time) ?? 0);
+                });
+
+                refreshTravel(list);
+                markDirty();
+
+                say(
+                    latest > 18 * 60
+                        ? `Day ${card.dataset.dayNumber} now runs to ${fromMinutes(latest)}. That is past the ${fromMinutes(18 * 60)} the planner aims for.`
+                        : `Day ${card.dataset.dayNumber} refits into ${fromMinutes(latest)}.`,
+                    latest > 18 * 60 ? 'warn' : 'info'
+                );
+            })
+            .catch(() => say('Those times could not be recomputed.', 'error'))
+            .finally(() => button?.removeAttribute('aria-busy'));
+    }
+
+    /* -------------------------------------------------------------- travel */
+
+    function refreshTravel(list) {
+        let previousEnd = null;
+
+        [...list.querySelectorAll('[data-stop]')].forEach((row) => {
+            const start = toMinutes(rowFields(row, 'start-time').value);
+            const end = toMinutes(rowFields(row, 'end-time').value);
+            const badge = row.querySelector('[data-travel]');
+            const placed = start !== null && end !== null && end > start;
+
+            if (!placed) {
+                // A stop with no usable window is still a draft, so it shows no
+                // gap and does not become the reference the next stop measures
+                // from. Letting end <= start through here used to reset the
+                // reference backwards and understate every gap after it.
+                badge.textContent = '';
+                badge.hidden = true;
+
+                return;
+            }
+
+            if (previousEnd === null) {
+                badge.textContent = 'First stop';
+            } else {
+                const gap = Math.max(0, start - previousEnd);
+
+                badge.textContent = gap === 0 ? 'Back to back' : `${gap} min travel`;
+            }
+
+            badge.hidden = false;
+            previousEnd = end;
+        });
+    }
+
+    /* ----------------------------------------------------------------- add */
+
+    function addStop(destinationId, dayId) {
+        const template = root.querySelector('[data-stop-template]');
+        const list = editView.querySelector(`[data-stop-list][data-day-id="${dayId}"]`);
+        const checkbox = dialog.querySelector(`[data-destination="${destinationId}"]`);
+
+        if (!template || !list || !checkbox) {
+            return;
+        }
+
+        const key = String(nextKey--);
+        const fragment = template.content.cloneNode(true);
+        const row = fragment.querySelector('[data-stop]');
+
+        row.dataset.key = key;
+
+        fragment.querySelectorAll('[name]').forEach((input) => {
+            input.name = input.name.replace('__KEY__', key);
+        });
+
+        const field = (name) => row.querySelector(`[data-field="${name}"]`);
+
+        field('day-id').value = dayId;
+        field('destination-id').value = destinationId;
+        field('sort-order').value = String(list.querySelectorAll('[data-stop]').length + 1);
+        field('start-time').value = '';
+        field('end-time').value = '';
+        field('note').value = '';
+
+        const link = row.querySelector('[data-stop-name]');
+
+        link.textContent = checkbox.dataset.name;
+        link.href = checkbox.dataset.url;
+        row.querySelector('[data-stop-place]').textContent = checkbox.dataset.place;
+        row.querySelector('[data-stop-cost]').textContent = checkbox.dataset.fee;
+        row.querySelector('[data-remove]').setAttribute('aria-label', `Remove ${checkbox.dataset.name}`);
+
+        for (const [label, verb] of [
+            ['[data-drag-handle]', 'Drag to reorder'],
+            ['[data-move="up"]', 'Move earlier'],
+            ['[data-move="down"]', 'Move later'],
+        ]) {
+            row.querySelector(label).setAttribute('aria-label', `${verb} ${checkbox.dataset.name}`);
+        }
+
+        list.appendChild(row);
+
+        // The rows the page shipped with are wired for dragging at init, so a
+        // row cloned from the template has to be wired here or it can only be
+        // moved with the arrow buttons until the page reloads.
+        draggable(row);
+
+        renumber(list);
+        refreshTravel(list);
+        markDirty();
+    }
+
+    /* ---------------------------------------------------------------- drag */
+
+    /**
+     * Which day's list is under the pointer right now.
+     *
+     * Resolved per move rather than once at pointerdown, which is the whole
+     * difference between reordering within a day and dragging between days. The
+     * days are a two-column grid on desktop and stacked on mobile, so this has to
+     * consider X as well as Y -- a pointer below the source day's last row can be
+     * over a completely different column.
+     *
+     * Hit-tested from the lists' own rectangles rather than with
+     * document.elementFromPoint, because the dragged row is fixed to the pointer
+     * and would otherwise be the thing under it.
+     */
+    function listUnder(pointerX, pointerY, fallback) {
+        const lists = [...editView.querySelectorAll('[data-stop-list]')];
+
+        for (const candidate of lists) {
+            const box = candidate.getBoundingClientRect();
+
+            if (
+                pointerX >= box.left &&
+                pointerX <= box.right &&
+                pointerY >= box.top &&
+                pointerY <= box.bottom
+            ) {
+                return candidate;
+            }
+        }
+
+        return fallback;
+    }
+
+    /**
+     * Point a row at the day it now sits in.
+     *
+     * The hidden day_id input is the whole contract: it is what
+     * UpdateItineraryRequest validates against this trip's own days, and what
+     * the server reads to move the item. A row that lands in another day's list
+     * without this being rewritten would post its old day_id and silently snap
+     * back on reload.
+     */
+    function adoptDay(row, list) {
+        const field = row.querySelector('[data-field="day-id"]');
+
+        if (field && list.dataset.dayId) {
+            field.value = list.dataset.dayId;
+        }
+    }
+
+    function draggable(row) {
+        const handle = row.querySelector('[data-drag-handle]');
+
+        handle.addEventListener('pointerdown', (event) => {
+            if (event.button !== 0) {
+                return;
+            }
+
+            event.preventDefault();
+
+            const source = row.closest('[data-stop-list]');
+            const placeholder = document.createElement('li');
+            const box = row.getBoundingClientRect();
+            const offsetY = event.clientY - box.top;
+            const offsetX = event.clientX - box.left;
+
+            placeholder.style.height = `${box.height}px`;
+            placeholder.className = 'rounded-xl border-2 border-dashed border-boracay bg-boracay-light/40';
+            placeholder.setAttribute('aria-hidden', 'true');
+
+            source.insertBefore(placeholder, row);
+            row.style.position = 'fixed';
+            row.style.zIndex = '40';
+            row.style.top = `${event.clientY - offsetY}px`;
+            row.style.left = `${event.clientX - offsetX}px`;
+            row.style.width = `${box.width}px`;
+            row.style.pointerEvents = 'none';
+            document.body.style.userSelect = 'none';
+
+            let pointerY = event.clientY;
+            let pointerX = event.clientX;
+            let frame = 0;
+            let lastReference = null;
+            let lastList = source;
+            let crossed = false;
+
+            const place = () => {
+                frame = 0;
+                row.style.top = `${pointerY - offsetY}px`;
+                row.style.left = `${pointerX - offsetX}px`;
+
+                const edge = 90;
+
+                if (pointerY < edge) {
+                    window.scrollBy(0, -12);
+                } else if (pointerY > window.innerHeight - edge) {
+                    window.scrollBy(0, 12);
+                }
+            };
+
+            const onMove = (moveEvent) => {
+                pointerY = moveEvent.clientY;
+                pointerX = moveEvent.clientX;
+
+                /*
+                 * Re-home the placeholder first, so the index search below runs
+                 * against the list the pointer is actually over. Doing it the other
+                 * way round would compute an index in the source list and then
+                 * insert into a different one.
+                 */
+                const target = listUnder(pointerX, pointerY, source);
+
+                if (target !== lastList) {
+                    lastList = target;
+                    crossed = true;
+
+                    if (target) {
+                        target.appendChild(placeholder);
+                    }
+
+                    // Force the reshuffle below to run: the reference that was
+                    // current belongs to the list we just left.
+                    lastReference = null;
+                }
+
+                const list = lastList;
+                const rest = [...list.querySelectorAll('[data-stop]')].filter((node) => node !== row);
+                let index = rest.length;
+
+                for (let i = 0; i < rest.length; i += 1) {
+                    const box = rest[i].getBoundingClientRect();
+
+                    if (pointerY < box.top + box.height / 2) {
+                        index = i;
+                        break;
+                    }
+                }
+
+                const reference = rest[index] ?? null;
+
+                // Only reshuffle when the target row actually changes, not on
+                // every pointermove. Animating each one would restart the
+                // siblings' transforms mid-gesture and read as jitter, and it
+                // would measure getBoundingClientRect on every mouse event
+                // while the row is fixed to the pointer.
+                if (reference !== lastReference) {
+                    const before = captureTops(list, row);
+
+                    if (reference) {
+                        list.insertBefore(placeholder, reference);
+                    } else {
+                        list.appendChild(placeholder);
+                    }
+
+                    playFlip(before);
+                    lastReference = reference;
+                }
+
+                if (!frame) {
+                    frame = requestAnimationFrame(place);
+                }
+            };
+
+            const onEnd = () => {
+                cancelAnimationFrame(frame);
+                window.removeEventListener('pointermove', onMove);
+                window.removeEventListener('pointerup', onEnd);
+                window.removeEventListener('pointercancel', onEnd);
+
+                row.style.position = '';
+                row.style.zIndex = '';
+                row.style.width = '';
+                row.style.left = '';
+                row.style.pointerEvents = '';
+                document.body.style.userSelect = '';
+
+                placeholder.replaceWith(row);
+
+                const destination = row.closest('[data-stop-list]') ?? source;
+
+                if (crossed) {
+                    adoptDay(row, destination);
+                }
+
+                /*
+                 * Both lists, not just the destination. Moving a row out of a day
+                 * leaves a gap in the source day's ordering, and renumbering only
+                 * the destination would post sort_order 1,3,4 for a day that now
+                 * has three stops -- which the reflow endpoint and the schedule
+                 * both read.
+                 */
+                renumber(destination);
+                refreshTravel(destination);
+
+                if (destination !== source) {
+                    renumber(source);
+                    refreshTravel(source);
+                }
+
+                markDirty();
+            };
+
+            handle.setPointerCapture(event.pointerId);
+            window.addEventListener('pointermove', onMove);
+            window.addEventListener('pointerup', onEnd);
+            window.addEventListener('pointercancel', onEnd);
+        });
+    }
+
+    /* --------------------------------------------------------------- wiring */
+
+    editView.addEventListener('click', (event) => {
+        const target = event.target.closest('[data-move], [data-remove], [data-reflow], [data-add]');
+
+        if (!target) {
+            return;
+        }
+
+        const row = target.closest('[data-stop]');
+
+        if (target.matches('[data-move]')) {
+            move(row, target.dataset.move === 'up' ? -1 : 1);
+        } else if (target.matches('[data-remove]')) {
+            const list = row.closest('[data-stop-list]');
+
+            row.remove();
+            renumber(list);
+            refreshTravel(list);
+            markDirty();
+        } else if (target.matches('[data-reflow]')) {
+            applyTimes(target.closest('[data-day-card]').dataset.dayId);
+        } else if (target.matches('[data-add]')) {
+            openDialog(target.closest('[data-day-card]').dataset.dayId);
+        }
+    });
+
+    function openDialog(dayId) {
+        dialog.dataset.targetDay = dayId;
+        dialog.querySelectorAll('[data-day-option]').forEach((option) => {
+            option.checked = option.value === dayId;
+        });
+
+        // Clear the last batch too, otherwise reopening the dialog still shows
+        // it ticked, the count still reads it, and confirming silently adds
+        // the same place a second time to whichever day is now chosen.
+        dialog.querySelectorAll('[data-destination]').forEach((box) => {
+            box.checked = false;
+        });
+        dialog.querySelector('[data-add-count]').textContent = '0';
+        dialog.querySelector('[data-add-confirm]').disabled = true;
+
+        dialog.showModal();
+    }
+
+    /** The day the traveller chose inside the dialog, not the one they opened it from. */
+    function chosenDay() {
+        return dialog.querySelector('[data-day-option]:checked')?.value ?? dialog.dataset.targetDay;
+    }
+
+    dialog.addEventListener('change', (event) => {
+        if (event.target.matches('[data-destination]')) {
+            const picked = dialog.querySelectorAll('[data-destination]:checked');
+
+            dialog.querySelector('[data-add-count]').textContent = String(picked.length);
+            dialog.querySelector('[data-add-confirm]').disabled = picked.length === 0;
+        }
+    });
+
+    dialog.querySelector('[data-add-confirm]').addEventListener('click', () => {
+        const dayId = chosenDay();
+        const picked = [...dialog.querySelectorAll('[data-destination]:checked')];
+
+        if (!dayId || picked.length === 0) {
+            return;
+        }
+
+        picked.forEach((checkbox) => addStop(checkbox.dataset.destination, dayId));
+
+        dialog.close();
+        say(
+            `${picked.length} ${picked.length === 1 ? 'stop' : 'stops'} added. Give ${picked.length === 1 ? 'it a time' : 'them times'} or reflow the day.`
+        );
+    });
+
+    root.querySelectorAll('[data-editor-toggle]').forEach((button) => {
+        button.addEventListener('click', () => {
+            editing = !editing;
+
+            readView.hidden = editing;
+            editView.hidden = !editing;
+
+            root.querySelectorAll('[data-editor-toggle]').forEach((each) => {
+                each.textContent = editing ? 'Stop editing' : 'Edit itinerary';
+                each.setAttribute('aria-pressed', String(editing));
+            });
+
+            lists().forEach((list) => {
+                renumber(list);
+                refreshTravel(list);
+            });
+
+            if (!editing) {
+                dirty = false;
+                say('');
+            }
+        });
+    });
+
+    root.querySelector('[data-editor-cancel]')?.addEventListener('click', () => {
+        window.location.reload();
+    });
+
+    editView.querySelectorAll('[data-stop]').forEach(draggable);
+
+    editView.addEventListener('input', (event) => {
+        if (event.target.matches('[data-field="start-time"], [data-field="end-time"]')) {
+            refreshTravel(event.target.closest('[data-stop-list]'));
+        }
+
+        markDirty();
+    });
+
+    form.addEventListener('submit', () => {
+        dirty = false;
+        say('');
+    });
+
+    window.addEventListener('beforeunload', (event) => {
+        if (editing && dirty) {
+            event.preventDefault();
+            event.returnValue = '';
+        }
+    });
+}
+
+document.querySelectorAll('[data-itinerary-editor]').forEach(initItineraryEditor);

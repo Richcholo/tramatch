@@ -38,7 +38,7 @@
 
             <button
                 type="submit"
-                class="rounded-full bg-boracay px-4 py-2 text-sm font-bold text-benguet-charcoal transition hover:bg-boracay-dark hover:text-white focus:outline-none focus:ring-2 focus:ring-boracay focus:ring-offset-2"
+                class="rounded-full bg-red-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-600 focus:ring-offset-2 active:scale-[0.98] active:duration-75"
             >
                 Log out
             </button>

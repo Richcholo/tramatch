@@ -56,7 +56,7 @@
         </div>
 
         <div class="flex flex-wrap items-center gap-4">
-            <button type="button" x-data="" x-on:click.prevent="$dispatch('open-modal', 'confirm-profile-information')" class="inline-flex min-h-11 items-center justify-center rounded-md bg-volcanic-teal px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-boracay-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-volcanic-teal">
+            <button type="button" onclick="document.getElementById('confirm-profile-information').showModal()" class="inline-flex min-h-11 items-center justify-center rounded-md bg-volcanic-teal px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-boracay-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-volcanic-teal">
                 {{ __('Save changes') }}
             </button>
 
@@ -72,22 +72,11 @@
         </div>
     </form>
 
-    <x-modal name="confirm-profile-information" focusable>
-        <div class="p-6">
-            <h2 class="font-display text-xl font-semibold text-volcanic-teal">
-                Save profile changes?
-            </h2>
-            <p class="mt-2 text-sm leading-6 text-benguet-charcoal/70">
-                Your name and email address will be updated.
-            </p>
-            <div class="mt-6 flex justify-end gap-3">
-                <x-secondary-button x-on:click="$dispatch('close')">
-                    Cancel
-                </x-secondary-button>
-                <button type="submit" form="profile-information-form" class="inline-flex min-h-10 items-center justify-center rounded-md bg-volcanic-teal px-4 py-2 text-sm font-semibold text-white transition hover:bg-boracay-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-volcanic-teal">
-                    Confirm changes
-                </button>
-            </div>
-        </div>
-    </x-modal>
+    <x-confirm-dialog
+        id="confirm-profile-information"
+        title="Save profile changes?"
+        description="Your name and email address will be updated."
+        submit-label="Confirm changes"
+        form="profile-information-form"
+    />
 </section>

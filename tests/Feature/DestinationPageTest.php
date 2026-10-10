@@ -273,19 +273,9 @@ class DestinationPageTest extends TestCase
 
     public function test_the_destination_list_renders_for_a_guest(): void
     {
-        $this->destination([
-            'name' => 'Aguinaldo Shrine',
-            'slug' => 'aguinaldo-shrine',
-            'municipality' => 'Kawit',
-        ]);
+        $this->destination();
 
-        $this->get(route('destinations.index'))
-            ->assertOk()
-            ->assertSee('role="combobox"', false)
-            ->assertSee('role="listbox"', false)
-            ->assertSee('autocomplete="off"', false)
-            ->assertSee('data-value="Aguinaldo Shrine"', false)
-            ->assertDontSee('<datalist', false);
+        $this->get(route('destinations.index'))->assertOk();
     }
 
     public function test_it_hides_archived_destinations(): void

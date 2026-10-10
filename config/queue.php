@@ -1,5 +1,24 @@
 <?php
 
+/*
+|--------------------------------------------------------------------------
+| Worker timeout
+|--------------------------------------------------------------------------
+|
+| AppServiceProvider re-registers queue:listen with this --timeout, because
+| every crawl sleeps at least five seconds and makes two HTTP requests and the
+| stock worker has no per-job timeout at all.
+|
+| A job is only handed back for another attempt after retry_after, so
+| retry_after MUST stay above this number. When it does not, a job that
+| outlives retry_after is reserved by a second worker while the first is still
+| running it, and the crawl runs twice against the same source. Both values
+| read QUEUE_WORKER_TIMEOUT here and there, so they cannot drift apart again.
+|
+*/
+
+$workerTimeout = (int) env('QUEUE_WORKER_TIMEOUT', 300);
+
 return [
 
     /*
@@ -40,7 +59,7 @@ return [
             'connection' => env('DB_QUEUE_CONNECTION'),
             'table' => env('DB_QUEUE_TABLE', 'jobs'),
             'queue' => env('DB_QUEUE', 'default'),
-            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 90),
+            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', $workerTimeout + 60),
             'after_commit' => false,
         ],
 
@@ -48,7 +67,7 @@ return [
             'driver' => 'beanstalkd',
             'host' => env('BEANSTALKD_QUEUE_HOST', 'localhost'),
             'queue' => env('BEANSTALKD_QUEUE', 'default'),
-            'retry_after' => (int) env('BEANSTALKD_QUEUE_RETRY_AFTER', 90),
+            'retry_after' => (int) env('BEANSTALKD_QUEUE_RETRY_AFTER', $workerTimeout + 60),
             'block_for' => 0,
             'after_commit' => false,
         ],
@@ -68,7 +87,7 @@ return [
             'driver' => 'redis',
             'connection' => env('REDIS_QUEUE_CONNECTION', 'default'),
             'queue' => env('REDIS_QUEUE', 'default'),
-            'retry_after' => (int) env('REDIS_QUEUE_RETRY_AFTER', 90),
+            'retry_after' => (int) env('REDIS_QUEUE_RETRY_AFTER', $workerTimeout + 60),
             'block_for' => null,
             'after_commit' => false,
         ],

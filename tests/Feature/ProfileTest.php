@@ -4,6 +4,9 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use App\Models\Tag;
+use DOMDocument;
+use DOMElement;
+use DOMXPath;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -105,6 +108,100 @@ class ProfileTest extends TestCase
             ->assertSee('Save profile changes?')
             ->assertSee('Update your password?')
             ->assertSee('/profile');
+    }
+
+    public function test_every_confirmation_dialog_opens_with_a_native_dialog_element(): void
+    {
+        $user = User::factory()->create([
+            'profile_photo_path' => 'profile-photos/avatar.jpg',
+        ]);
+
+        $response = $this
+            ->actingAs($user)
+            ->get('/editprofile')
+            ->assertOk();
+
+        foreach ([
+            'confirm-profile-photo',
+            'confirm-remove-profile-photo',
+            'confirm-profile-information',
+            'confirm-profile-password',
+            'confirm-user-deletion',
+        ] as $id) {
+            $response->assertSee('id="'.$id.'"', false);
+            $response->assertSee(
+                "document.getElementById('{$id}').showModal()",
+                false
+            );
+        }
+    }
+
+    public function test_no_confirmation_dialog_carries_a_server_rendered_display_none(): void
+    {
+        $user = User::factory()->create([
+            'profile_photo_path' => 'profile-photos/avatar.jpg',
+        ]);
+
+        $html = $this
+            ->actingAs($user)
+            ->get('/editprofile')
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringNotContainsString(
+            'display: none',
+            $html,
+            'an inline display:none cannot be overridden by x-show, which is what left a '
+                .'grey backdrop covering the page with no dialog on top'
+        );
+    }
+
+    public function test_the_profile_photo_dialog_submits_the_photo_form(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)
+            ->get('/editprofile')
+            ->assertOk()
+            ->assertSee('form="profile-photo-form"', false)
+            ->assertSee('id="profile-photo-form"', false);
+    }
+
+    public function test_the_delete_dialog_reopens_when_the_password_is_wrong(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)
+            ->from('/editprofile')
+            ->delete('/editprofile', ['password' => 'wrong-password'])
+            ->assertRedirect('/editprofile');
+
+        $html = $this
+            ->actingAs($user)
+            ->get('/editprofile')
+            ->assertOk()
+            ->getContent();
+
+        preg_match_all('#<dialog[^>]*>#', $html, $matches);
+
+        $dialog = null;
+
+        foreach ($matches[0] as $tag) {
+            if (str_contains($tag, 'id="confirm-user-deletion"')) {
+                $dialog = $tag;
+            }
+        }
+
+        $this->assertNotNull(
+            $dialog,
+            'the delete dialog must still exist after a failed attempt'
+        );
+
+        $this->assertMatchesRegularExpression(
+            '#\bopen\b#',
+            $dialog,
+            'a wrong password must leave the delete dialog open so the traveler can retry'
+        );
     }
 
     public function test_profile_information_can_be_updated(): void

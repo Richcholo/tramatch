@@ -56,7 +56,7 @@
 
                     <button
                         type="submit"
-                        class="rounded-xl bg-philippine-gold px-5 py-3 font-bold text-benguet-charcoal transition hover:bg-white"
+                        class="rounded-xl bg-philippine-gold px-5 py-3 font-bold text-benguet-charcoal transition hover:bg-white active:scale-[0.98] active:duration-75"
                     >
                         Load places
                     </button>
@@ -80,7 +80,7 @@
                 >
 
                 <section class="rounded-[2rem] bg-island-white p-6 shadow-sm ring-1 ring-boracay-light sm:p-10">
-                    <div class="grid gap-6 md:grid-cols-2">
+                    <div class="grid gap-6 md:grid-cols-3">
                         <label class="block">
                             <span class="text-xs font-bold uppercase tracking-[0.2em] text-boracay-dark">
                                 Itinerary title
@@ -107,6 +107,26 @@
                                 min="{{ now()->toDateString() }}"
                                 class="mt-3 w-full rounded-xl border-boracay-light bg-palawan-sand focus:border-boracay focus:ring-boracay"
                             >
+                        </label>
+
+                        <label class="block">
+                            <span class="text-xs font-bold uppercase tracking-[0.2em] text-boracay-dark">
+                                Days
+                            </span>
+
+                            <input
+                                type="number"
+                                name="days"
+                                value="{{ old('days', $profile->trip_duration_days) }}"
+                                min="1"
+                                max="{{ $maxDays }}"
+                                inputmode="numeric"
+                                class="mt-3 w-full rounded-xl border-boracay-light bg-palawan-sand focus:border-boracay focus:ring-boracay"
+                            >
+
+                            <span class="mt-2 block text-xs leading-5 text-benguet-charcoal/60">
+                                Defaults to the {{ $profile->trip_duration_days }} in your preferences. More days than stops leaves the extra days open.
+                            </span>
                         </label>
                     </div>
                 </section>
@@ -211,7 +231,7 @@
 
                         <button
                             type="submit"
-                            class="rounded-full bg-philippine-gold px-6 py-3 font-bold text-benguet-charcoal transition hover:bg-white"
+                            class="rounded-full bg-philippine-gold px-6 py-3 font-bold text-benguet-charcoal transition hover:bg-white active:scale-[0.98] active:duration-75"
                         >
                             Generate itinerary →
                         </button>

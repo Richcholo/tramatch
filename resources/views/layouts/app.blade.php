@@ -6,10 +6,16 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="theme-color" content="#0B252B">
 
-    <link rel="icon" href="{{ asset('images/logo.png') }}">
+    <link rel="icon" href="{{ asset('images/logo.svg') }}">
     <link rel="manifest" href="/manifest.webmanifest">
 
     <title>{{ $title ?? 'TraMatch' }}</title>
+
+    {{-- Playfair Display backs every .font-display heading on app pages.
+         Without this link those headings silently fall back to Georgia. --}}
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600&display=swap" rel="stylesheet">
 
     @vite([
         'resources/css/app.css',
@@ -71,7 +77,7 @@
                 class="flex items-center"
             >
                 <img
-                    src="{{ asset('images/logo.png') }}"
+                    src="{{ asset('images/logo.svg') }}"
                     alt="TraMatch"
                     class="h-10 w-auto"
                 >
@@ -83,9 +89,22 @@
                     title="Navigation menu"
                     class="flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-full border border-white/30 bg-white/10 text-white shadow-sm transition hover:bg-white/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-philippine-gold [&::-webkit-details-marker]:hidden"
                 >
-                    <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                        <path class="group-open:hidden" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-                        <path class="hidden group-open:block" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    {{-- Three separate lines so they can rotate into the X.
+                         Previously two whole paths were swapped with
+                         hidden/group-open:hidden, which is an instant cut --
+                         the button looked like it glitched. --}}
+                    <svg
+                        class="tm-burger h-6 w-6"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        aria-hidden="true"
+                    >
+                        <line class="tm-burger-line tm-burger-line--top" x1="4" y1="7" x2="20" y2="7" />
+                        <line class="tm-burger-line tm-burger-line--middle" x1="4" y1="12" x2="20" y2="12" />
+                        <line class="tm-burger-line tm-burger-line--bottom" x1="4" y1="17" x2="20" y2="17" />
                     </svg>
                 </summary>
 
@@ -124,13 +143,13 @@
                         </a>
                     @endif
 
-                    @if (Route::has('preferences.edit'))
+@if (Route::has('preferences.edit'))
                         <a href="{{ route('preferences.edit') }}" class="block rounded-md px-4 py-3 transition hover:bg-boracay-light hover:text-boracay-dark">
                             Preferences
                         </a>
                     @endif
 
-                    @if (Route::has('admin.dashboard') && auth()->user()->isAdmin())
+                    @if (Route::has('admin.dashboard') && auth()->check() && auth()->user()->isAdmin())
                         <a href="{{ route('admin.dashboard') }}" class="mt-1 block rounded-md bg-philippine-gold px-4 py-3 text-benguet-charcoal transition hover:bg-boracay">
                             Admin
                         </a>
@@ -141,7 +160,7 @@
                         <button
                             type="button"
                             onclick="document.getElementById('logout-confirmation').showModal()"
-                            class="block w-full rounded-md px-4 py-3 text-left text-benguet-charcoal/70 transition hover:bg-boracay-light hover:text-boracay-dark"
+                            class="block w-full rounded-md px-4 py-3 text-left text-red-600 transition hover:bg-red-50 hover:text-red-700 active:scale-[0.98] active:duration-75"
                         >
                             Log out
                         </button>
@@ -185,5 +204,7 @@
     </main>
 
     <x-logout-confirmation />
+
+    @stack('scripts')
 </body>
 </html>

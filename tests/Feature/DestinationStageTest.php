@@ -1019,14 +1019,14 @@ class DestinationStageTest extends TestCase
      * place.
      *
      * THE BOUND MOVED RATHER THAN DISAPPEARED, and that is the part worth
-     * guarding: the destination page's full-bleed surface has a bounded inner
-     * content wrapper, so the stage can only ever be as wide as the page content.
-     * Removing that cap would let `--u` run away on a 4K display and the panels
-     * would grow without limit.
+     * guarding: `main` is capped at 1600px in `layouts/app.blade.php`, so the
+     * stage can only ever be as wide as the page around it. Removing that cap as
+     * well would let `--u` run away on a 4K display and the panels would grow
+     * without limit.
      *
      * Both halves are asserted together, because neither means anything alone: a
-     * stage with no cap and no content cap is the failure, and a content cap with
-     * no assertion that the stage actually grew is the bug this page had.
+     * stage with no cap and no page cap is the failure, and a page cap with no
+     * assertion that the stage actually grew is the bug this page had.
      */
     #[Test]
     public function the_stage_grows_with_its_container_and_main_bounds_it(): void
@@ -1043,26 +1043,14 @@ class DestinationStageTest extends TestCase
             .'like and is why it was removed.'
         );
 
-        $this->assertStringContainsString(
-            'max-w-[1504px]',
-            (string) file_get_contents(resource_path('views/destinations/show.blade.php')),
-            'the full-bleed page has no bounded content sections. Without them the panels grow '
-            .'without limit on a wide display.'
+        $layout = (string) file_get_contents(resource_path('views/layouts/app.blade.php'));
+
+        $this->assertMatchesRegularExpression(
+            '/max-w-\[1600px\]/',
+            $layout,
+            'the stage no longer caps `--u`, so `main` must. Without this the panels grow '
+            .'without limit on a wide display and nothing else on the page does.'
         );
-
-        $html = (string) $this->get(route('destinations.show', $this->destination()))
-            ->assertOk()
-            ->getContent();
-        $dom = $this->dom($html);
-        $main = $dom->query('//main')->item(0);
-        $page = $dom->query('//main//*[contains(concat(" ", normalize-space(@class), " "), " tm-page ")]')->item(0);
-
-        $this->assertInstanceOf(\DOMElement::class, $main);
-        $this->assertStringContainsString('w-full', $main->getAttribute('class'));
-        $this->assertInstanceOf(\DOMElement::class, $page);
-        $opening = $dom->query('.//*[contains(concat(" ", normalize-space(@class), " "), " tm-page__opening ")]', $page)->item(0);
-        $this->assertInstanceOf(\DOMElement::class, $opening);
-        $this->assertStringContainsString('max-w-[1504px]', $opening->getAttribute('class'));
     }
 
     /**

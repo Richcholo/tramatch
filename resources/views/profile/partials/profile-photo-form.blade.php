@@ -41,32 +41,20 @@
 
         <button
             type="button"
-            x-data=""
-            x-on:click.prevent="$dispatch('open-modal', 'confirm-profile-photo')"
+            onclick="document.getElementById('confirm-profile-photo').showModal()"
             class="inline-flex min-h-11 items-center justify-center rounded-md bg-volcanic-teal px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-boracay-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-volcanic-teal"
         >
             Save photo
         </button>
     </form>
 
-    <x-modal name="confirm-profile-photo" focusable>
-        <div class="p-6">
-            <h2 class="font-display text-xl font-semibold text-volcanic-teal">
-                Save this profile photo?
-            </h2>
-            <p class="mt-2 text-sm leading-6 text-benguet-charcoal/70">
-                Your current photo will be replaced with the selected image.
-            </p>
-            <div class="mt-6 flex justify-end gap-3">
-                <x-secondary-button x-on:click="$dispatch('close')">
-                    Cancel
-                </x-secondary-button>
-                <button type="submit" form="profile-photo-form" class="inline-flex min-h-10 items-center justify-center rounded-md bg-volcanic-teal px-4 py-2 text-sm font-semibold text-white transition hover:bg-boracay-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-volcanic-teal">
-                    Confirm upload
-                </button>
-            </div>
-        </div>
-    </x-modal>
+    <x-confirm-dialog
+        id="confirm-profile-photo"
+        title="Save this profile photo?"
+        description="Your current photo will be replaced with the selected image."
+        submit-label="Confirm upload"
+        form="profile-photo-form"
+    />
 
     @if ($user->profile_photo_path)
         <form id="remove-profile-photo-form" method="post" action="{{ route('profile.photo.destroy') }}" class="mt-5 border-t border-boracay-light pt-5">
@@ -74,32 +62,22 @@
             @method('delete')
             <button
                 type="button"
-                x-data=""
-                x-on:click.prevent="$dispatch('open-modal', 'confirm-remove-profile-photo')"
+                onclick="document.getElementById('confirm-remove-profile-photo').showModal()"
                 class="inline-flex min-h-10 items-center justify-center rounded-md px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
             >
                 Remove photo
             </button>
         </form>
 
-        <x-modal name="confirm-remove-profile-photo" focusable>
-            <div class="p-6">
-                <h2 class="font-display text-xl font-semibold text-red-800">
-                    Remove your profile photo?
-                </h2>
-                <p class="mt-2 text-sm leading-6 text-benguet-charcoal/70">
-                    Your initials avatar will be shown instead.
-                </p>
-                <div class="mt-6 flex justify-end gap-3">
-                    <x-secondary-button x-on:click="$dispatch('close')">
-                        Keep photo
-                    </x-secondary-button>
-                    <button type="submit" form="remove-profile-photo-form" class="inline-flex min-h-10 items-center justify-center rounded-md bg-red-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700">
-                        Remove photo
-                    </button>
-                </div>
-            </div>
-        </x-modal>
+        <x-confirm-dialog
+            id="confirm-remove-profile-photo"
+            title="Remove your profile photo?"
+            description="Your initials avatar will be shown instead."
+            submit-label="Remove photo"
+            cancel-label="Keep photo"
+            form="remove-profile-photo-form"
+            destructive
+        />
     @endif
 
     @if (session('photoUpdated') || session('photoRemoved'))

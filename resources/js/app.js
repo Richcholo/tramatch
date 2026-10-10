@@ -3,17 +3,25 @@ import './swipe';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { loadDrivingRoute } from './routing';
-<<<<<<< Updated upstream
-=======
 import initBudgetTier from './admin-budget-tier';
 import destinationStage from './stage';
 import './destination-search';
 import './destination-pagination';
->>>>>>> Stashed changes
 import './home';
 
 window.Alpine = Alpine;
 window.L = L;
+
+/*
+ * BEFORE Alpine.start(), always.
+ *
+ * An `Alpine.data()` registration that lands after start() leaves every `x-data`
+ * on the page unevaluated. The destinations stage renders from the server, so it
+ * still looks like a stage -- with its panels, its caption and its dots all
+ * present -- while the script that moves them is silently never attached. That is
+ * indistinguishable from a frozen stage, and it reports nothing anywhere.
+ */
+Alpine.data('destinationStage', destinationStage);
 
 Alpine.start();
 
@@ -34,6 +42,13 @@ if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/sw.js');
     });
 }
+
+/*
+ * Admin-only, so it no-ops everywhere else rather than needing a guard at the
+ * call site. It reads the tier boundaries out of the rendered guideline instead
+ * of carrying its own numbers, which is why it has to run after the DOM exists.
+ */
+initBudgetTier();
 
 if (destinationMap) {
     const lat = Number(destinationMap.dataset.lat);

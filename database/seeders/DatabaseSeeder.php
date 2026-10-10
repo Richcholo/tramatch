@@ -11,6 +11,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             TagSeeder::class,
             LuzonLocationsCsvSeeder::class,
+            DestinationSourceSeeder::class,
         ]);
     }
 }
