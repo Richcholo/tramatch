@@ -795,7 +795,65 @@ init() {
 
         toggle() {
             this.paused = !this.paused;
+
+            /*
+             * RESUMING CLEARS THE FOCUS HOLD. The hold exists so the fan does not
+             * move under a keyboard visitor working the dots, and it is not a
+             * reason to ignore an explicit request to start again: press Play and
+             * watch nothing move, with the control reading "playing" and the stage
+             * frozen, which is the reported "autoplay isn't working".
+             *
+             * Before this, the click that moved focus into the stage had already
+             * pushed 'focus' onto `held` -- and a click on the pause button IS
+             * focus, whatever the pointer intended -- so `autoplayable()` was false
+             * on the very call that was supposed to resume.
+             */
+            this.release('focus');
+
             this.scheduleAutoplay();
+        },
+
+        /**
+         * Hold autoplay for KEYBOARD focus, and only for keyboard focus.
+         *
+         * Every control on the stage is focusable, and focus does not leave on its
+         * own: once a click lands on a dot, a chevron or the pause button, focus
+         * stays there until the visitor clicks somewhere else. So a plain
+         * `focusin` -> hold is a timer that stops on first interaction and is
+         * restarted by nothing the visitor is doing -- the same failure hover-hold
+         * had, where the stage is the whole opening screen so the pointer is over
+         * it for exactly as long as anyone reads it. Hover was removed for that
+         * reason; this is the same trap one interaction narrower, and it survived
+         * because the trigger (a click) is rarer than the trigger (a cursor).
+         *
+         * `:focus-visible` is the distinction the platform already draws. A
+         * pointer click does not set it; a Tab does. So a mouse user clicking
+         * through the controls leaves the timer running, and a keyboard user
+         * tabbing between the dots still gets a stage that holds still under them.
+         */
+        focusIn(event) {
+            const target = event.target;
+
+            let keyboard = true;
+
+            try {
+                keyboard = !(target instanceof Element) || target.matches(':focus-visible');
+            } catch (error) {
+                /*
+                 * A browser without `:focus-visible` holds. That is the safe
+                 * direction to fail in: it stops a timer rather than starting one
+                 * under somebody using a keyboard, and `toggle()` above still gives
+                 * them their explicit request back.
+                 */
+            }
+
+            if (keyboard) {
+                this.hold('focus');
+
+                return;
+            }
+
+            this.release('focus');
         },
 
         hold(reason) {

@@ -1870,6 +1870,133 @@ class DestinationStageTest extends TestCase
     }
 
     /**
+     * THE FOCUS HOLD IS FOR KEYBOARD FOCUS, AND ONLY FOR KEYBOARD
+     * FOCUS.
+     *
+     * `autoplayable()` refuses to run while `held` is not empty, and `focusin`
+     * pushed 'focus' onto it unconditionally. Every control on the stage is
+     * focusable and focus does not leave on its own, so one click anywhere on
+     * the stage stopped the timer for good: a timer held for the rest of the
+     * visit by an interaction the visitor had finished with.
+     *
+     * It is the failure hover-hold was removed for -- "a timer held for the
+     * entire dwell is a timer that never fires while anyone is watching" --
+     * one interaction narrower, and it survived because a click is rarer than a
+     * cursor sitting there reading.
+     *
+     * `:focus-visible` is the line the platform already draws: a pointer click
+     * does not set it, a Tab does. So the mouse keeps its autoplay and the
+     * keyboard still gets a stage that holds still while it is being driven.
+     */
+    #[Test]
+    public function the_focus_hold_is_for_keyboard_focus_only(): void
+    {
+        $stage = (string) file_get_contents(
+            resource_path('views/components/destinations/stage.blade.php')
+        );
+
+        $this->assertStringContainsString(
+            'x-on:focusin="focusIn($event)"',
+            $stage,
+            'the stage does not route focusin through focusIn(), so a mouse click '
+            .'on a control holds the autoplay for the rest of the visit'
+        );
+
+        $this->assertStringNotContainsString(
+            '@focusin="hold(\'focus\')"',
+            $stage,
+            'focusin holds the autoplay unconditionally again, so one click stops '
+            .'the timer permanently'
+        );
+
+        $script = $this->script();
+
+        $this->assertStringContainsString(
+            "focusIn(event)",
+            $script,
+            'the stage script has no focusIn(), so the markup calls a method that '
+            .'does not exist and the stage throws on the first focus event'
+        );
+
+        $this->assertStringContainsString(
+            "matches(':focus-visible')",
+            $script,
+            'the focus hold does not test :focus-visible, so it cannot tell a '
+            .'keyboard user from a mouse user and holds for both'
+        );
+    }
+
+    /**
+     * THE PAUSE CONTROL CAN ALWAYS RESUME.
+     *
+     * `toggle()` used to call `scheduleAutoplay()` and nothing else, so it was at
+     * the mercy of whatever was already holding the timer -- including the 'focus'
+     * that the click on the pause button itself had just pushed. The control's
+     * accessible label said "Resume the slideshow", the glyph said play, and the
+     * stage sat still.
+     *
+     * That is the reported "autoplay isn't working" with the pause button still
+     * rendered and still reading correctly: every part of the interface agreed
+     * autoplay was running.
+     */
+    #[Test]
+    public function the_pause_control_can_always_resume(): void
+    {
+        /*
+         * Bounded to ONE METHOD BODY. `[\s\S]*?` runs straight past `toggle()`'s
+         * closing brace and finds the `release('focus')` inside `focusIn()`
+         * instead, so the assertion passed with the very call it was written for
+         * deleted. The one-level-nested-brace alternation is what keeps the match
+         * inside the method it names.
+         */
+        $this->assertMatchesRegularExpression(
+            '/toggle\(\) \{(?:[^{}]|\{[^{}]*\})*this\.release\(\'focus\'\);/',
+            $this->script(),
+            'toggle() does not release the focus hold, so resuming is refused by '
+            .'the very click that asked for it: the control reads "playing" and '
+            .'the stage stays frozen'
+        );
+    }
+
+    /**
+     * AUTOPLAY NEEDS MORE THAN ONE PHOTOGRAPH, and that is the whole of
+     * its precondition.
+     *
+     * The stage holds ONE destination (the one you arrived at), so `count` is
+     * that destination's photographs: its hero plus its uploads. A destination
+     * with one photograph has nothing to advance to, so the pager and the
+     * mandatory pause control do not render either -- a pause button that cannot
+     * pause anything would be worse than none.
+     *
+     * Worth stating because it makes "autoplay isn't working" a statement about
+     * the catalogue and not about the timer: a stage that never moves is the
+     * correct behaviour for a destination nobody has uploaded a second
+     * photograph for.
+     */
+    #[Test]
+    public function autoplay_needs_more_than_one_photograph_to_move(): void
+    {
+        $this->assertMatchesRegularExpression(
+            '/autoplayable\(\) \{(?:[^{}]|\{[^{}]*\})*this\.count > 1/',
+            $this->script(),
+            'autoplay no longer requires more than one photograph, so a '
+            .'single-photograph destination either spins on a one-item array '
+            .'or renders a pause control for a slideshow of one'
+        );
+
+        $pager = (string) file_get_contents(
+            resource_path('views/components/destinations/stage-pager.blade.php')
+        );
+
+        $this->assertStringContainsString(
+            '@if ($count > 1)',
+            $pager,
+            'the pager renders for a single photograph, so a pause control '
+            .'appears on a slideshow with nothing to advance through'
+        );
+    }
+
+    /**
      * The standfirst and the prose block are a PAIR, so no sentence appears twice.
      *
      * The caption prints the description's first sentence; the body prints what

@@ -785,6 +785,35 @@ it**, which is why it asserts the invariant now.
   asked — it is always in the accessibility tree and always visible —
   and that is where the decision belongs, not under the visitor's cursor
   by accident. A hidden tab also stops it.
+- **THE FOCUS HOLD IS FOR KEYBOARD FOCUS ONLY, AND IT WAS REPORTED AS
+  "AUTOPLAY ISN'T WORKING" FOR THE SAME REASON HOVER WAS.** Every
+  control on the stage is focusable and **focus does not leave on its
+  own** — once a click lands on a dot, a chevron or the pause button,
+  focus sits there until the visitor clicks somewhere else. So a plain
+  `focusin` → hold is a timer that stops on first interaction and is
+  restarted by nothing the visitor is doing. `focusIn($event)` now tests
+  `:focus-visible`, which is the line the platform already draws: a
+  pointer click does not set it, a Tab does. A browser without
+  `:focus-visible` holds, which is the safe direction to fail in.
+- **`toggle()` RELEASES THE FOCUS HOLD, OR THE PAUSE CONTROL CANNOT
+  RESUME.** The hold is a reason not to move the fan under a keyboard
+  visitor working the dots; it is not a reason to ignore an explicit
+  request to start again. Without the release, the click on the pause
+  button had itself pushed `'focus'` onto `held`, so `autoplayable()`
+  was false **on the very call that was supposed to resume** — the
+  control's label read "Resume the slideshow", the glyph showed play,
+  and the stage sat still. Every part of the interface agreeing that
+  autoplay was running is what made it read as broken rather than
+  paused.
+- **AUTOPLAY NEEDS MORE THAN ONE PHOTOGRAPH, AND THE STAGE HOLDS ONE
+  DESTINATION.** `count` is *that* destination's photographs — hero
+  plus uploads — because the payload is filtered to a single slug. A
+  destination with one photograph has nothing to advance to, so
+  `autoplayable()` is false and the pager (which carries the mandatory
+  pause control) does not render either. **So "autoplay isn't working"
+  is very often a statement about the catalogue, not the timer**: check
+  the destination's photograph count before touching `stage.js`. It is
+  `1 + COUNT(destination_images)` per destination.
 - **THERE IS NO `x-cloak` RULE IN `app.css`**, so the pause/play glyph swap is CSS
   keyed off `aria-pressed` — the attribute the control needs anyway — rather than
   `x-show`, which would paint both glyphs for a frame. `element.hidden` on the

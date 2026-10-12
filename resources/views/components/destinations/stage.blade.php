@@ -84,8 +84,8 @@
             @keydown.arrow-right.prevent="next()"
             @keydown.home.prevent="go(0)"
             @keydown.end.prevent="go(count - 1)"
-             @focusin="hold('focus')"
-             @focusout="release('focus')"
+            x-on:focusin="focusIn($event)"
+            x-on:focusout="release('focus')"
             class="tm-stage"
         >
             {{--
