@@ -188,11 +188,34 @@
                         Crawl progress
                     </h2>
 
+                    @php
+                        /*
+                         * Built as a list rather than with inline @if, because a
+                         * Blade directive glued to the end of a WORD is never
+                         * compiled: the directive regex is `\B@(...)`, it needs
+                         * a non-word-boundary before the `@`, and here the
+                         * preceding character is `d` of "checked". So
+                         * `checked@if (...)` compiled to itself and the admin
+                         * read `@if ($summary['queued'] > 0), 0 waiting in the
+                         * queue@endif.` on the page. The `{{ }}` either side
+                         * compiled normally, which is what made it look like the
+                         * counts were wrong rather than the directive being
+                         * inert.
+                         *
+                         * These parts must match the JS `renderSummary()` below,
+                         * or the line changes text the first time a poll lands.
+                         */
+                        $progressParts = array_values(array_filter([
+                            $summary['active'] > 0 ? $summary['active'].' crawling now' : null,
+                            $summary['queued'] > 0 ? $summary['queued'].' waiting in the queue' : null,
+                        ]));
+                    @endphp
+
                     <p
                         data-progress-line
                         class="mt-2 text-sm text-benguet-charcoal/60"
                     >
-                        {{ $summary['finished'] }} of {{ $summary['total'] }} sources checked@if ($summary['queued'] > 0), {{ $summary['queued'] }} waiting in the queue@endif.
+                        {{ $summary['finished'] }} of {{ $summary['total'] }} sources checked{{ $progressParts ? ' · '.implode(' · ', $progressParts) : '' }}.
                     </p>
                 </div>
 
