@@ -662,6 +662,23 @@ it**, which is why it asserts the invariant now.
   their `textContent`. `font-variant-numeric: tabular-nums` is load-bearing: a
   number that changes width while it changes is worse than one that does not
   animate.
+- **THE CURRENCY SYMBOL IS DECLARED ONCE, IN THE MARKUP, AND THE SCRIPT
+  ONLY READS IT.** The cost metric's value is animated, so `syncNumbers()`
+  formats it as `costPrefix() + number`, and `costPrefix()` reads
+  `data-stage-prefix`, which `stage-caption.blade.php` sets to `₱`. It used to
+  ALSO emit a hard-coded `₱` of its own, and the caption read `EST. COST` and
+  **`₱₱225`**. Only after the stage hydrated, too: the server-rendered fallback
+  comes from `CarouselSlide::peso()`, which adds exactly one, so the markup was
+  right and the script was wrong and nothing else on the page disagreed. A test
+  asserting the caption "shows the estimated cost" passes on both.
+  `the_currency_symbol_is_declared_once` pins the invariant, and it strips block
+  comments from `stage.js` before searching — the `syncMetrics()` docblock quotes
+  `₱1,250` as prose about what a stray separator looks like, and an unstripped
+  search reads the comment and concludes the code is wrong. The positive half is
+  load-bearing too: without it, "fix" the doubling by deleting `costPrefix()`
+  and leaving the hard-coded sign, which renders correctly and makes
+  `data-stage-prefix` dead markup nobody notices is now the currency's only
+  declaration.
 - **THE MATCH SCORE IS EMPTY FOR A GUEST**, which is the honest answer rather than
   a missing feature. The label **and the separator that follows it** are hidden
   together, or the row reads "· EST. COST ₱450". It comes from

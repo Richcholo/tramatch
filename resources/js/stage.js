@@ -663,6 +663,15 @@ init() {
          * Tabular numerals on the label so the width does not move while the digits
          * change -- an animated number that reflows the row it sits in is worse
          * than one that does not animate at all.
+         *
+         * THE CURRENCY SYMBOL IS READ, NEVER WRITTEN. The formatter used to emit
+         * `costPrefix()` -- which reads `data-stage-prefix`, where the markup
+         * declares the symbol -- AND a peso sign of its own, and the caption read
+         * "EST. COST" and "₱₱225". Only after the stage hydrated, too: the
+         * server-rendered fallback comes from `CarouselSlide::peso()`, which
+         * carries exactly one, so the markup was right and the script was not
+         * and nothing else in the page disagreed. `the_currency_symbol_is_declared_once`
+         * pins it.
          */
         syncNumbers() {
             const cost = this.active() ? this.active().estimatedCost : null;
@@ -676,7 +685,7 @@ init() {
             this.countUp(
                 this.$el.querySelector('[data-stage-number="cost"]'),
                 cost,
-                (value) => `${this.costPrefix()}₱${Math.round(value).toLocaleString('en-PH')}`
+                (value) => `${this.costPrefix()}${Math.round(value).toLocaleString('en-PH')}`
             );
         },
 

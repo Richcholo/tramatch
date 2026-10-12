@@ -1802,6 +1802,74 @@ class DestinationStageTest extends TestCase
     }
 
     /**
+     * THE CURRENCY SYMBOL IS DECLARED ONCE.
+     *
+     * `syncNumbers()` animates the cost metric, and its formatter used to write
+     * `costPrefix()` -- which reads `data-stage-prefix`, where the markup
+     * declares the symbol -- AND a peso sign of its own. Both halves rendered
+     * correctly and the caption read "EST. COST" and "₱₱225".
+     *
+     * Only after the stage hydrated, which is why nothing objected: the
+     * server-rendered fallback comes from `CarouselSlide::peso()` and carries
+     * exactly one, so the markup was right, the script was not, and the two
+     * disagreed in the browser and nowhere else. A test asserting the caption
+     * "shows the estimated cost" passes on both.
+     *
+     * So the formatter reads the prefix and adds nothing, and the executable
+     * script hard-codes no currency character at all -- which is also what
+     * keeps a currency change flowing to the server-rendered value and the
+     * animated one together.
+     */
+    #[Test]
+    public function the_currency_symbol_is_declared_once(): void
+    {
+        $dom = $this->dom(
+            (string) $this->get(route('destinations.show', $this->destination()))
+                ->assertOk()
+                ->getContent()
+        );
+
+        $prefixes = $dom->query('//*[@data-stage-prefix]');
+
+        $this->assertSame(
+            1,
+            $prefixes->length,
+            'the cost metric does not declare its currency prefix, so the '
+            .'animated value has nothing to read it from'
+        );
+
+        $this->assertSame(
+            "\u{20B1}",
+            $prefixes->item(0)->getAttribute('data-stage-prefix'),
+            'the cost metric does not declare the peso sign as its prefix'
+        );
+
+        /*
+         * Comments are prose, and this file's comments quote a peso amount to
+         * describe what a stray separator looks like. Strip block comments
+         * before searching, or the prose satisfies the assertion it is
+         * warning about.
+         */
+        $code = (string) preg_replace('/\/\*.*?\*\//s', '', $this->script());
+
+        $this->assertStringContainsString(
+            'this.costPrefix()',
+            $code,
+            'the cost formatter does not read the prefix from the markup, so '
+            .'the symbol ends up declared in two places that have to be kept '
+            .'in step'
+        );
+
+        $this->assertStringNotContainsString(
+            "\u{20B1}",
+            $code,
+            'the stage script hard-codes a currency symbol, so a value that '
+            .'already carries one from the markup renders doubled -- '
+            .'"Est. cost ₱₱225". Declare it once, in data-stage-prefix'
+        );
+    }
+
+    /**
      * The standfirst and the prose block are a PAIR, so no sentence appears twice.
      *
      * The caption prints the description's first sentence; the body prints what
