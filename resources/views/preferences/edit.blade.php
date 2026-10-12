@@ -5,7 +5,7 @@
                 01 / Set a direction
             </p>
 
-            <h1 class="mt-2 font-display text-3xl font-semibold text-volcanic-teal sm:text-4xl">
+            <h1 class="mt-2 font-display text-3xl font-semibold text-ink-strong sm:text-4xl">
                 Tell us what feels like you.
             </h1>
         </div>
@@ -33,7 +33,7 @@
                         @foreach (['economy', 'mid-range', 'premium'] as $budget)
                             <option
                                 value="{{ $budget }}"
-                                class="text-benguet-charcoal"
+                                class="text-ink"
                                 @selected(old('budget_level', $profile?->budget_level ?? 'economy') === $budget)
                             >
                                 {{ ucfirst($budget) }}
@@ -112,7 +112,7 @@
             }"
             x-init="refreshSelectedInterests()"
             x-on:change="if ($event.target.matches('select[name^=weights]')) refreshSelectedInterests()"
-            class="rounded-xl bg-island-white p-5 shadow-sm ring-1 ring-boracay-light sm:p-6"
+            class="rounded-xl bg-surface-raised p-5 shadow-sm ring-1 ring-boracay-light sm:p-6"
         >
             <div class="flex flex-wrap items-end justify-between gap-4">
                 <div>
@@ -120,11 +120,11 @@
                         02 / Your signals
                     </p>
 
-                    <h2 class="mt-2 font-display text-2xl font-semibold text-volcanic-teal">
+                    <h2 class="mt-2 font-display text-2xl font-semibold text-ink-strong">
                         What do you naturally look for?
                     </h2>
 
-                    <p class="mt-2 max-w-2xl text-sm leading-5 text-benguet-charcoal/65">
+                    <p class="mt-2 max-w-2xl text-sm leading-5 text-ink/65">
                         Mark the interests that matter. Higher numbers mean stronger preference.
                     </p>
                 </div>
@@ -136,14 +136,14 @@
 
             <div class="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                 @foreach ($tags as $tag)
-                    <label class="flex items-center justify-between gap-2 rounded-lg border border-boracay-light bg-palawan-sand px-3 py-2 transition hover:border-boracay">
-                        <span class="text-sm font-semibold leading-tight text-volcanic-teal">
+                    <label class="flex items-center justify-between gap-2 rounded-lg border border-line bg-surface px-3 py-2 transition hover:border-boracay">
+                        <span class="text-sm font-semibold leading-tight text-ink-strong">
                             {{ $tag->name }}
                         </span>
 
                         <select
                             name="weights[{{ $tag->id }}]"
-                            class="w-24 shrink-0 rounded-md border-boracay-light bg-white px-2 py-1.5 text-xs focus:border-boracay focus:ring-boracay"
+                            class="w-24 shrink-0 rounded-md border-line bg-white px-2 py-1.5 text-xs focus:border-boracay focus:ring-boracay"
                         >
                             <option value="0">
                                 Not selected
@@ -162,12 +162,12 @@
                 @endforeach
             </div>
 
-            <div class="mt-5 border-t border-boracay-light pt-4" aria-live="polite">
+            <div class="mt-5 border-t border-line pt-4" aria-live="polite">
                 <div class="flex flex-wrap items-center justify-between gap-3">
-                    <h3 class="text-sm font-semibold text-volcanic-teal">
+                    <h3 class="text-sm font-semibold text-ink-strong">
                         Selected interests
                     </h3>
-                    <p class="text-sm text-benguet-charcoal/60">
+                    <p class="text-sm text-ink/60">
                         <span x-text="selectedInterests.length">0</span>
                         selected
                     </p>
@@ -175,7 +175,7 @@
 
                 <div class="mt-3 flex flex-wrap gap-2">
                     <template x-for="interest in selectedInterests" :key="interest.name">
-                        <span class="inline-flex items-center gap-1 rounded-full bg-boracay-light px-2.5 py-1 text-xs text-boracay-dark">
+                        <span class="inline-flex items-center gap-1 rounded-full bg-line px-2.5 py-1 text-xs text-boracay-dark">
                             <span x-text="interest.name"></span>
                             <span aria-hidden="true" class="text-boracay-dark/50">·</span>
                             <span class="font-semibold" x-text="interest.level"></span>
@@ -183,7 +183,7 @@
                     </template>
 
                     <template x-if="selectedInterests.length === 0">
-                        <p class="text-sm text-benguet-charcoal/55">
+                        <p class="text-sm text-ink/55">
                             No interests selected yet.
                         </p>
                     </template>
@@ -192,7 +192,7 @@
         </section>
 
         <div class="flex flex-wrap items-center justify-between gap-4">
-            <p class="text-sm text-benguet-charcoal/60">
+            <p class="text-sm text-ink/60">
                 Saving new preferences refreshes your discovery deck.
             </p>
 

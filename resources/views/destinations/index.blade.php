@@ -6,25 +6,25 @@
                     TraMatch / Collection
                 </p>
 
-                <h1 class="mt-3 font-display text-5xl font-medium uppercase leading-[0.85] tracking-[-0.05em] text-volcanic-teal sm:text-7xl lg:text-8xl">
+                <h1 class="mt-3 font-display text-5xl font-medium uppercase leading-[0.85] tracking-[-0.05em] text-ink-strong sm:text-7xl lg:text-8xl">
                     Destinations
                 </h1>
             </div>
 
-            <span class="hidden text-xs font-bold uppercase tracking-[0.25em] text-benguet-charcoal/45 md:block">
+            <span class="hidden text-xs font-bold uppercase tracking-[0.25em] text-ink/45 md:block">
                 Luzon / Philippines
             </span>
         </div>
     </x-slot>
 
     <div class="space-y-8">
-        <section class="rounded-[1.5rem] border border-boracay-light bg-palawan-sand">
+        <section class="rounded-[1.5rem] border border-line bg-surface">
             <form
                 method="GET"
                 class="grid gap-5 p-6 sm:grid-cols-3 sm:items-center sm:p-8"
             >
                 <label class="block">
-                    <span class="text-[0.65rem] font-bold uppercase tracking-[0.25em] text-benguet-charcoal/60">
+                    <span class="text-[0.65rem] font-bold uppercase tracking-[0.25em] text-ink/60">
                         Location or destination
                     </span>
 
@@ -34,7 +34,7 @@
                         list="destination-location-options"
                         value="{{ request('search') }}"
                         placeholder="Search or enter a location"
-                        class="mt-3 w-full border-0 border-b border-boracay-light bg-transparent px-0 pb-3 text-sm text-volcanic-teal placeholder:text-benguet-charcoal/40 focus:border-boracay focus:ring-0"
+                        class="mt-3 w-full border-0 border-b border-line bg-transparent px-0 pb-3 text-sm text-ink-strong placeholder:text-ink/40 focus:border-boracay focus:ring-0"
                     >
                     <datalist id="destination-location-options">
                         @foreach ($locations as $location)
@@ -44,13 +44,13 @@
                 </label>
 
                 <label class="block">
-                    <span class="text-[0.65rem] font-bold uppercase tracking-[0.25em] text-benguet-charcoal/60">
+                    <span class="text-[0.65rem] font-bold uppercase tracking-[0.25em] text-ink/60">
                         Budget
                     </span>
 
                     <select
                         name="budget_level"
-                        class="mt-3 w-full border-0 border-b border-boracay-light bg-transparent px-0 pb-3 text-sm text-volcanic-teal focus:border-boracay focus:ring-0"
+                        class="mt-3 w-full border-0 border-b border-line bg-transparent px-0 pb-3 text-sm text-ink-strong focus:border-boracay focus:ring-0"
                     >
                         <option value="">All budgets</option>
 
@@ -66,7 +66,7 @@
                 </label>
 
                 <div class="flex items-end justify-between gap-4 sm:justify-end">
-                    <span class="text-[0.65rem] font-bold uppercase tracking-[0.25em] text-benguet-charcoal/45">
+                    <span class="text-[0.65rem] font-bold uppercase tracking-[0.25em] text-ink/45">
                         {{ $destinations->total() }} places
                     </span>
 
@@ -82,7 +82,7 @@
 
         <div class="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
             @forelse ($destinations as $index => $destination)
-                <article class="group overflow-hidden rounded-[1.5rem] border border-boracay-light bg-palawan-sand">
+                <article class="group overflow-hidden rounded-[1.5rem] border border-line bg-surface">
                     <a
                         href="{{ route('destinations.show', $destination) }}"
                         class="block"
@@ -104,13 +104,13 @@
                     <div class="p-6">
                         <div class="flex items-start justify-between gap-4">
                             <div>
-                                <p class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-benguet-charcoal/45">
+                                <p class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-ink/45">
                                     0{{ $index + 1 }}
                                     /
                                     {{ $destination->province }}
                                 </p>
 
-                                <h2 class="mt-4 font-display text-3xl font-medium leading-tight text-volcanic-teal">
+                                <h2 class="mt-4 font-display text-3xl font-medium leading-tight text-ink-strong">
                                     {{ $destination->name }}
                                 </h2>
                             </div>
@@ -120,7 +120,7 @@
                             </span>
                         </div>
 
-                        <p class="mt-5 line-clamp-3 text-sm leading-6 text-benguet-charcoal/65">
+                        <p class="mt-5 line-clamp-3 text-sm leading-6 text-ink/65">
                             {{ $destination->description }}
                         </p>
 
@@ -133,22 +133,22 @@
                         </div>
 
                         @if ($destination->hasOpeningHours())
-                            <p class="mt-5 text-sm text-benguet-charcoal/70">
-                                <span class="font-bold text-volcanic-teal">{{ $destination->formatHours() }}</span>
+                            <p class="mt-5 text-sm text-ink/70">
+                                <span class="font-bold text-ink-strong">{{ $destination->formatHours() }}</span>
                                 @if ($destination->closedDaysLabel())
-                                    <span class="text-benguet-charcoal/55"> · {{ $destination->closedDaysLabel() }}</span>
+                                    <span class="text-ink/55"> · {{ $destination->closedDaysLabel() }}</span>
                                 @endif
                             </p>
                         @endif
 
-                        <div class="mt-7 flex items-center justify-between border-t border-boracay-light pt-5">
-                            <span class="text-sm text-benguet-charcoal/55">
+                        <div class="mt-7 flex items-center justify-between border-t border-line pt-5">
+                            <span class="text-sm text-ink/55">
                                 From ₱{{ number_format($destination->estimated_cost, 2) }}
                             </span>
 
                             <a
                                 href="{{ route('destinations.show', $destination) }}"
-                                class="text-sm font-bold text-volcanic-teal transition group-hover:text-boracay-dark"
+                                class="text-sm font-bold text-ink-strong transition group-hover:text-boracay-dark"
                             >
                                 View place ↗
                             </a>
@@ -156,16 +156,16 @@
                     </div>
                 </article>
             @empty
-                <div class="border border-boracay-light bg-palawan-sand p-10 md:col-span-2 lg:col-span-3">
+                <div class="border border-line bg-surface p-10 md:col-span-2 lg:col-span-3">
                     <p class="text-xs font-bold uppercase tracking-[0.25em] text-boracay-dark">
                         No results
                     </p>
 
-                    <h2 class="mt-5 font-display text-5xl font-medium text-volcanic-teal">
+                    <h2 class="mt-5 font-display text-5xl font-medium text-ink-strong">
                         Nothing matched this search.
                     </h2>
 
-                    <p class="mt-4 max-w-xl text-benguet-charcoal/65">
+                    <p class="mt-4 max-w-xl text-ink/65">
                         Try a different destination name, province, or budget level.
                     </p>
                 </div>

@@ -230,7 +230,7 @@
                         @disabled($isClosed)
                         class="rounded-lg border-slate-300"
                     >
-                    <span class="text-benguet-charcoal/50">to</span>
+                    <span class="text-ink/50">to</span>
                     <input
                         type="time"
                         name="daily_hours[{{ $day }}][close]"

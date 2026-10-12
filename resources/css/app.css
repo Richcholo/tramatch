@@ -11,6 +11,56 @@
     --color-benguet-charcoal: #2C3531;
     --color-island-white: #FFFFFF;
 
+    /*
+     * SEMANTIC TOKENS, AND THIS IS THE WHOLE THEME SYSTEM.
+     *
+     * The palette above names COLOURS. These name ROLES, which is the only
+     * thing that can survive being drawn twice: `surface` is the card, `ink` is
+     * the text on it, `page` is the ground behind the cards -- and a role can
+     * have a different value per theme, while a colour cannot.
+     *
+     * THE LIGHT VALUES ARE BYTE-FOR-BYTE WHAT THE PALETTE TOKENS ALREADY WERE.
+     * That is deliberate and it is the reason this migration is safe to land in
+     * one commit: `bg-surface` on the light theme is literally
+     * `bg-palawan-sand`, so switching a view over to the semantic token is a
+     * rename, not a restyle, and light mode cannot move. It is asserted by
+     * `the_light_theme_is_exactly_the_palette_it_replaced`.
+     *
+     * A PALETTE TOKEN CANNOT SIMPLY BE FLIPPED, and this is why. Several are
+     * used in two roles at once: `bg-island-white` is a card surface on a light
+     * page AND light text on the stage; `bg-benguet-charcoal` is the ink on
+     * the turquoise Like button AND would be the ink token; and
+     * `bg-volcanic-teal` is an always-dark header bar that has to stay dark in
+     * BOTH themes. Redefining those under `.dark` would repaint the header and
+     * put light-on-light somewhere. Hence roles.
+     */
+    --color-page: #D7E4DB;
+    --color-surface: #FDFBF7;
+    --color-surface-raised: #FFFFFF;
+    --color-line: #E1F7F3;
+    --color-ink: #2C3531;
+    --color-ink-strong: #0B252B;
+
+    /*
+     * INK ON A BRIGHT FILL, AND THESE TWO ARE NOT REDEFINED UNDER `.dark` --
+     * that is the point of them.
+     *
+     * A blanket rename gets these wrong: `text-ink` becomes Sea Glass on the
+     * dark theme, and Sea Glass on Boracay Turquoise or Philippine Gold is a
+     * weak pairing, so every filled button would lose its contrast the moment
+     * the theme flipped. The ink on a bright fill is not a theme role at all --
+     * gold and turquoise stay gold and turquoise in both themes, so the ink on
+     * them does too.
+     *
+     * Both values are the ones the buttons already carried: `ink-fill` is the
+     * charcoal most filled buttons used, and `ink-fill-strong` is the volcanic
+     * teal the deck's own primary button settled on, because teal on turquoise
+     * measured 5.0:1 where charcoal measured 3.98:1. Two constants, so light
+     * mode stays byte-identical rather than being tidied into one.
+     */
+    --color-ink-fill: #2C3531;
+    --color-ink-fill-strong: #0B252B;
+
     --animate-float: float 7s ease-in-out infinite;
     --animate-float-delay: float 7s 1.5s ease-in-out infinite;
     --animate-reveal: reveal 800ms ease both;
@@ -60,6 +110,35 @@
      */
     html.dark {
         color-scheme: dark;
+    }
+
+    /*
+     * THE DARK HALF, AND IT IS THE DESTINATIONS STAGE'S WORLD.
+     *
+     * Not a darker version of the light theme. The ground is the same Deep
+     * Volcanic Teal the stage and the deck are already built on, and a card is
+     * the stage's own `.tm-panel` treatment: `rgb(255 255 255 / 0.04)` with a
+     * hairline, lifted by light rather than by a different fill. That is why
+     * the dark values are translucent white and not a solid dark grey -- a solid
+     * card on this ground is the flat colour block the stage's panel rules
+     * forbid.
+     *
+     * Ink is Sea Glass on Volcanic Teal (12.9:1), and headings are Island
+     * White. Gold and Boracay Turquoise stay accents in both themes, which is
+     * the same inversion the stage section records: they fail on Palawan Sand
+     * and carry on this ground.
+     *
+     * REDEFINED, NOT REASSIGNED. `.dark` and `:root` have equal specificity, so
+     * this wins on source order alone -- and `@theme` has already been emitted
+     * by the time this runs.
+     */
+    .dark {
+        --color-page: #0B252B;
+        --color-surface: rgb(255 255 255 / 0.04);
+        --color-surface-raised: rgb(255 255 255 / 0.07);
+        --color-line: rgb(255 255 255 / 0.12);
+        --color-ink: #D7E4DB;
+        --color-ink-strong: #FFFFFF;
     }
 
     html.lenis,
@@ -1978,3 +2057,4 @@
  * The transition a traveller sees is .tm-loader above, which is a full-screen
  * overlay with a delay on it and no cover animation.
  */
+

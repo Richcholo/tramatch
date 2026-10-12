@@ -2,7 +2,7 @@
     <x-slot name="header">
         <a
             href="{{ route('itineraries.index') }}"
-            class="text-sm font-semibold text-boracay-dark hover:text-volcanic-teal"
+            class="text-sm font-semibold text-boracay-dark hover:text-ink-strong"
         >
             ← Back to my itineraries
         </a>
@@ -14,12 +14,12 @@
                 04 / Make it a plan
             </p>
 
-            <h1 class="mt-4 font-display text-5xl font-semibold leading-[0.95] tracking-[-0.05em] text-volcanic-teal sm:text-7xl">
+            <h1 class="mt-4 font-display text-5xl font-semibold leading-[0.95] tracking-[-0.05em] text-ink-strong sm:text-7xl">
                 Choose the places.
                 We’ll help shape the day.
             </h1>
 
-            <p class="mt-6 max-w-2xl text-lg leading-8 text-benguet-charcoal/70">
+            <p class="mt-6 max-w-2xl text-lg leading-8 text-ink/70">
                 Select an area, choose the exact destinations you want, and keep control of the final itinerary.
             </p>
         </div>
@@ -39,14 +39,14 @@
                         name="area"
                         class="min-w-0 flex-1 rounded-xl border-white/20 bg-white/10 text-white focus:border-philippine-gold focus:ring-philippine-gold"
                     >
-                        <option value="" class="text-benguet-charcoal">
+                        <option value="" class="text-ink">
                             Select a province
                         </option>
 
                         @foreach ($areas as $availableArea)
                             <option
                                 value="{{ $availableArea }}"
-                                class="text-benguet-charcoal"
+                                class="text-ink"
                                 @selected($area === $availableArea)
                             >
                                 {{ $availableArea }}
@@ -56,7 +56,7 @@
 
                     <button
                         type="submit"
-                        class="rounded-xl bg-philippine-gold px-5 py-3 font-bold text-benguet-charcoal transition hover:bg-white active:scale-[0.98] active:duration-75"
+                        class="rounded-xl bg-philippine-gold px-5 py-3 font-bold text-ink-fill transition hover:bg-white active:scale-[0.98] active:duration-75"
                     >
                         Load places
                     </button>
@@ -79,7 +79,7 @@
                     value="{{ $area }}"
                 >
 
-                <section class="rounded-[2rem] bg-island-white p-6 shadow-sm ring-1 ring-boracay-light sm:p-10">
+                <section class="rounded-[2rem] bg-surface-raised p-6 shadow-sm ring-1 ring-boracay-light sm:p-10">
                     <div class="grid gap-6 md:grid-cols-3">
                         <label class="block">
                             <span class="text-xs font-bold uppercase tracking-[0.2em] text-boracay-dark">
@@ -90,7 +90,7 @@
                                 name="title"
                                 value="{{ old('title', 'My ' . $area . ' trip') }}"
                                 required
-                                class="mt-3 w-full rounded-xl border-boracay-light bg-palawan-sand focus:border-boracay focus:ring-boracay"
+                                class="mt-3 w-full rounded-xl border-line bg-surface focus:border-boracay focus:ring-boracay"
                                 placeholder="Example: A slow weekend in Pampanga"
                             >
                         </label>
@@ -105,7 +105,7 @@
                                 name="start_date"
                                 value="{{ old('start_date') }}"
                                 min="{{ now()->toDateString() }}"
-                                class="mt-3 w-full rounded-xl border-boracay-light bg-palawan-sand focus:border-boracay focus:ring-boracay"
+                                class="mt-3 w-full rounded-xl border-line bg-surface focus:border-boracay focus:ring-boracay"
                             >
                         </label>
 
@@ -121,28 +121,28 @@
                                 min="1"
                                 max="{{ $maxDays }}"
                                 inputmode="numeric"
-                                class="mt-3 w-full rounded-xl border-boracay-light bg-palawan-sand focus:border-boracay focus:ring-boracay"
+                                class="mt-3 w-full rounded-xl border-line bg-surface focus:border-boracay focus:ring-boracay"
                             >
 
-                            <span class="mt-2 block text-xs leading-5 text-benguet-charcoal/60">
+                            <span class="mt-2 block text-xs leading-5 text-ink/60">
                                 Defaults to the {{ $profile->trip_duration_days }} in your preferences. More days than stops leaves the extra days open.
                             </span>
                         </label>
                     </div>
                 </section>
 
-                <section class="rounded-[2rem] bg-island-white p-6 shadow-sm ring-1 ring-boracay-light sm:p-10">
+                <section class="rounded-[2rem] bg-surface-raised p-6 shadow-sm ring-1 ring-boracay-light sm:p-10">
                     <div class="flex flex-wrap items-end justify-between gap-4">
                         <div>
                             <p class="text-xs font-bold uppercase tracking-[0.2em] text-boracay-dark">
                                 {{ $area }} / Eligible places
                             </p>
 
-                            <h2 class="mt-3 font-display text-4xl font-semibold tracking-[-0.04em] text-volcanic-teal">
+                            <h2 class="mt-3 font-display text-4xl font-semibold tracking-[-0.04em] text-ink-strong">
                                 Choose your stops.
                             </h2>
 
-                            <p class="mt-3 text-sm leading-6 text-benguet-charcoal/65">
+                            <p class="mt-3 text-sm leading-6 text-ink/65">
                                 These are liked destinations that match your budget and at least one of your interests.
                             </p>
                         </div>
@@ -158,7 +158,7 @@
                                 data-destination-option
                                 data-destination-id="{{ $destination->id }}"
                                 data-destination-name="{{ $destination->name }}"
-                                class="flex cursor-pointer items-center gap-4 rounded-2xl border border-boracay-light bg-palawan-sand p-4 transition hover:border-boracay"
+                                class="flex cursor-pointer items-center gap-4 rounded-2xl border border-line bg-surface p-4 transition hover:border-boracay"
                             >
                                 <input
                                     type="checkbox"
@@ -169,11 +169,11 @@
                                 >
 
                                 <span class="min-w-0 flex-1">
-                                    <span class="block font-bold text-volcanic-teal">
+                                    <span class="block font-bold text-ink-strong">
                                         {{ $destination->name }}
                                     </span>
 
-                                    <span class="mt-1 block text-sm text-benguet-charcoal/60">
+                                    <span class="mt-1 block text-sm text-ink/60">
                                         {{ $destination->municipality }},
                                         {{ $destination->province }}
                                         · {{ $destination->match_score }}% match
@@ -181,7 +181,7 @@
 
                                     <span class="mt-2 flex flex-wrap gap-2">
                                         @foreach ($destination->matched_tags as $tag)
-                                            <span class="rounded-full bg-boracay-light px-2 py-1 text-xs font-semibold text-boracay-dark">
+                                            <span class="rounded-full bg-line px-2 py-1 text-xs font-semibold text-boracay-dark">
                                                 {{ $tag->name }}
                                             </span>
                                         @endforeach
@@ -193,8 +193,8 @@
                                 </span>
                             </label>
                         @empty
-                            <div class="rounded-2xl bg-palawan-sand p-6">
-                                <p class="text-sm text-benguet-charcoal/65">
+                            <div class="rounded-2xl bg-surface p-6">
+                                <p class="text-sm text-ink/65">
                                     No liked destinations match this area yet. Try another province or return to Discover.
                                 </p>
                             </div>
@@ -231,7 +231,7 @@
 
                         <button
                             type="submit"
-                            class="rounded-full bg-philippine-gold px-6 py-3 font-bold text-benguet-charcoal transition hover:bg-white active:scale-[0.98] active:duration-75"
+                            class="rounded-full bg-philippine-gold px-6 py-3 font-bold text-ink-fill transition hover:bg-white active:scale-[0.98] active:duration-75"
                         >
                             Generate itinerary →
                         </button>
@@ -239,16 +239,16 @@
                 </section>
             </form>
         @else
-            <section class="mt-8 rounded-[2rem] bg-island-white p-10 text-center shadow-sm ring-1 ring-boracay-light">
+            <section class="mt-8 rounded-[2rem] bg-surface-raised p-10 text-center shadow-sm ring-1 ring-boracay-light">
                 <p class="text-xs font-bold uppercase tracking-[0.25em] text-boracay-dark">
                     Choose your direction
                 </p>
 
-                <h2 class="mt-5 font-display text-4xl font-semibold text-volcanic-teal">
+                <h2 class="mt-5 font-display text-4xl font-semibold text-ink-strong">
                     Start with a province.
                 </h2>
 
-                <p class="mx-auto mt-4 max-w-xl leading-7 text-benguet-charcoal/65">
+                <p class="mx-auto mt-4 max-w-xl leading-7 text-ink/65">
                     Your liked destinations will appear after you choose an area.
                 </p>
             </section>

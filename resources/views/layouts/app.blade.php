@@ -27,7 +27,7 @@
     ])
 </head>
 
-<body class="tm-topographic-background min-h-screen bg-sea-glass text-benguet-charcoal antialiased">
+<body class="tm-topographic-background min-h-screen bg-page text-ink antialiased">
     <x-navigation-loading />
 
     <header class="relative z-30 border-b border-white/10 bg-volcanic-teal">
@@ -80,59 +80,59 @@
                         </svg>
                     </summary>
 
-                    <nav aria-label="Main navigation" class="absolute right-0 top-full z-50 mt-3 w-72 max-w-[calc(100vw-2.5rem)] rounded-md border border-boracay-light bg-palawan-sand p-2 text-sm font-semibold shadow-xl shadow-benguet-charcoal/15">
-                        <a href="{{ route('dashboard') }}" class="block rounded-md px-4 py-3 transition hover:bg-boracay-light hover:text-boracay-dark">
+                    <nav aria-label="Main navigation" class="absolute right-0 top-full z-50 mt-3 w-72 max-w-[calc(100vw-2.5rem)] rounded-md border border-line bg-surface p-2 text-sm font-semibold shadow-xl shadow-benguet-charcoal/15">
+                        <a href="{{ route('dashboard') }}" class="block rounded-md px-4 py-3 transition hover:bg-line hover:text-boracay-dark">
                             Dashboard
                         </a>
 
                         @if (Route::has('discover.index'))
-                            <a href="{{ route('discover.index') }}" class="block rounded-md px-4 py-3 transition hover:bg-boracay-light hover:text-boracay-dark">
+                            <a href="{{ route('discover.index') }}" class="block rounded-md px-4 py-3 transition hover:bg-line hover:text-boracay-dark">
                                 Discover
                             </a>
                         @endif
 
                         @if (Route::has('destinations.index'))
-                            <a href="{{ route('destinations.index') }}" class="block rounded-md px-4 py-3 transition hover:bg-boracay-light hover:text-boracay-dark">
+                            <a href="{{ route('destinations.index') }}" class="block rounded-md px-4 py-3 transition hover:bg-line hover:text-boracay-dark">
                                 Destinations
                             </a>
                         @endif
 
                         @if (Route::has('recommendations.index'))
-                            <a href="{{ route('recommendations.index') }}" class="block rounded-md px-4 py-3 transition hover:bg-boracay-light hover:text-boracay-dark">
+                            <a href="{{ route('recommendations.index') }}" class="block rounded-md px-4 py-3 transition hover:bg-line hover:text-boracay-dark">
                                 Matches
                             </a>
                         @endif
 
                         @if (Route::has('itineraries.index'))
-                            <a href="{{ route('itineraries.index') }}" class="block rounded-md px-4 py-3 transition hover:bg-boracay-light hover:text-boracay-dark">
+                            <a href="{{ route('itineraries.index') }}" class="block rounded-md px-4 py-3 transition hover:bg-line hover:text-boracay-dark">
                                 My trips
                             </a>
                         @endif
 
                         @if (Route::has('profile.show'))
-                            <a href="{{ route('profile.show') }}" class="block rounded-md px-4 py-3 transition hover:bg-boracay-light hover:text-boracay-dark">
+                            <a href="{{ route('profile.show') }}" class="block rounded-md px-4 py-3 transition hover:bg-line hover:text-boracay-dark">
                                 Profile
                             </a>
                         @endif
 
                         @if (Route::has('preferences.edit'))
-                            <a href="{{ route('preferences.edit') }}" class="block rounded-md px-4 py-3 transition hover:bg-boracay-light hover:text-boracay-dark">
+                            <a href="{{ route('preferences.edit') }}" class="block rounded-md px-4 py-3 transition hover:bg-line hover:text-boracay-dark">
                                 Preferences
                             </a>
                         @endif
 
                         @if (Route::has('admin.dashboard') && auth()->check() && auth()->user()->isAdmin())
-                            <a href="{{ route('admin.dashboard') }}" class="mt-1 block rounded-md bg-philippine-gold px-4 py-3 text-benguet-charcoal transition hover:bg-boracay">
+                            <a href="{{ route('admin.dashboard') }}" class="mt-1 block rounded-md bg-philippine-gold px-4 py-3 text-ink-fill transition hover:bg-boracay">
                                 Admin
                             </a>
                         @endif
 
                         @if (Route::has('logout'))
-                            <div class="my-2 border-t border-boracay-light"></div>
+                            <div class="my-2 border-t border-line"></div>
                             <button
                                 type="button"
                                 onclick="document.getElementById('logout-confirmation').showModal()"
-                                class="block w-full rounded-md px-4 py-3 text-left text-red-600 transition hover:bg-red-50 hover:text-red-700 active:scale-[0.98] active:duration-75"
+                                class="block w-full rounded-md px-4 py-3 text-left text-red-600 transition hover:bg-red-50 dark:hover:bg-red-500/15 dark:bg-red-500/15 hover:text-red-700 dark:text-red-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400 dark:text-red-300 dark:hover:bg-red-50 dark:hover:bg-red-500/15 dark:bg-red-500/150/15 dark:hover:text-red-200 active:scale-[0.98] active:duration-75"
                             >
                                 Log out
                             </button>
@@ -144,7 +144,7 @@
     </header>
 
     @isset($header)
-        <section class="border-b border-boracay-light">
+        <section class="border-b border-line">
             <div class="mx-auto max-w-[1600px] px-5 py-8 sm:px-8 lg:px-12">
                 {{ $header }}
             </div>
@@ -156,14 +156,27 @@
         'w-full' => request()->routeIs('discover.index'),
         'mx-auto max-w-[1600px] px-5 py-10 sm:px-8 lg:px-12' => ! request()->routeIs('discover.index'),
     ])>
+        {{--
+                THE TWO FLASH BANNERS. They live here and nowhere else, so no page
+                renders its own.
+
+                The `dark:` pair on the error banner is a real requirement, not
+                polish: `bg-red-50 dark:bg-red-500/15` is a very pale pink, so on the dark ground it
+                is a bright rectangle at the top of every page -- and swapping it
+                for `bg-red-50 dark:bg-red-500/150/15` in BOTH themes would make the light theme's
+                dark red text unreadable on a barely-tinted fill. One-off status
+                colours get a variant; only the structural roles (surface, ink,
+                line) became theme tokens, because only those have a second role
+                to serve.
+            --}}
         @if (session('status'))
-            <div class="mb-8 rounded-2xl border border-boracay bg-boracay-light p-4 text-benguet-charcoal">
+            <div class="mb-8 rounded-2xl border border-boracay bg-line p-4 text-ink">
                 {{ session('status') }}
             </div>
         @endif
 
         @if ($errors->any())
-            <div class="mb-8 rounded-2xl border border-red-200 bg-red-50 p-4 text-red-800">
+            <div class="mb-8 rounded-2xl border border-red-200 dark:border-red-400/30 bg-red-50 dark:bg-red-500/15 p-4 text-red-800 dark:text-red-200 dark:border-red-400/30 dark:bg-red-50 dark:bg-red-500/150/15 dark:text-red-200">
                 <ul class="list-disc space-y-1 pl-5">
                     @foreach ($errors->all() as $error)
                         <li>{{ $error }}</li>

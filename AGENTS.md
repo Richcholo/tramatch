@@ -1049,26 +1049,58 @@ ones.
 - **`color-scheme` IS SET ON BOTH THEMES**, or scrollbars, form controls and
   the caret stay light on a dark page.
 
-**NOT FINISHED — THE PAGE MIGRATION.** The toggle, the persistence and the
-dark chrome are done; the ~650 palette-class occurrences across 60 views are
-not. So dark mode is currently a **half-flipped app**: the ground goes dark and
-the content cards stay on `bg-palawan-sand`. That is the state to finish from,
-and the order that keeps the app coherent at every commit is
-`app/` chrome → `dashboard` → `itineraries` → `profile`/`preferences` →
-`recommendations` → `admin` → `auth`, and **last** the two dark-by-design
-pages, because the destination page's palette inversion has to be re-solved
-for a light ground rather than colour-swapped (see the stage section: gold and
-Boracay Turquoise become accents *because* they fail on sand, and
-`text-volcanic-teal` at 1:1 against teal is how a heading vanishes).
+**THE MIGRATION IS DONE. It was a rename, not a restyle.** Every light value is
+byte-for-byte what the palette token it replaced already was, so light mode is
+unchanged and `/destinations` still looks exactly as it did — which is the
+constraint it was built to. `the_light_theme_is_exactly_the_palette_it_replaced`
+is the assertion the whole thing rests on.
 
-The palette guard to respect while doing it: a token cannot be flipped in
-place, because several are used in two roles. `bg-island-white` is a card
-surface on a light page and light text on the stage; `bg-benguet-charcoal` is
-text on the turquoise Like button *and* would be the ink token; and
-`bg-volcanic-teal` is an always-dark bar that must stay dark in both themes.
-The fix is semantic tokens (`--color-surface`, `--color-ink`, `--color-line`)
-defined once and redefined under `.dark` — never a value swap on the existing
-palette names.
+**ROLES FLIP, COLOURS DO NOT.** `--color-page`, `-surface`, `-surface-raised`,
+`-line`, `-ink`, `-ink-strong` are redefined under `.dark`; the palette tokens
+are untouched. A palette token cannot be flipped in place because several are
+used in two roles at once — `bg-island-white` is a card surface on a light page
+*and* light text on the stage, and `bg-volcanic-teal` is an always-dark header
+bar that must stay dark in both themes.
+`no_palette_token_is_flipped_in_place` guards it.
+
+**THE DARK HALF IS THE STAGE'S WORLD.** Ground is Volcanic Teal, and a card is
+the stage's own `.tm-panel` treatment — `rgb(255 255 255 / 0.04)`, lifted by
+light rather than by a different fill. A solid dark card on that ground is the
+flat colour block the stage's panel rules forbid.
+
+**`--color-ink-fill` AND `--color-ink-fill-strong` ARE NOT REDEFINED UNDER
+`.dark`, and that is their entire reason to exist.** A blanket rename gets this
+wrong: `text-ink` becomes Sea Glass on the dark theme, and Sea Glass on
+Boracay Turquoise or Philippine Gold is a weak pairing, so every filled button
+loses contrast the moment the theme flips. The ink on a bright fill is not a
+theme role — gold and turquoise stay gold and turquoise — so it gets its own
+constant pair. Two of them rather than one, because the buttons did not agree:
+charcoal measured 3.98:1 on turquoise, and the deck's primary settled on
+volcanic teal at 5.0:1.
+
+**STATUS COLOURS GET A VARIANT, NOT A SWAP.** `bg-red-50 text-red-800` cannot
+become `bg-red-500/15 text-red-200` in both themes — the light theme's dark red
+text is unreadable on a barely tinted fill. The light pair is kept and a `dark:`
+pair added beside it.
+
+**TWO SILENT FAILURES, BOTH HIT WHILE BUILDING THIS:**
+
+- **A MISSPELLED ROLE PRODUCES NO CSS AT ALL.** Tailwind v4 emits a utility
+  only where a source uses it, so `bg-surfacex` is not a wrong colour, it is no
+  rule, and the class does nothing with no warning anywhere.
+  `every_role_a_view_asked_for_is_emitted_into_the_built_stylesheet` reads the
+  role-shaped classes **out of the views** and checks each against the built
+  stylesheet; a constant list is not enough, because with `bg-surfacex` mistyped
+  on one page and `bg-surface` still used on twenty others every role is still
+  emitted and a constant list still passes. Caught in the act.
+- **`@property --tw-ring-offset-color` IS REGISTERED WITH `inherits: false`, SO
+  AN ANCESTOR RULE CANNOT FIX IT.** Setting the ring offset colour on `.dark`
+  puts it on `<html>` and nowhere else, and all sixteen focused controls keep
+  the initial white halo. That version of the test passed and the halos were
+  still there. The colour has to be declared on the control itself:
+  `dark:focus:ring-offset-volcanic-teal` beside each `focus:ring-offset-2`.
+
+`tests/Feature/ThemeMigrationTest.php` (8) pins all of it.
 
 #### Moving between places
 

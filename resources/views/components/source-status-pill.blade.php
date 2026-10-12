@@ -7,7 +7,7 @@
         'success' => ['Updated successfully', 'bg-emerald-100 text-emerald-800'],
         'unchanged' => ['No changes found', 'bg-teal-100 text-teal-800'],
         'blocked' => ['Blocked by robots.txt', 'bg-orange-100 text-orange-800'],
-        'failed' => ['Failed', 'bg-red-100 text-red-800'],
+        'failed' => ['Failed', 'bg-red-100 dark:bg-red-50 dark:bg-red-500/150/20 text-red-800 dark:text-red-200'],
     ];
 
     $status = $source->displayStatus();

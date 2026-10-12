@@ -25,7 +25,7 @@
     ])
 </head>
 
-<body class="min-h-screen bg-volcanic-teal text-benguet-charcoal antialiased">
+<body class="min-h-screen bg-volcanic-teal text-ink antialiased">
     <x-navigation-loading />
 
     <div class="fixed inset-0 overflow-hidden">
@@ -51,7 +51,7 @@
 
                 <a
                     href="{{ url('/') }}"
-                    class="rounded-full border border-white/40 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white hover:text-volcanic-teal"
+                    class="rounded-full border border-white/40 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white hover:text-ink-strong dark:hover:bg-white/15 dark:hover:text-ink-strong"
                 >
                     Back to home
                 </a>
@@ -81,14 +81,14 @@
                         Budget-aware
                     </span>
 
-                    <span class="rounded-full bg-philippine-gold px-4 py-2 text-sm font-semibold text-benguet-charcoal">
+                    <span class="rounded-full bg-philippine-gold px-4 py-2 text-sm font-semibold text-ink-fill">
                         Made locally
                     </span>
                 </div>
             </section>
 
             <section class="flex items-center justify-center px-5 pb-10 pt-28 sm:px-8 lg:px-12 lg:py-32">
-                <div class="w-full max-w-md rounded-[2rem] bg-palawan-sand/95 p-6 shadow-2xl shadow-black/20 backdrop-blur sm:p-9">
+                <div class="w-full max-w-md rounded-[2rem] bg-surface/95 p-6 shadow-2xl shadow-black/20 backdrop-blur sm:p-9">
                     {{ $slot }}
                 </div>
             </section>
