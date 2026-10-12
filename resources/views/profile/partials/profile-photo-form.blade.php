@@ -63,7 +63,7 @@
             <button
                 type="button"
                 onclick="document.getElementById('confirm-remove-profile-photo').showModal()"
-                class="inline-flex min-h-10 items-center justify-center rounded-md px-4 py-2 text-sm font-semibold text-red-700 dark:text-red-300 transition hover:bg-red-50 dark:hover:bg-red-500/15 dark:bg-red-500/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
+ class="inline-flex min-h-10 items-center justify-center rounded-md px-4 py-2 text-sm font-semibold text-red-700 dark:text-red-300 transition hover:bg-red-50 dark:hover:bg-red-500/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
             >
                 Remove photo
             </button>

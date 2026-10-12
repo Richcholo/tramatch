@@ -274,6 +274,214 @@ class ThemeMigrationTest extends TestCase
         );
     }
 
+    /**
+ * NOTHING IS A FLAT DARK BLOCK ANY MORE, IN EITHER DIRECTION.
+ *
+ * Two failures, opposite in sign and both reported as the same thing —
+ * "this page is forced dark" — so they belong in one test.
+ *
+ * A PHOTO-LESS CARD TILE. The catalogue is almost entirely without
+ * photographs, so `/destinations` rendered one solid `bg-volcanic-teal` tile
+ * per card. On a light page that is nine near-black rectangles, which is what
+ * made the listing read dark even in LIGHT mode. The stage's rule for the same
+ * situation is a typographic plate rather than a flat colour, so this is one
+ * now, themed like everything else.
+ *
+ * A DARK HERO PANEL THAT VANISHES ON DARK. `--color-page` is `#0B252B` on the
+ * dark theme and these panels were `bg-volcanic-teal`, which *is* `#0B252B` —
+ * so on dark the panel was the ground, held apart by nothing but a shadow. Nine
+ * of them, across the itinerary, recommendation, preference and admin pages.
+ *
+ * The panels get a VARIANT and not a swap, and that is the load-bearing half:
+ * they are deliberate dark blocks in light mode and the design's accents in
+ * both, so light mode has to keep them exactly as they are.
+ */
+#[Test]
+public function nothing_is_a_flat_dark_block_in_either_direction(): void
+    {
+        $sources = $this->lightViewSources();
+
+        $this->assertStringNotContainsString(
+            'justify-center bg-volcanic-teal',
+            $sources,
+            'the photo-less card tile is a solid volcanic teal block again. The '
+            .'catalogue is almost entirely without photographs, so this renders '
+            .'once per card and the listing reads dark even in LIGHT mode'
+        );
+
+        // A panel that is the ground colour on the dark theme is invisible, so
+        // every one of them has to carry the lift. Counted WITHOUT the dark
+        // variant in the pattern, because a fixed panel no longer matches it.
+        $unlifted = preg_match_all('/bg-volcanic-teal(\s+p-\d)/', $sources);
+
+        $lifted = preg_match_all(
+            '/bg-volcanic-teal dark:bg-surface-raised(\s+p-\d)/',
+            $sources
+        );
+
+        $this->assertGreaterThan(
+            0,
+            $lifted,
+            'no dark hero panel carries a dark variant, so this assertion is '
+            .'checking nothing'
+        );
+
+        $this->assertSame(
+            0,
+            $unlifted,
+            'a dark hero panel has no dark variant, so on the dark theme it is '
+            .'exactly the ground colour and disappears behind its own shadow'
+        );
+
+        // And the light theme must not have moved while fixing that.
+        $this->assertStringContainsString(
+            'bg-volcanic-teal',
+            $sources,
+            'the dark panels have been swapped instead of varied, so light mode '
+            .'has lost the blocks the design uses as its accents'
+        );
+    }
+
+    /**
+ * NO MALFORMED CLASS SURVIVES, WHICH IS THE HALF EVERY EARLIER ASSERTION
+ * MISSED.
+ *
+ * The status sweep replaced `bg-red-50` with no right boundary, so it matched
+ * inside the `bg-red-500/15` it had just created and inside a pre-existing
+ * `bg-red-50/60`, leaving `dark:bg-red-500/150/15`, `bg-red-500/15/60` and a
+ * bare `dark:bg-red-50` — 23 sites across 15 files, on a branch that was already
+ * pushed. Every test stayed green, because each one checked that the CORRECT
+ * pair was present and never that a second one was not. Both halves are
+ * asserted here.
+ *
+ * A doubled alpha like `/15/60` is not a colour Tailwind can parse, and a bare
+ * `dark:bg-red-50` is the pale pink this whole pass exists to stop.
+ */
+#[Test]
+    public function no_malformed_class_survives_a_status_rewrite(): void
+    {
+        $sources = $this->lightViewSources();
+
+/*
+         * PRECISE, because the obvious broad pattern is a false positive:
+         * `dark:text-red-200` is the CORRECT mapping for `text-red-800`, so
+         * "a dark: variant of a light-only token" is only broken for the
+         * values that are wrong ON DARK -- a pale pink fill, and dark ink,
+         * which is invisible on a dark ground. `dark:text-red-200` and
+         * `dark:border-red-400/30` are deliberate and must not be flagged.
+         */
+/*
+         * PRECISE, because the obvious broad pattern is a false positive:
+         * `dark:text-red-200` is the CORRECT mapping for `text-red-800`, so
+         * "a dark: variant of a light-only token" is only broken for the
+         * values that are wrong ON DARK -- a pale pink fill, and dark ink,
+         * which is invisible on a dark ground. `dark:text-red-200` and
+         * `dark:border-red-400/30` are deliberate and must not be flagged.
+         *
+         * The state prefix is OPTIONAL and the group is `(?:[a-z-]+:)?`, not
+         * `[a-z-]*:` -- the latter demands a second colon and therefore never
+         * matches `dark:bg-red-50` at all, which is how this check passed while
+         * proving nothing.
+         */
+/*
+         * PRECISE, because the obvious broad pattern is a false positive:
+         * `dark:text-red-200` is the CORRECT mapping for `text-red-800`, so
+         * "a dark: variant of a light-only token" is only broken for the
+         * values that are wrong ON DARK -- a pale pink fill, and dark ink,
+         * which is invisible on a dark ground. `dark:text-red-200` and
+         * `dark:border-red-400/30` are deliberate and must not be flagged.
+         *
+         * The state prefix is OPTIONAL and the group is `(?:[a-z-]+:)?`, not
+         * `[a-z-]*:` -- the latter demands a second colon and therefore never
+         * matches `dark:bg-red-50` at all, which is how this check passed while
+         * proving nothing.
+         *
+         * The doubled alpha is `SLASH-NUMBERS-SLASH-NUMBERS`, so the leading
+         * lookbehind has to be able to sit ON a slash. `(?<![\w/-])\d+\/\d+`
+         * cannot: the real corruption is `.../15/60`, where `/15` is preceded
+         * by a digit and `/60` by a digit, so both candidates are rejected and
+         * the check passes on an empty set. Measured against the three shapes
+         * this corruption actually takes -- `/150/15`, `/15/60`, `/150/20` --
+         * the bounded form catches none of them.
+         */
+        $broken = [
+            '/dark:(?:[a-z-]+:)?bg-red-(?:50|100)(?!\d)/',
+            '/dark:(?:[a-z-]+:)?text-red-(?:700|800)(?!\d)/',
+            '/dark:(?:[a-z-]+:)?border-red-200(?!\d)/',
+            '/\/\d{1,3}\/\d{1,3}/',
+        ];       foreach ($broken as $pattern) {
+            $count = preg_match_all($pattern, $sources, $found);
+
+            $this->assertSame(
+                0,
+                $count,
+                'a status class was rewritten into a malformed one: '
+                .($found[0][0] ?? 'an unprintable fragment')
+                .'. Anchor both ends when replacing a token, and assert the '
+                .'absence of the broken form as well as the presence of the '
+                .'right one'
+            );
+        }
+
+        // And the correct pairing is genuinely there, so the check above is not
+        // passing because the rewrite never happened in the first place.
+        $this->assertGreaterThan(
+            0,
+            preg_match_all('/bg-red-50 dark:bg-red-500\/15/', $sources),
+            'no status colour carries a dark variant at all, so the malformed '
+            .'check above is passing on an empty set'
+        );
+    }
+
+
+    /**
+     * THE DARK-BY-DESIGN PAGES MUST CARRY NO `dark:` VARIANT AT ALL.
+     *
+     * `destinations/show` and `discover/index` are excluded from the theme
+     * migration because they are dark in BOTH themes -- the stage is the whole
+     * destination page and the deck has the same ground. A `dark:` prefix on
+     * one of them is therefore not a theme choice, it is a contradiction: the
+     * variant is live at all times, because the page is dark whatever the
+     * toggle says.
+     *
+     * This was walked straight into while repairing the status colours. The
+     * destination page's "Closed now" badge is a light pill with dark text on
+     * a dark ground, deliberately -- the other status badges beside it are
+     * never allowed to tint their background -- and a `dark:bg-red-500/20
+     * dark:text-red-200` pair turned it into a dark tint that all but vanished
+     * into the ground it sits on.
+     *
+     * `welcome` is deliberately NOT in this list: it is a light landing page
+     * that does carry a couple of dark variants, and listing it here would make
+     * the guard fail for a correct reason.
+     */
+    #[Test]
+    public function the_dark_by_design_pages_carry_no_dark_variant(): void
+    {
+        foreach ([
+            'destinations/show.blade.php',
+            'discover/index.blade.php',
+        ] as $relative) {
+            $source = file_get_contents(resource_path('views/'.$relative));
+
+            $this->assertIsString($source, $relative.' could not be read');
+
+            $count = preg_match_all(
+                '/dark:(?:[a-z-]+:)?(?:bg|text|border)-red-\d/',
+                $source,
+                $found
+            );
+
+            $this->assertSame(
+                0,
+                $count,
+                $relative.' is dark in both themes, so a dark: variant on a '
+                .'status colour is live at all times and overrides the light '
+                .'pill the design uses there: '.($found[0][0] ?? '')
+            );
+        }
+    }
+
     private function darkBlock(): string
     {
         $css = $this->css();

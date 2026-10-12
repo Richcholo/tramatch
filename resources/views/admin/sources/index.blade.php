@@ -489,7 +489,7 @@
 
                                     @if ($source->error_message)
                                         <p
-                                            class="mt-2 text-xs leading-5 text-red-700 dark:text-red-300"
+ class="mt-2 text-xs leading-5 text-red-700 dark:text-red-300"
                                             title="{{ $source->error_message }}"
                                         >
                                             {{ \Illuminate\Support\Str::limit($source->error_message, 140) }}

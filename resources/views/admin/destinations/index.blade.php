@@ -161,7 +161,7 @@
                                     <button
                                         type="button"
                                         onclick="document.getElementById('delete-destination-confirmation-{{ $destination->id }}').showModal()"
-                                        class="font-semibold text-red-600"
+ class="font-semibold text-red-600"
                                     >
                                         Delete
                                     </button>
@@ -171,11 +171,11 @@
                                         aria-labelledby="delete-destination-confirmation-title-{{ $destination->id }}"
                                         aria-describedby="delete-destination-confirmation-description-{{ $destination->id }}"
                                         onclick="if (event.target === this) this.close()"
-                                        class="m-auto w-[calc(100%-2rem)] max-w-md rounded-lg border border-red-200 dark:border-red-400/30 bg-surface p-0 text-ink shadow-2xl backdrop:bg-volcanic-teal/60 backdrop:backdrop-blur-sm"
+ class="m-auto w-[calc(100%-2rem)] max-w-md rounded-lg border border-red-200 dark:border-red-400/30 bg-surface p-0 text-ink shadow-2xl backdrop:bg-volcanic-teal/60 backdrop:backdrop-blur-sm"
                                     >
                                         <div class="p-6 sm:p-7">
                                             <div class="flex items-start gap-4">
-                                                <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-100 dark:bg-red-50 dark:bg-red-500/150/20 text-red-700 dark:text-red-300" aria-hidden="true">
+ <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-300" aria-hidden="true">
                                                     <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
                                                         <path stroke-linecap="round" stroke-linejoin="round" d="M6 7h12m-10 0 .7 13h6.6L16 7M9 7V4h6v3m-4 4v5m2-5v5" />
                                                     </svg>
@@ -196,7 +196,7 @@
                                                 <button type="button" autofocus onclick="this.closest('dialog').close()" class="rounded-full border border-line px-4 py-2 text-sm font-semibold text-ink transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-boracay focus:ring-offset-2 dark:focus:ring-offset-volcanic-teal">
                                                     Cancel
                                                 </button>
-                                                <button type="submit" class="rounded-full bg-red-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-700 focus:ring-offset-2 dark:focus:ring-offset-volcanic-teal">
+ <button type="submit" class="rounded-full bg-red-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-700 focus:ring-offset-2 dark:focus:ring-offset-volcanic-teal">
                                                     Delete permanently
                                                 </button>
                                             </form>

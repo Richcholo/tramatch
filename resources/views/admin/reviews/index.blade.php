@@ -64,7 +64,7 @@
                                 <button
                                     type="button"
                                     onclick="document.getElementById('delete-review-confirmation-{{ $review->id }}').showModal()"
-                                    class="font-semibold text-red-600 hover:text-red-800 dark:text-red-200"
+ class="font-semibold text-red-600 hover:text-red-800"
                                 >
                                     Delete
                                 </button>
@@ -73,7 +73,7 @@
                                     id="delete-review-confirmation-{{ $review->id }}"
                                     aria-labelledby="delete-review-title-{{ $review->id }}"
                                     onclick="if (event.target === this) this.close()"
-                                    class="m-auto w-[calc(100%-2rem)] max-w-md rounded-lg border border-red-200 dark:border-red-400/30 bg-surface p-0 text-ink shadow-2xl backdrop:bg-volcanic-teal/60 backdrop:backdrop-blur-sm"
+ class="m-auto w-[calc(100%-2rem)] max-w-md rounded-lg border border-red-200 dark:border-red-400/30 bg-surface p-0 text-ink shadow-2xl backdrop:bg-volcanic-teal/60 backdrop:backdrop-blur-sm"
                                 >
                                     <div class="p-6 sm:p-7">
                                         <h2 id="delete-review-title-{{ $review->id }}" class="font-display text-xl font-semibold text-ink-strong">
@@ -89,7 +89,7 @@
                                             <button type="button" onclick="this.closest('dialog').close()" class="rounded-full border border-line px-4 py-2 text-sm font-semibold text-ink transition hover:bg-white">
                                                 Cancel
                                             </button>
-                                            <button type="submit" class="rounded-full bg-red-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-red-800">
+ <button type="submit" class="rounded-full bg-red-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-red-800">
                                                 Delete permanently
                                             </button>
                                         </form>

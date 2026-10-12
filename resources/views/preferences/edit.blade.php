@@ -15,7 +15,7 @@
         @csrf
         @method('PUT')
 
-        <section class="rounded-xl bg-volcanic-teal p-5 text-white shadow-md sm:p-6">
+        <section class="rounded-xl bg-volcanic-teal dark:bg-surface-raised p-5 text-white dark:text-ink-strong shadow-md sm:p-6">
             <p class="text-sm leading-6 text-white/70">
                 Your choices shape the destination deck and reset your discovery experience when changed.
             </p>
@@ -81,18 +81,18 @@
                 <input
                     id="preferred_region"
                     name="preferred_region"
-                    list="preferred-region-options"
+ list="preferred-region-options"
                     value="{{ old('preferred_region', $profile?->preferred_region) }}"
                     placeholder="Search or enter a province or municipality"
-                    aria-describedby="preferred-region-hint"
+ aria-describedby="preferred-region-hint"
                     class="mt-2 w-full rounded-lg border-white/20 bg-white/10 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:border-philippine-gold focus:ring-philippine-gold"
                 >
-                <datalist id="preferred-region-options">
+ <datalist id="preferred-region-options">
                     @foreach ($regions as $region)
                         <option value="{{ $region }}"></option>
                     @endforeach
                 </datalist>
-                <span id="preferred-region-hint" class="mt-2 block text-xs text-white/60">
+ <span id="preferred-region-hint" class="mt-2 block text-xs text-white/60">
                     Choose a suggestion or type any specific place.
                 </span>
             </label>

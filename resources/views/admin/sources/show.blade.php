@@ -29,7 +29,7 @@
     <div class="space-y-8">
         <x-flash-toast />
 
-        <section class="relative overflow-hidden rounded-[2rem] bg-volcanic-teal p-8 text-white shadow-xl sm:p-12">
+        <section class="relative overflow-hidden rounded-[2rem] bg-volcanic-teal dark:bg-surface-raised p-8 text-white dark:text-ink-strong shadow-xl sm:p-12">
             <div class="absolute -right-24 -top-24 h-96 w-96 rounded-full bg-boracay/25 blur-3xl"></div>
 
             <div class="relative">
@@ -227,12 +227,12 @@
         @endif
 
         @if ($source->error_message)
-            <section class="rounded-[2rem] border border-red-200 dark:border-red-400/30 bg-red-50 dark:bg-red-500/15 p-6 sm:p-8">
-                <h2 class="font-display text-2xl font-semibold text-red-900">
+ <section class="rounded-[2rem] border border-red-200 dark:border-red-400/30 bg-red-50 dark:bg-red-500/15 p-6 sm:p-8">
+ <h2 class="font-display text-2xl font-semibold text-red-900">
                     What went wrong
                 </h2>
 
-                <p class="mt-3 text-sm leading-6 text-red-800 dark:text-red-200">
+ <p class="mt-3 text-sm leading-6 text-red-800 dark:text-red-200">
                     {{ $source->error_message }}
                 </p>
             </section>
@@ -330,7 +330,7 @@
                                     'bg-emerald-100 text-emerald-800' => $crawl->outcome === 'success',
                                     'bg-teal-100 text-teal-800' => $crawl->outcome === 'unchanged',
                                     'bg-orange-100 text-orange-800' => $crawl->outcome === 'blocked',
-                                    'bg-red-100 dark:bg-red-50 dark:bg-red-500/150/20 text-red-800 dark:text-red-200' => $crawl->outcome === 'failed',
+'bg-red-100 dark:bg-red-500/20 text-red-800 dark:text-red-200' => $crawl->outcome ==='failed',
                                 ])>
                                     {{ match ($crawl->outcome) {
                                         'success' => 'Fetched',
@@ -392,7 +392,7 @@
                             @endif
 
                             @if ($crawl->error_message)
-                                <p class="mt-2 text-xs leading-5 text-red-700 dark:text-red-300">
+ <p class="mt-2 text-xs leading-5 text-red-700 dark:text-red-300">
                                     {{ $crawl->error_message }}
                                 </p>
                             @endif

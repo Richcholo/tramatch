@@ -20,7 +20,7 @@
             </div>
         </form>
 
-        <button type="button" onclick="document.getElementById('logout-confirmation').showModal()" class="underline text-sm text-red-600 hover:text-red-700 dark:text-red-300 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-volcanic-teal focus:ring-red-500">
+ <button type="button" onclick="document.getElementById('logout-confirmation').showModal()" class="underline text-sm text-red-600 hover:text-red-700 dark:hover:text-red-200 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-volcanic-teal focus:ring-red-500">
                 {{ __('Log Out') }}
         </button>
     </div>

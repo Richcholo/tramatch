@@ -5,8 +5,8 @@
         'thin_page' => ['Nearly empty', 'bg-amber-100 text-amber-800'],
         'bot_wall' => ['Site blocks us', 'bg-orange-100 text-orange-800'],
         'robots_blocked' => ['robots.txt says no', 'bg-orange-100 text-orange-800'],
-        'dead' => ['Page is gone', 'bg-red-100 dark:bg-red-50 dark:bg-red-500/150/20 text-red-800 dark:text-red-200'],
-        'unreachable' => ['Host is down', 'bg-red-100 dark:bg-red-50 dark:bg-red-500/150/20 text-red-800 dark:text-red-200'],
+'dead' => ['Page is gone', 'bg-red-100 dark:bg-red-500/20 text-red-800 dark:text-red-200'],
+'unreachable' => ['Host is down', 'bg-red-100 dark:bg-red-500/20 text-red-800 dark:text-red-200'],
     ];
 
     $state = (string) ($source->fetchability ?? '');
@@ -15,7 +15,7 @@
 @if ($state !== '')
     <span
         title="{{ $source->fetchability_note }}"
-        {{ $attributes->merge(['class' => 'inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold '.($meta[$state][1] ?? 'bg-slate-100 text-slate-700')]) }}
+        {{ $attributes->merge(['class' => 'inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold'.($meta[$state][1] ?? 'bg-slate-100 text-slate-700')]) }}
     >
         {{ $meta[$state][0] ?? $state }}
     </span>

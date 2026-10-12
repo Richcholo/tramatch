@@ -132,7 +132,7 @@
                             <button
                                 type="button"
                                 onclick="document.getElementById('logout-confirmation').showModal()"
-                                class="block w-full rounded-md px-4 py-3 text-left text-red-600 transition hover:bg-red-50 dark:hover:bg-red-500/15 dark:bg-red-500/15 hover:text-red-700 dark:text-red-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400 dark:text-red-300 dark:hover:bg-red-50 dark:hover:bg-red-500/15 dark:bg-red-500/150/15 dark:hover:text-red-200 active:scale-[0.98] active:duration-75"
+ class="block w-full rounded-md px-4 py-3 text-left text-red-600 transition hover:bg-red-50 dark:hover:bg-red-500/15 hover:text-red-700 dark:hover:text-red-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400 active:scale-[0.98] active:duration-75"
                             >
                                 Log out
                             </button>
@@ -161,9 +161,9 @@
                 renders its own.
 
                 The `dark:` pair on the error banner is a real requirement, not
-                polish: `bg-red-50 dark:bg-red-500/15` is a very pale pink, so on the dark ground it
+ polish: `bg-red-50 dark:bg-red-500/15 ` is a very pale pink, so on the dark ground it
                 is a bright rectangle at the top of every page -- and swapping it
-                for `bg-red-50 dark:bg-red-500/150/15` in BOTH themes would make the light theme's
+ for `bg-red-50 dark:bg-red-500/15 ` in BOTH themes would make the light theme's
                 dark red text unreadable on a barely-tinted fill. One-off status
                 colours get a variant; only the structural roles (surface, ink,
                 line) became theme tokens, because only those have a second role
@@ -176,7 +176,7 @@
         @endif
 
         @if ($errors->any())
-            <div class="mb-8 rounded-2xl border border-red-200 dark:border-red-400/30 bg-red-50 dark:bg-red-500/15 p-4 text-red-800 dark:text-red-200 dark:border-red-400/30 dark:bg-red-50 dark:bg-red-500/150/15 dark:text-red-200">
+ <div class="mb-8 rounded-2xl border border-red-200 dark:border-red-400/30 bg-red-50 dark:bg-red-500/15 p-4 text-red-800 dark:text-red-200">
                 <ul class="list-disc space-y-1 pl-5">
                     @foreach ($errors->all() as $error)
                         <li>{{ $error }}</li>

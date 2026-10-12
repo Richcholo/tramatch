@@ -65,7 +65,7 @@
                 </div>
             </article>
         @empty
-            <section class="rounded-[2rem] bg-volcanic-teal p-10 text-white">
+            <section class="rounded-[2rem] bg-volcanic-teal dark:bg-surface-raised p-10 text-white dark:text-ink-strong">
                 <p class="text-xs font-bold uppercase tracking-[0.28em] text-boracay-light">
                     No saved trips
                 </p>

@@ -23,7 +23,7 @@
     </x-slot>
 
     <div class="space-y-10">
-        <section class="rounded-[2rem] bg-volcanic-teal p-8 text-white shadow-xl sm:p-12">
+        <section class="rounded-[2rem] bg-volcanic-teal dark:bg-surface-raised p-8 text-white dark:text-ink-strong shadow-xl sm:p-12">
             <p class="text-xs font-bold uppercase tracking-[0.3em] text-boracay-light">
                 Swipe-informed recommendations
             </p>

@@ -95,7 +95,7 @@
                                 class="h-72 w-full object-cover transition duration-700 group-hover:scale-105"
                             >
                         @else
-                            <div class="flex h-72 items-center justify-center bg-volcanic-teal text-4xl font-medium text-white">
+                            <div class="flex h-72 items-center justify-center bg-line text-4xl font-medium text-ink-strong">
                                 {{ $destination->province }}
                             </div>
                         @endif

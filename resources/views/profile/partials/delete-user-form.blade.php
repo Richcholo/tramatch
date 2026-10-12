@@ -1,6 +1,6 @@
 <section class="space-y-6">
     <header>
-        <h2 class="font-display text-2xl font-semibold text-red-800 dark:text-red-200">
+ <h2 class="font-display text-2xl font-semibold text-red-800 dark:text-red-200">
             {{ __('Delete Account') }}
         </h2>
 
@@ -12,7 +12,7 @@
     <button
         type="button"
         onclick="document.getElementById('confirm-user-deletion').showModal()"
-        class="mt-5 inline-flex min-h-11 items-center justify-center rounded-md bg-red-700 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-red-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
+ class="mt-5 inline-flex min-h-11 items-center justify-center rounded-md bg-red-700 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-red-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
     >{{ __('Delete account') }}</button>
 
     <x-confirm-dialog
@@ -52,7 +52,7 @@
 
                 <button
                     type="submit"
-                    class="rounded-full bg-red-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-700 focus:ring-offset-2 dark:focus:ring-offset-volcanic-teal"
+ class="rounded-full bg-red-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-700 focus:ring-offset-2 dark:focus:ring-offset-volcanic-teal"
                 >{{ __('Delete Account') }}</button>
             </div>
         </form>

@@ -33,7 +33,7 @@
                     @include('profile.partials.update-password-form')
                 </section>
 
-                <section id="delete-account" class="scroll-mt-8 rounded-md border border-red-200 dark:border-red-400/30 bg-red-50 dark:bg-red-500/15/60 p-6 shadow-sm sm:p-8">
+ <section id="delete-account" class="scroll-mt-8 rounded-md border border-red-200 dark:border-red-400/30 bg-red-50 dark:bg-red-500/15 p-6 shadow-sm sm:p-8">
                     @include('profile.partials.delete-user-form')
                 </section>
             </div>
@@ -52,7 +52,7 @@
                     <a href="#password" class="block rounded px-3 py-2.5 text-ink-strong transition hover:bg-line">
                         Password
                     </a>
-                    <a href="#delete-account" class="block rounded px-3 py-2.5 text-red-700 dark:text-red-300 transition hover:bg-red-50 dark:hover:bg-red-500/15 dark:bg-red-500/15">
+ <a href="#delete-account" class="block rounded px-3 py-2.5 text-red-700 dark:text-red-300 transition hover:bg-red-50 dark:hover:bg-red-500/15">
                         Delete account
                     </a>
                 </nav>

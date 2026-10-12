@@ -29,7 +29,7 @@
     @endphp
 
     <div class="space-y-10">
-        <section class="relative overflow-hidden rounded-[2rem] bg-volcanic-teal p-8 text-white shadow-xl sm:p-12">
+        <section class="relative overflow-hidden rounded-[2rem] bg-volcanic-teal dark:bg-surface-raised p-8 text-white dark:text-ink-strong shadow-xl sm:p-12">
             <div class="absolute -right-24 -top-24 h-96 w-96 rounded-full bg-boracay/25 blur-3xl"></div>
             <div class="absolute -bottom-32 left-1/3 h-80 w-80 rounded-full bg-philippine-gold/15 blur-3xl"></div>
 
@@ -75,7 +75,7 @@
                     <button
                         type="button"
                         onclick="document.getElementById('delete-itinerary-confirmation').showModal()"
-                        class="rounded-full bg-red-50 dark:bg-red-500/150/15 px-5 py-3 text-sm font-semibold text-red-200 transition hover:bg-red-50 dark:hover:bg-red-500/15 dark:bg-red-500/150 hover:text-white"
+ class="rounded-full bg-red-50 dark:bg-red-500/15 px-5 py-3 text-sm font-semibold text-red-200 transition hover:bg-red-50 dark:hover:bg-red-500/15 hover:text-white"
                     >
                         Delete
                     </button>
@@ -88,11 +88,11 @@
             aria-labelledby="delete-itinerary-confirmation-title"
             aria-describedby="delete-itinerary-confirmation-description"
             onclick="if (event.target === this) this.close()"
-            class="m-auto w-[calc(100%-2rem)] max-w-md rounded-lg border border-red-200 dark:border-red-400/30 bg-surface p-0 text-ink shadow-2xl backdrop:bg-volcanic-teal/60 backdrop:backdrop-blur-sm"
+ class="m-auto w-[calc(100%-2rem)] max-w-md rounded-lg border border-red-200 dark:border-red-400/30 bg-surface p-0 text-ink shadow-2xl backdrop:bg-volcanic-teal/60 backdrop:backdrop-blur-sm"
         >
             <div class="p-6 sm:p-7">
                 <div class="flex items-start gap-4">
-                    <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-100 dark:bg-red-50 dark:bg-red-500/150/20 text-red-700 dark:text-red-300">
+ <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-300">
                         <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M6 7h12m-10 0 .7 13h6.6L16 7M9 7V4h6v3m-4 4v5m2-5v5" />
                         </svg>
@@ -124,7 +124,7 @@
 
                     <button
                         type="submit"
-                        class="rounded-full bg-red-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-700 focus:ring-offset-2 dark:focus:ring-offset-volcanic-teal"
+ class="rounded-full bg-red-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-700 focus:ring-offset-2 dark:focus:ring-offset-volcanic-teal"
                     >
                         Delete itinerary
                     </button>
@@ -334,7 +334,7 @@
                             <button
                                 type="button"
                                 data-remove
-                                class="inline-flex min-h-11 items-center justify-center rounded-md border border-red-200 dark:border-red-400/30 px-4 py-2 text-sm font-semibold text-red-700 dark:text-red-300 transition hover:bg-red-50 dark:hover:bg-red-500/15 dark:bg-red-500/15"
+ class="inline-flex min-h-11 items-center justify-center rounded-md border border-red-200 dark:border-red-400/30 px-4 py-2 text-sm font-semibold text-red-700 dark:text-red-300 transition hover:bg-red-50 dark:hover:bg-red-500/15"
                             >
                                 Remove
                             </button>
@@ -478,7 +478,7 @@
                                         <button
                                             type="submit"
                                             form="remove-day-{{ $day->id }}"
-                                            class="inline-flex min-h-11 items-center justify-center rounded-md border border-red-200 dark:border-red-400/30 px-3 py-2 text-xs font-bold text-red-700 dark:text-red-300 transition hover:bg-red-50 dark:hover:bg-red-500/15 dark:bg-red-500/15"
+ class="inline-flex min-h-11 items-center justify-center rounded-md border border-red-200 dark:border-red-400/30 px-3 py-2 text-xs font-bold text-red-700 dark:text-red-300 transition hover:bg-red-50 dark:hover:bg-red-500/15"
                                         >
                                             Remove day
                                         </button>
@@ -614,7 +614,7 @@
                                             <button
                                                 type="button"
                                                 data-remove
-                                                class="inline-flex min-h-11 items-center justify-center rounded-md border border-red-200 dark:border-red-400/30 px-4 py-2 text-sm font-semibold text-red-700 dark:text-red-300 transition hover:bg-red-50 dark:hover:bg-red-500/15 dark:bg-red-500/15"
+ class="inline-flex min-h-11 items-center justify-center rounded-md border border-red-200 dark:border-red-400/30 px-4 py-2 text-sm font-semibold text-red-700 dark:text-red-300 transition hover:bg-red-50 dark:hover:bg-red-500/15"
                                             >
                                                 Remove
                                             </button>

@@ -18,7 +18,7 @@
     </x-slot>
 
     <div class="space-y-10">
-        <section class="relative overflow-hidden rounded-[2rem] bg-volcanic-teal p-8 text-white shadow-xl sm:p-12">
+        <section class="relative overflow-hidden rounded-[2rem] bg-volcanic-teal dark:bg-surface-raised p-8 text-white dark:text-ink-strong shadow-xl sm:p-12">
             <div class="absolute -right-24 -top-24 h-96 w-96 rounded-full bg-boracay/25 blur-3xl"></div>
             <div class="absolute -bottom-32 left-1/3 h-80 w-80 rounded-full bg-philippine-gold/15 blur-3xl"></div>
 
@@ -246,7 +246,7 @@
                             {{ $successfulSourceCount }} successful
                         </span>
 
-                        <span class="rounded-full bg-red-100 dark:bg-red-50 dark:bg-red-500/150/20 px-3 py-1 text-red-700 dark:text-red-300">
+ <span class="rounded-full bg-red-100 dark:bg-red-500/20 px-3 py-1 text-red-700 dark:text-red-300">
                             {{ $failedSourceCount }} failed
                         </span>
                     </div>

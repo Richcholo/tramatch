@@ -27,7 +27,7 @@
         <form
             method="GET"
             action="{{ route('itineraries.create') }}"
-            class="rounded-[2rem] bg-volcanic-teal p-6 shadow-xl sm:p-8"
+            class="rounded-[2rem] bg-volcanic-teal dark:bg-surface-raised p-6 shadow-xl sm:p-8"
         >
             <label class="block">
                 <span class="text-xs font-bold uppercase tracking-[0.2em] text-boracay-light">
@@ -202,7 +202,7 @@
                     </div>
                 </section>
 
-                <section class="rounded-[2rem] bg-volcanic-teal p-6 text-white shadow-xl sm:p-10">
+                <section class="rounded-[2rem] bg-volcanic-teal dark:bg-surface-raised p-6 text-white dark:text-ink-strong shadow-xl sm:p-10">
                     <div class="flex flex-wrap items-end justify-between gap-4">
                         <div>
                             <p class="text-xs font-bold uppercase tracking-[0.2em] text-boracay-light">

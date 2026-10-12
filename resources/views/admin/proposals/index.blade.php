@@ -109,7 +109,7 @@
                                     <button
                                         type="submit"
                                         form="proposal-reject-{{ $proposal->id }}"
-                                        class="rounded-full border border-red-300 px-4 py-2 text-sm font-bold text-red-600"
+ class="rounded-full border border-red-300 px-4 py-2 text-sm font-bold text-red-600"
                                     >
                                         Reject
                                     </button>
@@ -127,7 +127,7 @@
                         </div>
                     </article>
                 @empty
-                    <div class="rounded-[2rem] bg-volcanic-teal p-10 text-white">
+                    <div class="rounded-[2rem] bg-volcanic-teal dark:bg-surface-raised p-10 text-white dark:text-ink-strong">
                         <p class="text-xs font-bold uppercase tracking-[0.28em] text-boracay-light">
                             Review queue clear
                         </p>

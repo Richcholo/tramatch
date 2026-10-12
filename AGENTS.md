@@ -1093,6 +1093,45 @@ pair added beside it.
   stylesheet; a constant list is not enough, because with `bg-surfacex` mistyped
   on one page and `bg-surface` still used on twenty others every role is still
   emitted and a constant list still passes. Caught in the act.
+- **A TIGHT-LOOKING PATTERN WITH NO RIGHT BOUNDARY CORRUPTS WHAT IT WAS MEANT
+  TO MAP, AND IT SHIPS GREEN.** The status sweep replaced `bg-red-50` →
+  `dark:bg-red-500/15` with no boundary, so it matched **inside the string it
+  had just created** and inside pre-existing `bg-red-50/60`, leaving
+  `dark:bg-red-500/150/15`, `bg-red-50 dark:bg-red-500/15/60` and a bare
+  `dark:bg-red-50` — 23 sites across 15 files. Every test stayed green
+  throughout, because the assertions only checked that the *correct* pair was
+  present and never that a second one was not. **Two rules for any rewrite:**
+  anchor both ends (`(?<![\w:.-])token(?![\w./-])`), and assert the ABSENCE of
+  the malformed form as well as the presence of the right one. Repaired in
+  place rather than reverted, because it had already shipped.
+- **A GUARD THAT CANNOT MATCH ANYTHING IS WORSE THAN NO GUARD, AND IT PASSES.**
+  Three separate regex mistakes during the status repair, each caught only by
+  deliberately reintroducing the exact corruption it claims to detect:
+
+  | Written | Means | Catch rate on the 3 real shapes |
+  |---|---|---|
+  | `dark:[a-z-]*:bg-red-…` | demands a **second** colon, so it never matches `dark:bg-red-50` | **0/3** |
+  | `dark:(?:[a-z-]+:)?bg-red-…` | optional state prefix — correct | 3/3 |
+  | `(?<![\w/-])\d+/\d+` | lookbehind can't sit on a slash, so `/15/60` is rejected at both ends | **0/3** |
+  | `/\/\d{1,3}\/\d{1,3}/` | doubled alpha — correct | 3/3 |
+
+  `[a-z-]*:` and `(?:[a-z-]+:)?` are not interchangeable; the first one is a
+  silent, total failure. The tell is always the same and it is cheap:
+  **falsify the guard by putting the bug back and watching it fail.** A guard
+  added and never falsified is an assumption. The `assertGreaterThan(0, …)`
+  companion helps and is not enough on its own — it proves the *positive* half
+  of a rule is live, not that the negative half can fire.
+- **THE DARK-BY-DESIGN PAGES MUST CARRY NO `dark:` VARIANT AT ALL.** A `dark:`
+  prefix on `destinations/show.blade.php` or `discover/index.blade.php` is not
+  a theme choice but a contradiction: those pages are dark in **both** themes,
+  so the variant is live at all times whatever the toggle says. The status
+  repair walked straight into it and turned the destination page's "Closed now"
+  badge — a light pill with dark text, deliberate and never allowed to tint its
+  background — into a dark tint that vanished into its own ground. Exclude
+  these from **any** sweep, not only the palette one:
+  `the_dark_by_design_pages_carry_no_dark_variant` guards it. `welcome` is
+  deliberately not in that list; it is a light page that does carry dark
+  variants, and adding it would fail the guard for a correct reason.
 - **`@property --tw-ring-offset-color` IS REGISTERED WITH `inherits: false`, SO
   AN ANCESTOR RULE CANNOT FIX IT.** Setting the ring offset colour on `.dark`
   puts it on `<html>` and nowhere else, and all sixteen focused controls keep

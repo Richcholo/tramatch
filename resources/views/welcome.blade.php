@@ -302,7 +302,7 @@
                 <div class="animate-reveal-delay relative hidden min-h-[520px] lg:block">
                     <div data-depth="1.2" class="absolute right-[10%] top-[6%] z-10">
                         <div class="animate-float w-56 rotate-6 rounded-[2rem] bg-white p-3 text-ink-strong shadow-2xl shadow-black/25">
-                            <div class="flex h-52 flex-col justify-between rounded-[1.4rem] bg-gradient-to-br from-philippine-gold via-orange-400 to-red-400 p-4 text-white">
+ <div class="flex h-52 flex-col justify-between rounded-[1.4rem] bg-gradient-to-br from-philippine-gold via-orange-400 to-red-400 p-4 text-white">
                                 <span class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-white/80">
                                     Match 98%
                                 </span>
@@ -656,7 +656,7 @@
                             </div>
                         </a>
                     @empty
-                        <div class="w-full shrink-0 rounded-[2rem] bg-volcanic-teal p-8 text-white">
+                        <div class="w-full shrink-0 rounded-[2rem] bg-volcanic-teal dark:bg-surface-raised p-8 text-white dark:text-ink-strong">
                             <p class="text-lg font-semibold">
                                 Your destination collection is getting ready.
                             </p>
