@@ -2002,13 +2002,42 @@ the runtime never executes it.
   discards stdout on this host**. The line that matters is
   `found the queue empty`: it means the drain ran and the queue was genuinely
   empty, which is the one thing `status` stuck on `queued` does not tell you.
-- **`DrainQueue` stops on the first job that throws outside its own handling.**
-  Releasing puts the row back with `available_at` in the past, so the next
-  `pop()` returns the same job and a permanently failing job never leaves the
-  queue — the drain spun on one job until its wall-clock cap, burning the cron
-  slot every minute and draining nothing. The suite measured it: 278s before
-  the `break`, 0.5s after. This is the same shape as the `retry_after` bug
-  below, reached from the other direction.
+- **A JOB THAT THROWS IS RETIRED AND THE DRAIN CARRIES ON. IT IS NOT RELEASED.**
+  The bug this replaces: releasing put the row back with `available_at` in the
+  past, so the next `pop()` returned the SAME job. One unreachable host pinned
+  the entire crawl queue — an admin clicked "crawl all", one source failed, and
+  every run thereafter burned its wall-clock cap re-popping that one row while
+  the 64 healthy sources were never attempted. Measured: 278s before the fix,
+  0.5s after. Falsifying it showed 3 of 3 jobs still `pending` after one drain.
+
+  The release was worse than a plain retry. `pop()` returns rows ordered by id,
+  and `release()` writes a NEW, higher id, so the failing row landed at the
+  *end* of the queue — it still consumed the whole run before anything else got
+  a turn.
+
+  `$job->fail()` is the right call. It runs the job's own `failed()` hook, which
+  is what writes the source's status and `error_message`, and it deletes the
+  queue row. A job-level retry adds nothing: `EthicalSourceFetcher` already makes
+  its own transport attempts (3 from the drain, 2 from the admin button) and
+  persists the failure *before* rethrowing, so re-running the job is just the
+  same request again. An admin re-crawls from the UI when they mean to.
+
+  Three traps in this code, all of them silent:
+
+  - **A RETIRED JOB LEAVES NO `failed_jobs` ROW IN THIS APP.**
+    `FailedJobProviderInterface` is **not bound in the container**, so
+    `CallQueuedHandler::failed()`'s `failedJobProvider?->log(...)` does nothing.
+    Measured with a probe that called `fail()` on a real popped job:
+    `failed_jobs` stayed empty while `jobs` went to zero. **Never assert a
+    `failed_jobs` row here** — assert the job left the `jobs` table. The record
+    of a failed crawl is `destination_source_crawls` plus the source's status.
+  - **`retire()` IS NOT `fail()`.** `Illuminate\Console\Command` already has a
+    public `fail()`, so declaring `private function fail()` is a fatal "access
+    level must be public" at class-load time, not a subtle bug.
+  - **`$tries` CANNOT BE REACHED BY RELEASING.** `release()` goes through
+    `deleteAndRelease()`, which resets `attempts` to 0, so a released job's
+    attempt counter never climbs toward `$tries`. `$job->attempts` is the only
+    reliable count.
 - `pop()` is called with **no argument**. The argument is a *queue* name, not a
   connection name, so `pop('database')` asked for a queue called "database" and
   always returned null — the first version drained nothing and still exited 0.

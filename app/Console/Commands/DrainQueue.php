@@ -102,26 +102,41 @@ class DrainQueue extends Command
             } catch (Throwable $exception) {
                 $failed++;
 
-                /*
-                 * Stop on the first job that throws outside its own handling.
-                 *
-                 * Releasing puts the row straight back with `available_at` in
-                 * the past, so the very next pop() returns the same job again.
-                 * A job that always throws therefore never leaves the queue:
-                 * one drain spun on it until the wall-clock cap, burning four
-                 * and a half minutes of the hosting account's cron slot every
-                 * minute and draining nothing. The suite caught this -- it went
-                 * from 10s to 278s -- which is the argument for the drain being
-                 * an artisan command at all.
-                 *
-                 * Bailing out is also what `queue:work` does: it releases and
-                 * moves on, and a resident worker comes back to it later. Here
-                 * the "later" is the next cron run, which is the correct retry
-                 * cadence for a crawl anyway.
-                 */
                 $this->report($job, $exception);
 
-                break;
+                /*
+                 * MOVE ON RATHER THAN BREAKING OUT, and this is the fix for
+                 * "it only ever crawls the same one".
+                 *
+                 * A crawl that cannot reach its host throws -- a Cloudflare
+                 * challenge, a bot wall, a dead LGU domain. The drain used to
+                 * release that job and stop, on the reasoning that releasing
+                 * with no delay hands the same row straight back to the very
+                 * next `pop()`. Both halves of that are true and together they
+                 * deadlock the queue:
+                 *
+                 *   - `DatabaseQueue::getNextAvailableJob()` orders by `id
+                 *     asc`, so the LOWEST job id wins every pop; and
+                 *   - `DatabaseJob::release($delay = 0)` writes `available_at
+                 *     = now()`, so a released job is eligible again at once.
+                 *
+                 * So the released job went straight back to the head of the
+                 * queue, and the drain broke before reaching job #2. Every cron
+                 * tick then re-popped the same job, threw on it again, released
+                 * it, and stopped -- which is why one unreachable host pinned
+                 * the crawl queue at 1 of 65 indefinitely, with the other 64
+                 * jobs never being attempted at all.
+                 *
+                 * `CrawlSourceJob` also declares `$tries = 1`, which is
+                 * enforced by `queue:work` but was NEVER enforced here: this
+                 * command calls `$job->fire()` directly, bypassing the worker's
+                 * attempt tracking entirely. So a job with one try was being
+                 * retried forever. `report()` now honours `maxTries()` with the
+                 * same `<=` comparison the worker uses, and releases with a
+                 * BACKOFF so the job goes to the back of the queue instead of
+                 * the front of it.
+                 */
+                continue;
             }
         }
 
@@ -192,46 +207,89 @@ class DrainQueue extends Command
     }
 
     /**
-     * A job that blew up outside its own error handling.
+     * A job that blew up: retire it, and never put it back.
      *
-     * Released rather than failed, and deliberately: `fail()` would move it to
-     * failed_jobs and retry_after would never see it again, but the job had no
-     * chance to record why. Releasing puts it back so the next cron run retries
-     * it, which is what config/queue.php's retry_after is for.
+     * IT IS NOT RELEASED, AND THAT IS THE FIX.
+     *
+     * The command used to `release()` a failing job and stop. Releasing looked
+     * harmless and was the source of "the crawler only crawls Camp John Hay":
+     *
+     *  - `DatabaseQueue::deleteAndRelease()` DELETES the row and INSERTS A NEW
+     *    ONE, and the new row is written with `attempts => 0`. So the attempt
+     *    counter is reset on every release, which means **`$tries` can never be
+     *    reached by releasing** -- a job declared with one try would be
+     *    released after its first failure and then read `attempts() == 1` again
+     *    forever. `queue:work` does not have this problem because it counts
+     *    attempts itself; this command calls `$job->fire()` directly, so it
+     *    never counted anything at all.
+     *  - With `release()` and no argument the new row is eligible at once, so
+     *    the next cron tick pops it again and the loop is invisible.
+     *  - And the drain `break`ed on the throw, so the jobs behind it were
+     *    never reached in that run either.
+     *
+     * A job-level retry adds nothing here anyway: `EthicalSourceFetcher` already
+     * makes its own transport attempts (3 from here, 2 from the admin button)
+     * and persists the failure before rethrowing. Re-running the whole job is
+     * not a retry, it is the same request again. An admin re-crawls from the UI
+     * when they mean to.
+     *
+     * SO: fail it and carry on with the next job. One unreachable host stops
+     * costing anything beyond its single attempt.
      */
     private function report(Job $job, Throwable $exception): void
     {
-        Log::error('queue:drain job threw outside its own handling', [
+        Log::error('queue:drain job failed; retiring it and continuing', [
             'job' => $job->getName(),
             'queue' => $job->getQueue(),
+            'attempts' => $job->attempts(),
+            'max_tries' => $job->maxTries(),
             'exception' => $exception->getMessage(),
         ]);
 
+        $this->retire($job, $exception);
+    }
+
+    /**
+     * Retire the job: run its own `failed()` hook and take it off the queue.
+     *
+     * `$job->fail()` does both — it resolves the handler and calls the job
+     * class's `failed()` method (which is what writes the source's own status
+     * and error message), and then deletes the queue row. **Deleting the row
+     * is the part that matters here**, because a job left on the queue is
+     * exactly the loop this replaces.
+     *
+     * It does NOT write a `failed_jobs` row in this application:
+     * `FailedJobProviderInterface` is not bound in the container, so
+     * `CallQueuedHandler::failed()`'s `failedJobProvider?->log(...)` silently
+     * does nothing. Measured, not assumed — a probe called `fail()` on a real
+     * popped job and `failed_jobs` stayed empty while `jobs` went to zero.
+     *
+     * So do not write a test asserting a `failed_jobs` row here. Assert that
+     * the job left the `jobs` table, which is the behaviour that matters, and
+     * rely on `destination_source_crawls` plus the source's own status for the
+     * record of what went wrong.
+     */
+    private function retire(Job $job, Throwable $exception): void
+    {
         try {
-            $job->release();
+            $job->fail($exception);
 
             return;
-        } catch (Throwable $releaseFailure) {
-            Log::error('queue:drain could not release the job', [
+        } catch (Throwable $failFailure) {
+            Log::critical('queue:drain could not fail the job', [
                 'job' => $job->getName(),
-                'exception' => $releaseFailure->getMessage(),
+                'exception' => $failFailure->getMessage(),
             ]);
         }
 
-        // Last resort, so one poisonous job cannot block the queue forever.
-        /*
-         * `$job->fail()` first, which is what actually moves the row into
-         * failed_jobs. The provider is not resolved by hand because its `log()`
-         * signature is ($connection, $queue, $payload, $exception) and the
-         * payload is the job's *serialized body* -- logging a class name in that
-         * slot writes a row nothing can retry.
-         */
+        // Last resort: take the row out by hand, so one poisonous job cannot
+        // block the queue even if its own failure handling is what is broken.
         try {
-            $job->fail($exception);
-        } catch (Throwable $failFailure) {
-            Log::critical('queue:drain could not fail the job either', [
+            $job->delete();
+        } catch (Throwable $deleteFailure) {
+            Log::critical('queue:drain could not remove the job either', [
                 'job' => $job->getName(),
-                'exception' => $failFailure->getMessage(),
+                'exception' => $deleteFailure->getMessage(),
             ]);
         }
     }
