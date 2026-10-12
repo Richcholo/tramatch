@@ -1,9 +1,9 @@
 <section>
     <header>
-        <h2 class="font-display text-2xl font-semibold text-ink-strong">
+        <h2 class="font-display text-2xl font-semibold text-volcanic-teal">
             Profile photo
         </h2>
-        <p class="mt-2 text-sm leading-6 text-ink/65">
+        <p class="mt-2 text-sm leading-6 text-benguet-charcoal/65">
             Choose a photo to personalize your account.
         </p>
     </header>
@@ -16,7 +16,7 @@
                 {{ strtoupper(substr($user->first_name ?: 'T', 0, 1) . substr($user->last_name, 0, 1)) }}
             @endif
         </div>
-        <p class="text-sm text-ink/65">
+        <p class="text-sm text-benguet-charcoal/65">
             JPG, PNG, or WebP. Maximum size 2 MB.
         </p>
     </div>
@@ -25,7 +25,7 @@
         @csrf
 
         <div>
-            <label for="photo" class="block text-sm font-semibold text-ink">
+            <label for="photo" class="block text-sm font-semibold text-benguet-charcoal">
                 Choose a new photo
             </label>
             <input
@@ -34,7 +34,7 @@
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
                 required
-                class="mt-2 block w-full text-sm text-ink-fill file:mr-4 file:rounded-md file:border-0 file:bg-line file:px-4 file:py-2 file:font-semibold file:text-boracay-dark hover:file:bg-boracay"
+                class="mt-2 block w-full text-sm text-benguet-charcoal file:mr-4 file:rounded-md file:border-0 file:bg-boracay-light file:px-4 file:py-2 file:font-semibold file:text-boracay-dark hover:file:bg-boracay"
             >
             <x-input-error class="mt-2" :messages="$errors->get('photo')" />
         </div>
@@ -57,13 +57,13 @@
     />
 
     @if ($user->profile_photo_path)
-        <form id="remove-profile-photo-form" method="post" action="{{ route('profile.photo.destroy') }}" class="mt-5 border-t border-line pt-5">
+        <form id="remove-profile-photo-form" method="post" action="{{ route('profile.photo.destroy') }}" class="mt-5 border-t border-boracay-light pt-5">
             @csrf
             @method('delete')
             <button
                 type="button"
                 onclick="document.getElementById('confirm-remove-profile-photo').showModal()"
- class="inline-flex min-h-10 items-center justify-center rounded-md px-4 py-2 text-sm font-semibold text-red-700 dark:text-red-300 transition hover:bg-red-50 dark:hover:bg-red-500/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
+                class="inline-flex min-h-10 items-center justify-center rounded-md px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
             >
                 Remove photo
             </button>

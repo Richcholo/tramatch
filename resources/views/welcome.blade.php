@@ -28,16 +28,6 @@
     <link rel="icon" href="{{ asset('images/logo.svg') }}">
     <link rel="manifest" href="/manifest.webmanifest">
 
-    {{--
-        The landing page is a standalone document rather than a layout, so it
-        carries its own copy of the theme script -- before the first stylesheet,
-        for the same reason the layouts do: a deferred script runs after the
-        paint. Without this the home page would stay light whatever the visitor
-        had chosen everywhere else, which is the most visible possible
-        inconsistency on the site.
-    --}}
-    <x-theme-init />
-
     <title>TraMatch — Find the places that feel like you</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -52,7 +42,7 @@
 
 </head>
 
-<body id="top" class="min-h-screen bg-surface text-ink antialiased">
+<body id="top" class="min-h-screen bg-palawan-sand text-benguet-charcoal antialiased">
     {{-- The welcome page is standalone, so the overlay the other two layouts
          render in their own header was simply absent here. page-transitions.js
          loaded all the same and its link handler fired on the CTA, so the
@@ -214,7 +204,7 @@
                 @if ($isAuthenticated)
                     <a
                         href="{{ route('dashboard') }}"
-                        class="hidden rounded-full border border-white/40 px-5 py-2.5 text-base font-semibold text-white transition hover:bg-white hover:text-ink-strong dark:hover:bg-white/15 dark:hover:text-ink-strong sm:inline-flex"
+                        class="hidden rounded-full border border-white/40 px-5 py-2.5 text-base font-semibold text-white transition hover:bg-white hover:text-volcanic-teal sm:inline-flex"
                     >
                         Dashboard
                     </a>
@@ -231,7 +221,7 @@
 
                 <a
                     href="{{ $primaryHref }}"
-                    class="rounded-full bg-philippine-gold px-5 py-2.5 text-base font-bold text-ink-fill shadow-lg shadow-black/10 transition hover:-translate-y-0.5 hover:bg-white"
+                    class="rounded-full bg-philippine-gold px-5 py-2.5 text-base font-bold text-benguet-charcoal shadow-lg shadow-black/10 transition hover:-translate-y-0.5 hover:bg-white"
                 >
                     {{ $primaryLabel }}
                 </a>
@@ -283,7 +273,7 @@
                     <div class="animate-reveal-delay mt-9 flex flex-wrap items-center gap-4">
                         <a
                             href="{{ $primaryHref }}"
-                            class="inline-flex items-center gap-3 rounded-full bg-white px-6 py-3 font-bold text-ink-strong transition hover:-translate-y-1 hover:bg-philippine-gold"
+                            class="inline-flex items-center gap-3 rounded-full bg-white px-6 py-3 font-bold text-volcanic-teal transition hover:-translate-y-1 hover:bg-philippine-gold"
                         >
                             {{ $primaryLabel }}
                             <span aria-hidden="true">↗</span>
@@ -301,8 +291,8 @@
 
                 <div class="animate-reveal-delay relative hidden min-h-[520px] lg:block">
                     <div data-depth="1.2" class="absolute right-[10%] top-[6%] z-10">
-                        <div class="animate-float w-56 rotate-6 rounded-[2rem] bg-white p-3 text-ink-strong shadow-2xl shadow-black/25">
- <div class="flex h-52 flex-col justify-between rounded-[1.4rem] bg-gradient-to-br from-philippine-gold via-orange-400 to-red-400 p-4 text-white">
+                        <div class="animate-float w-56 rotate-6 rounded-[2rem] bg-white p-3 text-volcanic-teal shadow-2xl shadow-black/25">
+                            <div class="flex h-52 flex-col justify-between rounded-[1.4rem] bg-gradient-to-br from-philippine-gold via-orange-400 to-red-400 p-4 text-white">
                                 <span class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-white/80">
                                     Match 98%
                                 </span>
@@ -319,11 +309,11 @@
                             </div>
 
                             <div class="flex items-center justify-between px-2 pb-1 pt-3">
-                                <span class="flex h-9 w-9 items-center justify-center rounded-full border border-benguet-charcoal/15 dark:border-white/15 text-sm text-ink/60">
+                                <span class="flex h-9 w-9 items-center justify-center rounded-full border border-benguet-charcoal/15 text-sm text-benguet-charcoal/60">
                                     ✕
                                 </span>
 
-                                <span class="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-ink/50">
+                                <span class="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-benguet-charcoal/50">
                                     Swipe
                                 </span>
 
@@ -335,7 +325,7 @@
                     </div>
 
                     <div data-depth="0.7" class="absolute bottom-[10%] left-[2%]">
-                        <div class="animate-float-delay w-60 -rotate-6 rounded-[2rem] bg-surface p-3 text-ink-strong shadow-2xl shadow-black/25">
+                        <div class="animate-float-delay w-60 -rotate-6 rounded-[2rem] bg-palawan-sand p-3 text-volcanic-teal shadow-2xl shadow-black/25">
                             <div class="flex h-56 flex-col justify-between rounded-[1.4rem] bg-gradient-to-br from-boracay via-cyan-500 to-volcanic-teal p-4 text-white">
                                 <span class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-white/80">
                                     Match 91%
@@ -353,11 +343,11 @@
                             </div>
 
                             <div class="flex items-center justify-between px-2 pb-1 pt-3">
-                                <span class="flex h-9 w-9 items-center justify-center rounded-full border border-benguet-charcoal/15 dark:border-white/15 text-sm text-ink/60">
+                                <span class="flex h-9 w-9 items-center justify-center rounded-full border border-benguet-charcoal/15 text-sm text-benguet-charcoal/60">
                                     ✕
                                 </span>
 
-                                <span class="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-ink/50">
+                                <span class="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-benguet-charcoal/50">
                                     Swipe
                                 </span>
 
@@ -370,7 +360,7 @@
 
                     <div
                         data-depth="0.4"
-                        class="absolute bottom-[4%] right-[2%] flex h-20 w-20 items-center justify-center rounded-full bg-philippine-gold text-center text-xs font-bold leading-4 text-ink-fill shadow-xl"
+                        class="absolute bottom-[4%] right-[2%] flex h-20 w-20 items-center justify-center rounded-full bg-philippine-gold text-center text-xs font-bold leading-4 text-benguet-charcoal shadow-xl"
                     >
                         <span class="block">
                             Swipe.<br>
@@ -390,10 +380,10 @@
 
         <div
             data-bg="#FFFFFF"
-            class="overflow-hidden border-y border-line py-5"
+            class="overflow-hidden border-y border-boracay-light py-5"
             aria-hidden="true"
         >
-            <div class="animate-marquee flex w-max items-center gap-10 whitespace-nowrap text-sm font-bold uppercase tracking-[0.3em] text-ink-strong">
+            <div class="animate-marquee flex w-max items-center gap-10 whitespace-nowrap text-sm font-bold uppercase tracking-[0.3em] text-volcanic-teal">
                 @for ($i = 0; $i < 2; $i++)
                     <span>Discover locally</span>
                     <span class="text-philippine-gold">✦</span>
@@ -425,22 +415,22 @@
                         <h2
                             data-reveal
                             data-parallax="6"
-                            class="max-w-5xl text-4xl font-semibold leading-[1.05] tracking-[-0.04em] text-ink-strong sm:text-6xl"
+                            class="max-w-5xl text-4xl font-semibold leading-[1.05] tracking-[-0.04em] text-volcanic-teal sm:text-6xl"
                         >
                             Not another list of places. A
                             <span class="text-boracay-dark">better way</span>
                             to discover where you want to go.
                         </h2>
 
-                        <div class="mt-10 grid gap-8 border-t border-line pt-8 sm:grid-cols-2">
-                            <p data-reveal class="leading-7 text-ink/75">
+                        <div class="mt-10 grid gap-8 border-t border-boracay-light pt-8 sm:grid-cols-2">
+                            <p data-reveal class="leading-7 text-benguet-charcoal/75">
                                 Travel planning usually starts with too many tabs, too many opinions, and no clear sense of what fits you.
                             </p>
 
                             <p
                                 data-reveal
                                 data-reveal-delay="0.15"
-                                class="leading-7 text-ink/75"
+                                class="leading-7 text-benguet-charcoal/75"
                             >
                                 TraMatch starts with your taste, then lets your instincts lead. Swipe through destinations, keep what feels right, and turn your choices into a trip.
                             </p>
@@ -458,7 +448,7 @@
                             02 / The ritual
                         </p>
 
-                        <h2 class="mt-4 max-w-3xl text-4xl font-semibold tracking-[-0.04em] text-ink-strong sm:text-6xl">
+                        <h2 class="mt-4 max-w-3xl text-4xl font-semibold tracking-[-0.04em] text-volcanic-teal sm:text-6xl">
                             Three small decisions. One trip that feels like yours.
                         </h2>
                     </div>
@@ -469,60 +459,60 @@
                 </div>
 
                 <div class="mt-16 flex flex-col gap-6">
-                    <article class="tm-step rounded-[2rem] border border-line bg-surface shadow-xl shadow-volcanic-teal/5" style="--i: 0">
+                    <article class="tm-step rounded-[2rem] border border-boracay-light bg-palawan-sand shadow-xl shadow-volcanic-teal/5" style="--i: 0">
                         <div class="grid min-h-[20rem] gap-8 p-8 sm:p-12 md:grid-cols-[auto_1fr_auto] md:items-center md:gap-16">
                             <span class="text-7xl font-semibold leading-none tracking-[-0.05em] text-philippine-gold sm:text-8xl">
                                 01
                             </span>
 
                             <div>
-                                <h3 class="text-3xl font-bold tracking-[-0.02em] text-ink-strong sm:text-4xl">
+                                <h3 class="text-3xl font-bold tracking-[-0.02em] text-volcanic-teal sm:text-4xl">
                                     Set a direction.
                                 </h3>
 
-                                <p class="mt-4 max-w-xl leading-7 text-ink/70">
+                                <p class="mt-4 max-w-xl leading-7 text-benguet-charcoal/70">
                                     Tell TraMatch your budget, group, trip length, and the kinds of places you naturally gravitate toward.
                                 </p>
                             </div>
 
                             <div class="flex flex-wrap gap-2 md:max-w-[13rem]">
-                                <span class="rounded-full border border-boracay/25 bg-surface-raised px-3 py-1.5 text-xs font-semibold text-ink/70">
+                                <span class="rounded-full border border-boracay/25 bg-island-white px-3 py-1.5 text-xs font-semibold text-benguet-charcoal/70">
                                     ₱5k budget
                                 </span>
 
-                                <span class="rounded-full border border-boracay/25 bg-surface-raised px-3 py-1.5 text-xs font-semibold text-ink/70">
+                                <span class="rounded-full border border-boracay/25 bg-island-white px-3 py-1.5 text-xs font-semibold text-benguet-charcoal/70">
                                     3 days
                                 </span>
 
-                                <span class="rounded-full border border-boracay/25 bg-surface-raised px-3 py-1.5 text-xs font-semibold text-ink/70">
+                                <span class="rounded-full border border-boracay/25 bg-island-white px-3 py-1.5 text-xs font-semibold text-benguet-charcoal/70">
                                     Barkada of 4
                                 </span>
 
-                                <span class="rounded-full border border-boracay/25 bg-surface-raised px-3 py-1.5 text-xs font-semibold text-ink/70">
+                                <span class="rounded-full border border-boracay/25 bg-island-white px-3 py-1.5 text-xs font-semibold text-benguet-charcoal/70">
                                     Beach + food
                                 </span>
                             </div>
                         </div>
                     </article>
 
-                    <article class="tm-step rounded-[2rem] border border-line bg-surface shadow-xl shadow-volcanic-teal/5" style="--i: 1">
+                    <article class="tm-step rounded-[2rem] border border-boracay-light bg-palawan-sand shadow-xl shadow-volcanic-teal/5" style="--i: 1">
                         <div class="grid min-h-[20rem] gap-8 p-8 sm:p-12 md:grid-cols-[auto_1fr_auto] md:items-center md:gap-16">
                             <span class="text-7xl font-semibold leading-none tracking-[-0.05em] text-philippine-gold sm:text-8xl">
                                 02
                             </span>
 
                             <div>
-                                <h3 class="text-3xl font-bold tracking-[-0.02em] text-ink-strong sm:text-4xl">
+                                <h3 class="text-3xl font-bold tracking-[-0.02em] text-volcanic-teal sm:text-4xl">
                                     Follow your instinct.
                                 </h3>
 
-                                <p class="mt-4 max-w-xl leading-7 text-ink/70">
+                                <p class="mt-4 max-w-xl leading-7 text-benguet-charcoal/70">
                                     Swipe through destination cards. Like what sparks something. Pass on what does not.
                                 </p>
                             </div>
 
                             <div class="flex items-center gap-4">
-                                <span class="flex h-14 w-14 items-center justify-center rounded-full border border-benguet-charcoal/15 dark:border-white/15 text-xl text-ink/60">
+                                <span class="flex h-14 w-14 items-center justify-center rounded-full border border-benguet-charcoal/15 text-xl text-benguet-charcoal/60">
                                     ✕
                                 </span>
 
@@ -533,23 +523,23 @@
                         </div>
                     </article>
 
-                    <article class="tm-step rounded-[2rem] border border-line bg-surface shadow-xl shadow-volcanic-teal/5" style="--i: 2">
+                    <article class="tm-step rounded-[2rem] border border-boracay-light bg-palawan-sand shadow-xl shadow-volcanic-teal/5" style="--i: 2">
                         <div class="grid min-h-[20rem] gap-8 p-8 sm:p-12 md:grid-cols-[auto_1fr_auto] md:items-center md:gap-16">
                             <span class="text-7xl font-semibold leading-none tracking-[-0.05em] text-philippine-gold sm:text-8xl">
                                 03
                             </span>
 
                             <div>
-                                <h3 class="text-3xl font-bold tracking-[-0.02em] text-ink-strong sm:text-4xl">
+                                <h3 class="text-3xl font-bold tracking-[-0.02em] text-volcanic-teal sm:text-4xl">
                                     Make it a plan.
                                 </h3>
 
-                                <p class="mt-4 max-w-xl leading-7 text-ink/70">
+                                <p class="mt-4 max-w-xl leading-7 text-benguet-charcoal/70">
                                     Your liked destinations become the foundation for a practical, personalized itinerary.
                                 </p>
                             </div>
 
-                            <div class="w-full max-w-[15rem] space-y-3 text-xs font-semibold text-ink/70">
+                            <div class="w-full max-w-[15rem] space-y-3 text-xs font-semibold text-benguet-charcoal/70">
                                 <div class="flex items-center gap-3">
                                     <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-philippine-gold"></span>
                                     09:00 — Breakfast in Tagaytay
@@ -582,14 +572,14 @@
                         03 / The places
                     </p>
 
-                    <h2 class="mt-4 text-4xl font-semibold tracking-[-0.04em] text-ink-strong sm:text-6xl">
+                    <h2 class="mt-4 text-4xl font-semibold tracking-[-0.04em] text-volcanic-teal sm:text-6xl">
                         Start close to home.
                     </h2>
 
                     @if (Route::has('destinations.index'))
                         <a
                             href="{{ route('destinations.index') }}"
-                            class="mt-7 inline-flex font-semibold text-boracay-dark transition hover:text-ink-strong"
+                            class="mt-7 inline-flex font-semibold text-boracay-dark transition hover:text-volcanic-teal"
                         >
                             Browse all destinations →
                         </a>
@@ -631,7 +621,7 @@
                                         0{{ $index + 1 }}
                                     </span>
 
-                                    <span class="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 backdrop-blur transition group-hover:bg-philippine-gold group-hover:text-ink-fill">
+                                    <span class="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 backdrop-blur transition group-hover:bg-philippine-gold group-hover:text-benguet-charcoal">
                                         ↗
                                     </span>
                                 </div>
@@ -656,7 +646,7 @@
                             </div>
                         </a>
                     @empty
-                        <div class="w-full shrink-0 rounded-[2rem] bg-volcanic-teal dark:bg-surface-raised p-8 text-white dark:text-ink-strong">
+                        <div class="w-full shrink-0 rounded-[2rem] bg-volcanic-teal p-8 text-white">
                             <p class="text-lg font-semibold">
                                 Your destination collection is getting ready.
                             </p>
@@ -725,7 +715,7 @@
                         >
                             <a
                                 href="{{ $primaryHref }}"
-                                class="inline-flex items-center gap-3 rounded-full bg-philippine-gold px-6 py-3 font-bold text-ink-fill transition hover:-translate-y-1 hover:bg-white"
+                                class="inline-flex items-center gap-3 rounded-full bg-philippine-gold px-6 py-3 font-bold text-benguet-charcoal transition hover:-translate-y-1 hover:bg-white"
                             >
                                 {{ $primaryLabel }}
                                 <span aria-hidden="true">↗</span>
@@ -747,12 +737,12 @@
         class="overflow-hidden"
     >
         <div class="mx-auto max-w-[1600px] px-5 pt-16 sm:px-8 lg:px-12">
-            <div class="flex flex-wrap items-center justify-between gap-5 text-sm text-ink/60">
+            <div class="flex flex-wrap items-center justify-between gap-5 text-sm text-benguet-charcoal/60">
                 <span>© {{ date('Y') }} TraMatch</span>
                 <span>Discover locally. Travel personally.</span>
                 <a
                     href="#top"
-                    class="font-semibold text-boracay-dark transition hover:text-ink-strong"
+                    class="font-semibold text-boracay-dark transition hover:text-volcanic-teal"
                 >
                     To top ↑
                 </a>

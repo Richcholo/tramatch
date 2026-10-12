@@ -4,11 +4,11 @@
             Welcome back
         </p>
 
-        <h1 class="mt-4 font-display text-4xl font-semibold leading-tight tracking-[-0.04em] text-ink-strong">
+        <h1 class="mt-4 font-display text-4xl font-semibold leading-tight tracking-[-0.04em] text-volcanic-teal">
             Return to your next place.
         </h1>
 
-        <p class="mt-3 text-sm leading-6 text-ink/70">
+        <p class="mt-3 text-sm leading-6 text-benguet-charcoal/70">
             Continue discovering destinations that match your travel style.
         </p>
     </div>
@@ -25,12 +25,12 @@
             <x-input-label
                 for="email"
                 :value="__('Email')"
-                class="text-ink"
+                class="text-benguet-charcoal"
             />
 
             <x-text-input
                 id="email"
-                class="mt-2 block w-full rounded-lg border-line bg-surface-raised focus:border-boracay focus:ring-boracay"
+                class="mt-2 block w-full rounded-lg border-boracay-light bg-white focus:border-boracay focus:ring-boracay"
                 type="email"
                 name="email"
                 :value="old('email')"
@@ -49,13 +49,13 @@
             <x-input-label
                 for="password"
                 :value="__('Password')"
-                class="text-ink"
+                class="text-benguet-charcoal"
             />
 
             <div class="relative mt-2">
                 <x-text-input
                     id="password"
-                    class="block w-full rounded-lg border-line bg-surface-raised pr-12 focus:border-boracay focus:ring-boracay"
+                    class="block w-full rounded-lg border-boracay-light bg-white pr-12 focus:border-boracay focus:ring-boracay"
                     type="password"
                     name="password"
                     required
@@ -66,7 +66,7 @@
                     type="button"
                     data-password-toggle="password"
                     aria-label="Show password"
-                    class="absolute inset-y-0 right-0 flex items-center pr-4 text-ink/40 transition hover:text-ink"
+                    class="absolute inset-y-0 right-0 flex items-center pr-4 text-benguet-charcoal/40 transition hover:text-benguet-charcoal"
                 >
                     <svg data-icon-show class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.964-7.178z"/>
@@ -84,12 +84,12 @@
             />
         </div>
 
-        <label class="flex items-center gap-3 text-sm text-ink/70">
+        <label class="flex items-center gap-3 text-sm text-benguet-charcoal/70">
             <input
                 id="remember_me"
                 type="checkbox"
                 name="remember"
-                class="rounded border-line text-boracay focus:ring-boracay"
+                class="rounded border-boracay-light text-boracay focus:ring-boracay"
             >
 
             <span>
@@ -100,7 +100,7 @@
         <div class="flex flex-col items-center gap-4 pt-2 text-center">
             <button
                 type="submit"
-                class="w-full rounded-full bg-boracay px-6 py-3 font-bold text-ink-fill transition hover:-translate-y-0.5 hover:bg-boracay-dark hover:text-white active:scale-[0.98] active:duration-75"
+                class="w-full rounded-full bg-boracay px-6 py-3 font-bold text-benguet-charcoal transition hover:-translate-y-0.5 hover:bg-boracay-dark hover:text-white active:scale-[0.98] active:duration-75"
             >
                 {{ __('Log in') }}
             </button>
@@ -108,19 +108,19 @@
             @if (Route::has('password.request'))
                 <a
                     href="{{ route('password.request') }}"
-                    class="text-sm font-semibold text-boracay-dark underline hover:text-ink-strong"
+                    class="text-sm font-semibold text-boracay-dark underline hover:text-volcanic-teal"
                 >
                     {{ __('Forgot your password?') }}
                 </a>
             @endif
 
             @if (Route::has('register'))
-                <p class="text-sm text-ink/70">
+                <p class="text-sm text-benguet-charcoal/70">
                     Don't have an account?
 
                     <a
                         href="{{ route('register') }}"
-                        class="font-bold text-boracay-dark hover:text-ink-strong"
+                        class="font-bold text-boracay-dark hover:text-volcanic-teal"
                     >
                         Create an account
                     </a>

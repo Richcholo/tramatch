@@ -6,7 +6,7 @@
                     03 / Your places
                 </p>
 
-                <h1 class="mt-3 font-display text-4xl font-semibold tracking-[-0.04em] text-ink-strong sm:text-6xl">
+                <h1 class="mt-3 font-display text-4xl font-semibold tracking-[-0.04em] text-volcanic-teal sm:text-6xl">
                     The places you kept.
                 </h1>
             </div>
@@ -14,7 +14,7 @@
             @if (Route::has('discover.index'))
                 <a
                     href="{{ route('discover.index') }}"
-                    class="rounded-full border border-boracay px-4 py-2 text-sm font-semibold text-boracay-dark transition hover:bg-line"
+                    class="rounded-full border border-boracay px-4 py-2 text-sm font-semibold text-boracay-dark transition hover:bg-boracay-light"
                 >
                     Continue discovering
                 </a>
@@ -23,7 +23,7 @@
     </x-slot>
 
     <div class="space-y-10">
-        <section class="rounded-[2rem] bg-volcanic-teal dark:bg-surface-raised p-8 text-white dark:text-ink-strong shadow-xl sm:p-12">
+        <section class="rounded-[2rem] bg-volcanic-teal p-8 text-white shadow-xl sm:p-12">
             <p class="text-xs font-bold uppercase tracking-[0.3em] text-boracay-light">
                 Swipe-informed recommendations
             </p>
@@ -43,11 +43,11 @@
                     Start here
                 </p>
 
-                <h2 class="mt-3 font-display text-4xl font-semibold text-ink-strong">
+                <h2 class="mt-3 font-display text-4xl font-semibold text-volcanic-teal">
                     Set your travel direction.
                 </h2>
 
-                <p class="mt-3 text-ink/70">
+                <p class="mt-3 text-benguet-charcoal/70">
                     Add your interests and budget before discovering destinations.
                 </p>
 
@@ -59,14 +59,14 @@
                 </a>
             </section>
         @elseif ($recommendations->isEmpty())
-            <section class="rounded-[2rem] bg-surface-raised p-10 text-center shadow-sm ring-1 ring-boracay-light">
+            <section class="rounded-[2rem] bg-island-white p-10 text-center shadow-sm ring-1 ring-boracay-light">
                 <span class="tm-gold-badge">Your deck is waiting</span>
 
-                <h2 class="mt-6 font-display text-4xl font-semibold text-ink-strong">
+                <h2 class="mt-6 font-display text-4xl font-semibold text-volcanic-teal">
                     Your liked places will appear here.
                 </h2>
 
-                <p class="mx-auto mt-4 max-w-lg leading-7 text-ink/65">
+                <p class="mx-auto mt-4 max-w-lg leading-7 text-benguet-charcoal/65">
                     Swipe right on destinations that feel like your kind of trip.
                 </p>
 
@@ -82,7 +82,7 @@
         @else
             <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 @foreach ($recommendations as $destination)
-                    <article class="group overflow-hidden rounded-[2rem] bg-surface-raised shadow-sm ring-1 ring-boracay-light">
+                    <article class="group overflow-hidden rounded-[2rem] bg-island-white shadow-sm ring-1 ring-boracay-light">
                         @if ($destination->image_url)
                             <img
                                 src="{{ $destination->image_url }}"
@@ -98,12 +98,12 @@
                         <div class="p-6">
                             <div class="flex items-start justify-between gap-4">
                                 <div>
-                                    <p class="text-sm text-ink/60">
+                                    <p class="text-sm text-benguet-charcoal/60">
                                         {{ $destination->municipality }},
                                         {{ $destination->province }}
                                     </p>
 
-                                    <h2 class="mt-2 text-2xl font-bold text-ink-strong">
+                                    <h2 class="mt-2 text-2xl font-bold text-volcanic-teal">
                                         {{ $destination->name }}
                                     </h2>
                                 </div>
@@ -113,36 +113,36 @@
                                 </span>
                             </div>
 
-                            <p class="mt-4 line-clamp-4 text-sm leading-6 text-ink/70">
+                            <p class="mt-4 line-clamp-4 text-sm leading-6 text-benguet-charcoal/70">
                                 {{ $destination->description }}
                             </p>
 
                             <div class="mt-5 flex flex-wrap gap-2">
                                 @foreach ($destination->matched_tags as $tag)
-                                    <span class="rounded-full bg-line px-3 py-1 text-xs font-semibold text-boracay-dark">
+                                    <span class="rounded-full bg-boracay-light px-3 py-1 text-xs font-semibold text-boracay-dark">
                                         {{ $tag->name }}
                                     </span>
                                 @endforeach
                             </div>
 
-                            <div class="mt-5 rounded-2xl bg-surface p-4 text-sm text-ink-strong">
+                            <div class="mt-5 rounded-2xl bg-palawan-sand p-4 text-sm text-volcanic-teal">
                                 <p class="font-semibold">
                                     Why it matches
                                 </p>
 
-                                <p class="mt-1 leading-6 text-ink/70">
+                                <p class="mt-1 leading-6 text-benguet-charcoal/70">
                                     {{ $destination->recommendation_reason ?? 'This destination matches your profile and budget.' }}
                                 </p>
                             </div>
 
                             <div class="mt-6 flex items-center justify-between gap-4">
-                                <span class="text-sm font-semibold text-ink/70">
+                                <span class="text-sm font-semibold text-benguet-charcoal/70">
                                     ₱{{ number_format($destination->estimated_cost, 2) }}
                                 </span>
 
                                 <a
                                     href="{{ route('destinations.show', $destination) }}"
-                                    class="font-semibold text-boracay-dark hover:text-ink-strong"
+                                    class="font-semibold text-boracay-dark hover:text-volcanic-teal"
                                 >
                                     View place →
                                 </a>
@@ -165,7 +165,7 @@
                 @if (Route::has('discover.index'))
                     <a
                         href="{{ route('discover.index') }}"
-                        class="inline-flex items-center rounded-full border border-boracay px-6 py-3 font-semibold text-boracay-dark transition hover:bg-line"
+                        class="inline-flex items-center rounded-full border border-boracay px-6 py-3 font-semibold text-boracay-dark transition hover:bg-boracay-light"
                     >
                         Discover more
                     </a>

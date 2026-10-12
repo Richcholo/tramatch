@@ -6,7 +6,7 @@
     <x-slot name="header">
         <a
             href="{{ route('itineraries.index') }}"
-            class="text-sm font-semibold text-boracay-dark hover:text-ink-strong"
+            class="text-sm font-semibold text-boracay-dark hover:text-volcanic-teal"
         >
             ← Back to my itineraries
         </a>
@@ -29,7 +29,7 @@
     @endphp
 
     <div class="space-y-10">
-        <section class="relative overflow-hidden rounded-[2rem] bg-volcanic-teal dark:bg-surface-raised p-8 text-white dark:text-ink-strong shadow-xl sm:p-12">
+        <section class="relative overflow-hidden rounded-[2rem] bg-volcanic-teal p-8 text-white shadow-xl sm:p-12">
             <div class="absolute -right-24 -top-24 h-96 w-96 rounded-full bg-boracay/25 blur-3xl"></div>
             <div class="absolute -bottom-32 left-1/3 h-80 w-80 rounded-full bg-philippine-gold/15 blur-3xl"></div>
 
@@ -66,7 +66,7 @@
 
                         <button
                             type="submit"
-                            class="rounded-full border border-white/35 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white hover:text-ink-strong dark:hover:bg-white/15 dark:hover:text-ink-strong"
+                            class="rounded-full border border-white/35 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white hover:text-volcanic-teal"
                         >
                             {{ $itinerary->is_completed ? 'Mark active' : 'Mark completed' }}
                         </button>
@@ -75,7 +75,7 @@
                     <button
                         type="button"
                         onclick="document.getElementById('delete-itinerary-confirmation').showModal()"
- class="rounded-full bg-red-50 dark:bg-red-500/15 px-5 py-3 text-sm font-semibold text-red-200 transition hover:bg-red-50 dark:hover:bg-red-500/15 hover:text-white"
+                        class="rounded-full bg-red-500/15 px-5 py-3 text-sm font-semibold text-red-200 transition hover:bg-red-500 hover:text-white"
                     >
                         Delete
                     </button>
@@ -88,22 +88,22 @@
             aria-labelledby="delete-itinerary-confirmation-title"
             aria-describedby="delete-itinerary-confirmation-description"
             onclick="if (event.target === this) this.close()"
- class="m-auto w-[calc(100%-2rem)] max-w-md rounded-lg border border-red-200 dark:border-red-400/30 bg-surface p-0 text-ink shadow-2xl backdrop:bg-volcanic-teal/60 backdrop:backdrop-blur-sm"
+            class="m-auto w-[calc(100%-2rem)] max-w-md rounded-lg border border-red-200 bg-palawan-sand p-0 text-benguet-charcoal shadow-2xl backdrop:bg-volcanic-teal/60 backdrop:backdrop-blur-sm"
         >
             <div class="p-6 sm:p-7">
                 <div class="flex items-start gap-4">
- <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-300">
+                    <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-700">
                         <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M6 7h12m-10 0 .7 13h6.6L16 7M9 7V4h6v3m-4 4v5m2-5v5" />
                         </svg>
                     </span>
 
                     <div>
-                        <h2 id="delete-itinerary-confirmation-title" class="font-display text-xl font-semibold text-ink-strong">
+                        <h2 id="delete-itinerary-confirmation-title" class="font-display text-xl font-semibold text-volcanic-teal">
                             Delete this itinerary?
                         </h2>
 
-                        <p id="delete-itinerary-confirmation-description" class="mt-2 text-sm leading-6 text-ink/70">
+                        <p id="delete-itinerary-confirmation-description" class="mt-2 text-sm leading-6 text-benguet-charcoal/70">
                             “{{ $itinerary->title }}” and its saved schedule will be permanently deleted.
                         </p>
                     </div>
@@ -117,14 +117,14 @@
                         type="button"
                         autofocus
                         onclick="this.closest('dialog').close()"
-                        class="rounded-full border border-line px-4 py-2 text-sm font-semibold text-ink transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-boracay focus:ring-offset-2 dark:focus:ring-offset-volcanic-teal"
+                        class="rounded-full border border-boracay-light px-4 py-2 text-sm font-semibold text-benguet-charcoal transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-boracay focus:ring-offset-2"
                     >
                         Cancel
                     </button>
 
                     <button
                         type="submit"
- class="rounded-full bg-red-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-700 focus:ring-offset-2 dark:focus:ring-offset-volcanic-teal"
+                        class="rounded-full bg-red-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-700 focus:ring-offset-2"
                     >
                         Delete itinerary
                     </button>
@@ -133,27 +133,27 @@
         </dialog>
 
         @if (session('itinerary_warnings'))
-            <section class="rounded-[2rem] border border-philippine-gold/50 bg-philippine-gold/15 p-6 text-ink-fill sm:p-8">
+            <section class="rounded-[2rem] border border-philippine-gold/50 bg-philippine-gold/15 p-6 text-benguet-charcoal sm:p-8">
                 <p class="text-xs font-bold uppercase tracking-[0.25em] text-boracay-dark">
                     Planning notes
                 </p>
 
-                <h2 class="mt-4 font-display text-3xl font-semibold text-ink-strong">
+                <h2 class="mt-4 font-display text-3xl font-semibold text-volcanic-teal">
                     Some selected places were not scheduled.
                 </h2>
 
-                <p class="mt-3 text-sm leading-6 text-ink/70">
+                <p class="mt-3 text-sm leading-6 text-benguet-charcoal/70">
                     The itinerary only saved destinations that fit the daily time window.
                 </p>
 
                 <ul class="mt-5 space-y-3">
                     @foreach (session('itinerary_warnings') as $warning)
                         <li class="rounded-xl bg-white/60 p-4 text-sm">
-                            <strong class="text-ink-strong">
+                            <strong class="text-volcanic-teal">
                                 {{ $warning['name'] }}
                             </strong>
 
-                            <span class="text-ink/70">
+                            <span class="text-benguet-charcoal/70">
                                 — {{ $warning['reason'] }}
                             </span>
                         </li>
@@ -162,11 +162,11 @@
             </section>
         @endif
 
-        <section class="rounded-[2rem] bg-surface-raised p-4 shadow-sm ring-1 ring-boracay-light sm:p-6">
+        <section class="rounded-[2rem] bg-island-white p-4 shadow-sm ring-1 ring-boracay-light sm:p-6">
             <div
                 id="itinerary-map"
                 data-itinerary-points="{{ json_encode($mapPoints) }}"
-                class="h-[28rem] rounded-[1.5rem] bg-line"
+                class="h-[28rem] rounded-[1.5rem] bg-boracay-light"
             ></div>
         </section>
 
@@ -177,11 +177,11 @@
                         The route
                     </p>
 
-                    <h2 class="mt-3 font-display text-4xl font-semibold tracking-[-0.04em] text-ink-strong">
+                    <h2 class="mt-3 font-display text-4xl font-semibold tracking-[-0.04em] text-volcanic-teal">
                         Your days, in order.
                     </h2>
 
-                    <p class="mt-3 max-w-2xl leading-7 text-ink/65">
+                    <p class="mt-3 max-w-2xl leading-7 text-benguet-charcoal/65">
                         TraMatch helps organize the places you selected while keeping the final destination choices yours.
                     </p>
                 </div>
@@ -195,7 +195,7 @@
 
                         <button
                             type="submit"
-                            class="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-boracay px-5 py-3 text-sm font-semibold text-ink-strong transition hover:bg-boracay hover:text-white"
+                            class="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-boracay px-5 py-3 text-sm font-semibold text-volcanic-teal transition hover:bg-boracay hover:text-white"
                         >
                             <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14M5 12h14" />
@@ -208,7 +208,7 @@
                         type="button"
                         data-editor-toggle
                         aria-pressed="false"
-                        class="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-boracay px-5 py-3 text-sm font-semibold text-ink-strong transition hover:bg-boracay hover:text-white"
+                        class="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-boracay px-5 py-3 text-sm font-semibold text-volcanic-teal transition hover:bg-boracay hover:text-white"
                     >
                         Edit itinerary
                     </button>
@@ -221,7 +221,7 @@
             <template data-stop-template>
                 <li
                     data-stop
-                    class="rounded-xl border border-line bg-surface-raised p-4 shadow-sm"
+                    class="rounded-xl border border-boracay-light bg-white p-4 shadow-sm"
                 >
                     <input type="hidden" name="items[__KEY__][day_id]" data-field="day-id" value="">
                     <input type="hidden" name="items[__KEY__][sort_order]" data-field="sort-order" value="0">
@@ -231,7 +231,7 @@
                             type="button"
                             data-drag-handle
                             aria-label="Drag to reorder this stop"
-                            class="mt-1 shrink-0 cursor-grab touch-none rounded-md p-2 text-ink/40 transition hover:bg-line hover:text-ink-strong active:cursor-grabbing"
+                            class="mt-1 shrink-0 cursor-grab touch-none rounded-md p-2 text-benguet-charcoal/40 transition hover:bg-boracay-light hover:text-volcanic-teal active:cursor-grabbing"
                         >
                             <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                 <circle cx="9" cy="6" r="1.6" />
@@ -248,36 +248,36 @@
                                 <a
                                     data-stop-name
                                     href="{{ route('destinations.index') }}"
-                                    class="text-lg font-bold text-ink-strong hover:text-boracay-dark"
+                                    class="text-lg font-bold text-volcanic-teal hover:text-boracay-dark"
                                 >
                                     New stop
                                 </a>
 
-                                <span data-stop-cost class="text-xs font-semibold text-ink/60"></span>
+                                <span data-stop-cost class="text-xs font-semibold text-benguet-charcoal/60"></span>
                             </div>
 
-                            <p data-stop-place class="mt-1 text-xs text-ink/55"></p>
+                            <p data-stop-place class="mt-1 text-xs text-benguet-charcoal/55"></p>
                         </div>
                     </div>
 
                     <div class="mt-4 grid gap-3 sm:grid-cols-2">
                         <label class="block">
-                            <span class="text-xs font-semibold uppercase tracking-wide text-ink/60">Starts</span>
+                            <span class="text-xs font-semibold uppercase tracking-wide text-benguet-charcoal/60">Starts</span>
                             <input
                                 type="time"
                                 name="items[__KEY__][start_time]"
                                 data-field="start-time"
-                                class="mt-1 block min-h-11 w-full rounded-md border border-line bg-surface px-3 py-2 text-sm"
+                                class="mt-1 block min-h-11 w-full rounded-md border border-boracay-light bg-palawan-sand px-3 py-2 text-sm"
                             >
                         </label>
 
                         <label class="block">
-                            <span class="text-xs font-semibold uppercase tracking-wide text-ink/60">Ends</span>
+                            <span class="text-xs font-semibold uppercase tracking-wide text-benguet-charcoal/60">Ends</span>
                             <input
                                 type="time"
                                 name="items[__KEY__][end_time]"
                                 data-field="end-time"
-                                class="mt-1 block min-h-11 w-full rounded-md border border-line bg-surface px-3 py-2 text-sm"
+                                class="mt-1 block min-h-11 w-full rounded-md border border-boracay-light bg-palawan-sand px-3 py-2 text-sm"
                             >
                         </label>
 
@@ -286,14 +286,14 @@
                              was generated with, a new one takes the
                              destination's own figure. See ItineraryEditor. --}}
                         <label class="block">
-                            <span class="text-xs font-semibold uppercase tracking-wide text-ink/60">Note</span>
+                            <span class="text-xs font-semibold uppercase tracking-wide text-benguet-charcoal/60">Note</span>
                             <input
                                 type="text"
                                 maxlength="500"
                                 name="items[__KEY__][note]"
                                 data-field="note"
                                 placeholder="Optional"
-                                class="mt-1 block min-h-11 w-full rounded-md border border-line bg-surface px-3 py-2 text-sm"
+                                class="mt-1 block min-h-11 w-full rounded-md border border-boracay-light bg-palawan-sand px-3 py-2 text-sm"
                             >
                         </label>
                     </div>
@@ -313,7 +313,7 @@
                                 type="button"
                                 data-move="up"
                                 aria-label="Move this stop earlier"
-                                class="inline-flex h-11 w-11 items-center justify-center rounded-md border border-line text-ink/70 transition hover:bg-line disabled:cursor-not-allowed disabled:opacity-30"
+                                class="inline-flex h-11 w-11 items-center justify-center rounded-md border border-boracay-light text-benguet-charcoal/70 transition hover:bg-boracay-light disabled:cursor-not-allowed disabled:opacity-30"
                             >
                                 <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="m5 15 7-7 7 7" />
@@ -324,7 +324,7 @@
                                 type="button"
                                 data-move="down"
                                 aria-label="Move this stop later"
-                                class="inline-flex h-11 w-11 items-center justify-center rounded-md border border-line text-ink/70 transition hover:bg-line disabled:cursor-not-allowed disabled:opacity-30"
+                                class="inline-flex h-11 w-11 items-center justify-center rounded-md border border-boracay-light text-benguet-charcoal/70 transition hover:bg-boracay-light disabled:cursor-not-allowed disabled:opacity-30"
                             >
                                 <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="m19 9-7 7-7-7" />
@@ -334,7 +334,7 @@
                             <button
                                 type="button"
                                 data-remove
- class="inline-flex min-h-11 items-center justify-center rounded-md border border-red-200 dark:border-red-400/30 px-4 py-2 text-sm font-semibold text-red-700 dark:text-red-300 transition hover:bg-red-50 dark:hover:bg-red-500/15"
+                                class="inline-flex min-h-11 items-center justify-center rounded-md border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50"
                             >
                                 Remove
                             </button>
@@ -346,14 +346,14 @@
             <div data-editor-read>
                 <div class="grid gap-6 lg:grid-cols-2">
                     @foreach ($itinerary->days as $day)
-                        <article class="rounded-[2rem] bg-surface-raised p-6 shadow-sm ring-1 ring-boracay-light sm:p-8">
+                        <article class="rounded-[2rem] bg-island-white p-6 shadow-sm ring-1 ring-boracay-light sm:p-8">
                             <div class="flex flex-wrap items-center justify-between gap-3">
-                                <h3 class="text-2xl font-bold text-ink-strong">
+                                <h3 class="text-2xl font-bold text-volcanic-teal">
                                     Day {{ $day->day_number }}
                                 </h3>
 
                                 @if ($day->date)
-                                    <span class="text-sm text-ink/60">
+                                    <span class="text-sm text-benguet-charcoal/60">
                                         {{ $day->date->format('M d, Y') }}
                                     </span>
                                 @endif
@@ -376,17 +376,17 @@
 
                                         <a
                                             href="{{ route('destinations.show', $item->destination) }}"
-                                            class="mt-2 block text-xl font-bold text-ink-strong hover:text-boracay-dark"
+                                            class="mt-2 block text-xl font-bold text-volcanic-teal hover:text-boracay-dark"
                                         >
                                             {{ $item->destination->name }}
                                         </a>
 
-                                        <p class="mt-2 text-sm text-ink/60">
+                                        <p class="mt-2 text-sm text-benguet-charcoal/60">
                                             {{ $item->destination->municipality }},
                                             {{ $item->destination->province }}
                                         </p>
 
-                                        <div class="mt-3 flex flex-wrap gap-3 text-xs font-semibold text-ink/60">
+                                        <div class="mt-3 flex flex-wrap gap-3 text-xs font-semibold text-benguet-charcoal/60">
                                             <span>
                                                 ₱{{ number_format($item->estimated_cost, 2) }}
                                             </span>
@@ -399,14 +399,14 @@
                                         </div>
 
                                         @if ($item->note)
-                                            <p class="mt-3 text-sm italic text-ink/60">
+                                            <p class="mt-3 text-sm italic text-benguet-charcoal/60">
                                                 {{ $item->note }}
                                             </p>
                                         @endif
                                     </div>
                                 @empty
-                                    <div class="rounded-2xl bg-surface p-5">
-                                        <p class="text-sm text-ink/60">
+                                    <div class="rounded-2xl bg-palawan-sand p-5">
+                                        <p class="text-sm text-benguet-charcoal/60">
                                             Nothing planned for this day yet. Edit the itinerary and add a stop.
                                         </p>
                                     </div>
@@ -434,7 +434,7 @@
                     data-tone="info"
                     role="status"
                     hidden
-                    class="rounded-lg border border-boracay bg-line px-4 py-3 text-sm font-semibold text-ink-strong"
+                    class="rounded-lg border border-boracay bg-boracay-light px-4 py-3 text-sm font-semibold text-volcanic-teal"
                 ></p>
 
                 <div class="grid gap-6 lg:grid-cols-2">
@@ -443,16 +443,16 @@
                             data-day-card
                             data-day-id="{{ $day->id }}"
                             data-day-number="{{ $day->day_number }}"
-                            class="rounded-[2rem] bg-surface-raised p-6 shadow-sm ring-1 ring-boracay-light sm:p-8"
+                            class="rounded-[2rem] bg-island-white p-6 shadow-sm ring-1 ring-boracay-light sm:p-8"
                         >
                             <div class="flex flex-wrap items-start justify-between gap-3">
                                 <div>
-                                    <h3 class="text-2xl font-bold text-ink-strong">
+                                    <h3 class="text-2xl font-bold text-volcanic-teal">
                                         Day {{ $day->day_number }}
                                     </h3>
 
                                     @if ($day->date)
-                                        <p class="mt-1 text-sm text-ink/60">
+                                        <p class="mt-1 text-sm text-benguet-charcoal/60">
                                             {{ $day->date->format('M d, Y') }}
                                         </p>
                                     @endif
@@ -462,7 +462,7 @@
                                     <button
                                         type="button"
                                         data-reflow
-                                        class="inline-flex min-h-11 items-center justify-center rounded-md border border-philippine-gold bg-philippine-gold/20 px-3 py-2 text-xs font-bold text-ink-fill transition hover:bg-philippine-gold"
+                                        class="inline-flex min-h-11 items-center justify-center rounded-md border border-philippine-gold bg-philippine-gold/20 px-3 py-2 text-xs font-bold text-benguet-charcoal transition hover:bg-philippine-gold"
                                     >
                                         Reflow times
                                     </button>
@@ -478,7 +478,7 @@
                                         <button
                                             type="submit"
                                             form="remove-day-{{ $day->id }}"
- class="inline-flex min-h-11 items-center justify-center rounded-md border border-red-200 dark:border-red-400/30 px-3 py-2 text-xs font-bold text-red-700 dark:text-red-300 transition hover:bg-red-50 dark:hover:bg-red-500/15"
+                                            class="inline-flex min-h-11 items-center justify-center rounded-md border border-red-200 px-3 py-2 text-xs font-bold text-red-700 transition hover:bg-red-50"
                                         >
                                             Remove day
                                         </button>
@@ -495,7 +495,7 @@
                                     <li
                                         data-stop
                                         data-key="{{ $item->id }}"
-                                        class="rounded-xl border border-line bg-surface-raised p-4 shadow-sm"
+                                        class="rounded-xl border border-boracay-light bg-white p-4 shadow-sm"
                                     >
                                         {{-- data-field="day-id" is what makes cross-day dragging
                                              possible: itinerary-editor.js rewrites this value when a row
@@ -512,7 +512,7 @@
                                                 type="button"
                                                 data-drag-handle
                                                 aria-label="Drag to reorder {{ $item->destination->name }}"
-                                                class="mt-1 shrink-0 cursor-grab touch-none rounded-md p-2 text-ink/40 transition hover:bg-line hover:text-ink-strong active:cursor-grabbing"
+                                                class="mt-1 shrink-0 cursor-grab touch-none rounded-md p-2 text-benguet-charcoal/40 transition hover:bg-boracay-light hover:text-volcanic-teal active:cursor-grabbing"
                                             >
                                                 <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                                     <circle cx="9" cy="6" r="1.6" />
@@ -529,17 +529,17 @@
                                                     <a
                                                         data-stop-name
                                                         href="{{ route('destinations.show', $item->destination) }}"
-                                                        class="text-lg font-bold text-ink-strong hover:text-boracay-dark"
+                                                        class="text-lg font-bold text-volcanic-teal hover:text-boracay-dark"
                                                     >
                                                         {{ $item->destination->name }}
                                                     </a>
 
-                                                    <span data-stop-cost class="text-xs font-semibold text-ink/60">
+                                                    <span data-stop-cost class="text-xs font-semibold text-benguet-charcoal/60">
                                                         ₱{{ number_format($item->estimated_cost, 2) }}
                                                     </span>
                                                 </div>
 
-                                                <p data-stop-place class="mt-1 text-xs text-ink/55">
+                                                <p data-stop-place class="mt-1 text-xs text-benguet-charcoal/55">
                                                     {{ $item->destination->municipality }},
                                                     {{ $item->destination->province }}
                                                 </p>
@@ -548,24 +548,24 @@
 
                                         <div class="mt-4 grid gap-3 sm:grid-cols-2">
                                             <label class="block">
-                                                <span class="text-xs font-semibold uppercase tracking-wide text-ink/60">Starts</span>
+                                                <span class="text-xs font-semibold uppercase tracking-wide text-benguet-charcoal/60">Starts</span>
                                                 <input
                                                     type="time"
                                                     name="items[{{ $item->id }}][start_time]"
                                                     data-field="start-time"
                                                     value="{{ $item->start_time ? substr($item->start_time, 0, 5) : '' }}"
-                                                    class="mt-1 block min-h-11 w-full rounded-md border border-line bg-surface px-3 py-2 text-sm"
+                                                    class="mt-1 block min-h-11 w-full rounded-md border border-boracay-light bg-palawan-sand px-3 py-2 text-sm"
                                                 >
                                             </label>
 
                                             <label class="block">
-                                                <span class="text-xs font-semibold uppercase tracking-wide text-ink/60">Ends</span>
+                                                <span class="text-xs font-semibold uppercase tracking-wide text-benguet-charcoal/60">Ends</span>
                                                 <input
                                                     type="time"
                                                     name="items[{{ $item->id }}][end_time]"
                                                     data-field="end-time"
                                                     value="{{ $item->end_time ? substr($item->end_time, 0, 5) : '' }}"
-                                                    class="mt-1 block min-h-11 w-full rounded-md border border-line bg-surface px-3 py-2 text-sm"
+                                                    class="mt-1 block min-h-11 w-full rounded-md border border-boracay-light bg-palawan-sand px-3 py-2 text-sm"
                                                 >
                                             </label>
 
@@ -573,7 +573,7 @@
                                                  row header is the stored one and
                                                  stays put. --}}
                                             <label class="block">
-                                                <span class="text-xs font-semibold uppercase tracking-wide text-ink/60">Note</span>
+                                                <span class="text-xs font-semibold uppercase tracking-wide text-benguet-charcoal/60">Note</span>
                                                 <input
                                                     type="text"
                                                     maxlength="500"
@@ -581,7 +581,7 @@
                                                     data-field="note"
                                                     value="{{ $item->note }}"
                                                     placeholder="Optional"
-                                                    class="mt-1 block min-h-11 w-full rounded-md border border-line bg-surface px-3 py-2 text-sm"
+                                                    class="mt-1 block min-h-11 w-full rounded-md border border-boracay-light bg-palawan-sand px-3 py-2 text-sm"
                                                 >
                                             </label>
                                         </div>
@@ -593,7 +593,7 @@
                                                 type="button"
                                                 data-move="up"
                                                 aria-label="Move {{ $item->destination->name }} earlier"
-                                                class="inline-flex h-11 w-11 items-center justify-center rounded-md border border-line text-ink/70 transition hover:bg-line disabled:cursor-not-allowed disabled:opacity-30"
+                                                class="inline-flex h-11 w-11 items-center justify-center rounded-md border border-boracay-light text-benguet-charcoal/70 transition hover:bg-boracay-light disabled:cursor-not-allowed disabled:opacity-30"
                                             >
                                                 <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
                                                     <path stroke-linecap="round" stroke-linejoin="round" d="m5 15 7-7 7 7" />
@@ -604,7 +604,7 @@
                                                 type="button"
                                                 data-move="down"
                                                 aria-label="Move {{ $item->destination->name }} later"
-                                                class="inline-flex h-11 w-11 items-center justify-center rounded-md border border-line text-ink/70 transition hover:bg-line disabled:cursor-not-allowed disabled:opacity-30"
+                                                class="inline-flex h-11 w-11 items-center justify-center rounded-md border border-boracay-light text-benguet-charcoal/70 transition hover:bg-boracay-light disabled:cursor-not-allowed disabled:opacity-30"
                                             >
                                                 <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
                                                     <path stroke-linecap="round" stroke-linejoin="round" d="m19 9-7 7-7-7" />
@@ -614,7 +614,7 @@
                                             <button
                                                 type="button"
                                                 data-remove
- class="inline-flex min-h-11 items-center justify-center rounded-md border border-red-200 dark:border-red-400/30 px-4 py-2 text-sm font-semibold text-red-700 dark:text-red-300 transition hover:bg-red-50 dark:hover:bg-red-500/15"
+                                                class="inline-flex min-h-11 items-center justify-center rounded-md border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50"
                                             >
                                                 Remove
                                             </button>
@@ -626,7 +626,7 @@
                             <button
                                 type="button"
                                 data-add
-                                class="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-dashed border-boracay px-4 py-3 text-sm font-semibold text-boracay-dark transition hover:bg-line"
+                                class="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-dashed border-boracay px-4 py-3 text-sm font-semibold text-boracay-dark transition hover:bg-boracay-light"
                             >
                                 <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14M5 12h14" />
@@ -641,14 +641,14 @@
                     <button
                         type="button"
                         data-editor-cancel
-                        class="inline-flex min-h-11 items-center justify-center rounded-lg border border-benguet-charcoal/30 bg-surface-raised px-5 py-3 text-sm font-semibold text-ink transition hover:bg-surface"
+                        class="inline-flex min-h-11 items-center justify-center rounded-lg border border-benguet-charcoal/30 bg-white px-5 py-3 text-sm font-semibold text-benguet-charcoal transition hover:bg-palawan-sand"
                     >
                         Discard changes
                     </button>
 
                     <button
                         type="submit"
-                        class="inline-flex min-h-11 items-center justify-center rounded-lg bg-boracay px-6 py-3 text-sm font-bold text-ink-fill transition hover:bg-boracay-dark hover:text-white"
+                        class="inline-flex min-h-11 items-center justify-center rounded-lg bg-boracay px-6 py-3 text-sm font-bold text-benguet-charcoal transition hover:bg-boracay-dark hover:text-white"
                     >
                         Save itinerary
                     </button>
@@ -678,24 +678,24 @@
             <dialog
                 data-add-dialog
                 aria-labelledby="add-stop-title"
-                class="m-auto max-h-[85vh] w-[calc(100%-2rem)] max-w-2xl rounded-lg border border-line bg-surface p-0 text-ink shadow-2xl backdrop:bg-volcanic-teal/60 backdrop:backdrop-blur-sm"
+                class="m-auto max-h-[85vh] w-[calc(100%-2rem)] max-w-2xl rounded-lg border border-boracay-light bg-palawan-sand p-0 text-benguet-charcoal shadow-2xl backdrop:bg-volcanic-teal/60 backdrop:backdrop-blur-sm"
             >
                 <div class="flex max-h-[85vh] flex-col">
-                    <div class="border-b border-line p-6">
-                        <h2 id="add-stop-title" class="font-display text-2xl font-semibold text-ink-strong">
+                    <div class="border-b border-boracay-light p-6">
+                        <h2 id="add-stop-title" class="font-display text-2xl font-semibold text-volcanic-teal">
                             Add a place you liked
                         </h2>
 
-                        <p class="mt-2 text-sm leading-6 text-ink/70">
+                        <p class="mt-2 text-sm leading-6 text-benguet-charcoal/70">
                             These are the places you liked that this trip does not visit yet. Pick as many as you want and say which day each one goes on.
                         </p>
 
                         <div class="mt-5">
-                            <span class="text-xs font-semibold uppercase tracking-wide text-ink/60">Add to</span>
+                            <span class="text-xs font-semibold uppercase tracking-wide text-benguet-charcoal/60">Add to</span>
 
                             <div class="mt-2 flex flex-wrap gap-2">
                                 @foreach ($itinerary->days as $day)
-                                    <label class="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-md border border-line bg-surface-raised px-4 py-2 text-sm font-semibold has-checked:border-boracay has-checked:bg-line">
+                                    <label class="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-md border border-boracay-light bg-white px-4 py-2 text-sm font-semibold has-checked:border-boracay has-checked:bg-boracay-light">
                                         <input
                                             type="radio"
                                             name="add-target-day"
@@ -712,7 +712,7 @@
 
                     <div class="min-h-0 flex-1 overflow-y-auto p-6">
                         @forelse ($addableDestinations as $destination)
-                            <label class="flex cursor-pointer items-start gap-3 rounded-lg border border-transparent px-3 py-3 transition hover:border-line hover:bg-white has-checked:border-boracay has-checked:bg-white">
+                            <label class="flex cursor-pointer items-start gap-3 rounded-lg border border-transparent px-3 py-3 transition hover:border-boracay-light hover:bg-white has-checked:border-boracay has-checked:bg-white">
                                 <input
                                     type="checkbox"
                                     data-destination="{{ $destination->id }}"
@@ -724,28 +724,28 @@
                                 >
 
                                 <span class="min-w-0 flex-1">
-                                    <span class="block font-bold text-ink-strong">{{ $destination->name }}</span>
-                                    <span class="mt-0.5 block text-sm text-ink/60">
+                                    <span class="block font-bold text-volcanic-teal">{{ $destination->name }}</span>
+                                    <span class="mt-0.5 block text-sm text-benguet-charcoal/60">
                                         {{ $destination->municipality }}, {{ $destination->province }}
                                     </span>
                                 </span>
 
-                                <span class="shrink-0 text-sm font-semibold text-ink/70">
+                                <span class="shrink-0 text-sm font-semibold text-benguet-charcoal/70">
                                     ₱{{ number_format((float) $destination->estimated_cost, 2) }}
                                 </span>
                             </label>
                         @empty
-                            <p class="rounded-lg bg-surface-raised p-6 text-sm leading-6 text-ink/70">
+                            <p class="rounded-lg bg-white p-6 text-sm leading-6 text-benguet-charcoal/70">
                                 Every place you liked is already on this trip. Swipe a few more in Discover to add somewhere new.
                             </p>
                         @endforelse
                     </div>
 
-                    <div class="flex flex-wrap items-center justify-between gap-3 border-t border-line p-6">
+                    <div class="flex flex-wrap items-center justify-between gap-3 border-t border-boracay-light p-6">
                         <button
                             type="button"
                             onclick="this.closest('dialog').close()"
-                            class="inline-flex min-h-11 items-center justify-center rounded-lg border border-benguet-charcoal/30 px-4 py-2 text-sm font-semibold text-ink transition hover:bg-white"
+                            class="inline-flex min-h-11 items-center justify-center rounded-lg border border-benguet-charcoal/30 px-4 py-2 text-sm font-semibold text-benguet-charcoal transition hover:bg-white"
                         >
                             Cancel
                         </button>
@@ -754,7 +754,7 @@
                             type="button"
                             data-add-confirm
                             disabled
-                            class="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-boracay px-5 py-3 text-sm font-bold text-ink-fill transition hover:bg-boracay-dark hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                            class="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-boracay px-5 py-3 text-sm font-bold text-benguet-charcoal transition hover:bg-boracay-dark hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
                         >
                             Add <span data-add-count>0</span> more
                         </button>

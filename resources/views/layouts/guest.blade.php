@@ -9,14 +9,6 @@
     <link rel="icon" href="{{ asset('images/logo.svg') }}">
     <link rel="manifest" href="/manifest.webmanifest">
 
-    {{--
-        The guest pages load no bundle of their own -- just
-        `page-transitions.js` -- so this inline script is the only thing here
-        that can apply a theme. It has to be inline and early for exactly that
-        reason: see the component.
-    --}}
-    <x-theme-init />
-
     <title>{{ $title ?? 'TraMatch' }}</title>
 
     @vite([
@@ -25,7 +17,7 @@
     ])
 </head>
 
-<body class="min-h-screen bg-volcanic-teal text-ink antialiased">
+<body class="min-h-screen bg-volcanic-teal text-benguet-charcoal antialiased">
     <x-navigation-loading />
 
     <div class="fixed inset-0 overflow-hidden">
@@ -49,29 +41,12 @@
                     >
                 </a>
 
-                <div class="flex items-center gap-3">
-                    {{--
-                        THE TOGGLE IS HERE TOO, and its absence was a trap: the
-                        guest layout already ran the theme script, so the page
-                        painted in the visitor's saved theme -- but with no control
-                        to change it. Anyone who chose a theme, then signed out or
-                        followed a password-reset link, was stuck on whatever the
-                        script decided, with no way back. A setting you cannot
-                        change is not a setting.
-
-                        It wears the burger's ghost ring rather than the light
-                        "Back to home" pill beside it, because it is the same kind
-                        of control: a round ghost sitting on this dark hero.
-                    --}}
-                    <x-theme-toggle />
-
-                    <a
-                        href="{{ url('/') }}"
-                        class="rounded-full border border-white/40 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white hover:text-ink-strong dark:hover:bg-white/15 dark:hover:text-ink-strong"
-                    >
-                        Back to home
-                    </a>
-                </div>
+                <a
+                    href="{{ url('/') }}"
+                    class="rounded-full border border-white/40 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white hover:text-volcanic-teal"
+                >
+                    Back to home
+                </a>
             </div>
         </header>
 
@@ -98,14 +73,14 @@
                         Budget-aware
                     </span>
 
-                    <span class="rounded-full bg-philippine-gold px-4 py-2 text-sm font-semibold text-ink-fill">
+                    <span class="rounded-full bg-philippine-gold px-4 py-2 text-sm font-semibold text-benguet-charcoal">
                         Made locally
                     </span>
                 </div>
             </section>
 
             <section class="flex items-center justify-center px-5 pb-10 pt-28 sm:px-8 lg:px-12 lg:py-32">
-                <div class="w-full max-w-md rounded-[2rem] bg-surface/95 p-6 shadow-2xl shadow-black/20 backdrop-blur sm:p-9">
+                <div class="w-full max-w-md rounded-[2rem] bg-palawan-sand/95 p-6 shadow-2xl shadow-black/20 backdrop-blur sm:p-9">
                     {{ $slot }}
                 </div>
             </section>

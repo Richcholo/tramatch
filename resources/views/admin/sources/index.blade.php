@@ -6,7 +6,7 @@
                     Admin / Data freshness
                 </p>
 
-                <h1 class="mt-3 font-display text-4xl font-semibold tracking-[-0.04em] text-ink-strong sm:text-6xl">
+                <h1 class="mt-3 font-display text-4xl font-semibold tracking-[-0.04em] text-volcanic-teal sm:text-6xl">
                     Approved sources.
                 </h1>
             </div>
@@ -35,13 +35,13 @@
             </p>
         </div>
 
-        <section class="rounded-[2rem] bg-surface-raised p-6 shadow-sm ring-1 ring-boracay-light sm:p-8">
+        <section class="rounded-[2rem] bg-island-white p-6 shadow-sm ring-1 ring-boracay-light sm:p-8">
             <form method="GET" action="{{ route('admin.sources.index') }}">
                 <div class="flex flex-wrap items-end justify-between gap-4">
                     <div class="min-w-64 flex-1">
                         <label
                             for="search"
-                            class="block text-sm font-medium text-ink"
+                            class="block text-sm font-medium text-benguet-charcoal"
                         >
                             Search sources
                         </label>
@@ -52,13 +52,13 @@
                             type="search"
                             value="{{ $search }}"
                             placeholder="Destination, source name, province or URL"
-                            class="mt-2 w-full rounded-xl border-line bg-surface text-sm focus:border-boracay focus:ring-boracay"
+                            class="mt-2 w-full rounded-xl border-boracay-light bg-palawan-sand text-sm focus:border-boracay focus:ring-boracay"
                         >
                     </div>
 
                     <div class="flex flex-wrap items-center gap-3">
                         @if ($search !== '' || $status !== '')
-                            <span class="text-sm text-ink/60">
+                            <span class="text-sm text-benguet-charcoal/60">
                                 Showing
                                 <strong>{{ $sources->total() }}</strong>
                                 of {{ $summary['total'] }}
@@ -88,7 +88,7 @@
                     @class([
                         'rounded-full px-4 py-2 text-sm font-semibold transition',
                         'bg-volcanic-teal text-white' => $status === '',
-                        'bg-surface text-ink/70 hover:bg-line' => $status !== '',
+                        'bg-palawan-sand text-benguet-charcoal/70 hover:bg-boracay-light' => $status !== '',
                     ])
                 >
                     All
@@ -109,7 +109,7 @@
                         @class([
                             'rounded-full px-4 py-2 text-sm font-semibold transition',
                             'bg-volcanic-teal text-white' => $status === $key,
-                            'bg-surface text-ink/70 hover:bg-line' => $status !== $key,
+                            'bg-palawan-sand text-benguet-charcoal/70 hover:bg-boracay-light' => $status !== $key,
                         ])
                     >
                         {{ $label }}
@@ -119,7 +119,7 @@
             </div>
 
             <div class="mt-3 flex flex-wrap items-center gap-2">
-                <span class="text-xs font-bold uppercase tracking-[0.18em] text-ink/50">
+                <span class="text-xs font-bold uppercase tracking-[0.18em] text-benguet-charcoal/50">
                     Page reachability
                 </span>
 
@@ -128,7 +128,7 @@
                     @class([
                         'rounded-full px-3 py-1 text-xs font-semibold transition',
                         'bg-volcanic-teal text-white' => $reachability === '',
-                        'bg-surface text-ink/70 hover:bg-line' => $reachability !== '',
+                        'bg-palawan-sand text-benguet-charcoal/70 hover:bg-boracay-light' => $reachability !== '',
                     ])
                 >
                     Any
@@ -148,7 +148,7 @@
                         @class([
                             'rounded-full px-3 py-1 text-xs font-semibold transition',
                             'bg-volcanic-teal text-white' => $reachability === $key,
-                            'bg-surface text-ink/70 hover:bg-line' => $reachability !== $key,
+                            'bg-palawan-sand text-benguet-charcoal/70 hover:bg-boracay-light' => $reachability !== $key,
                         ])
                     >
                         {{ $label }}
@@ -159,7 +159,7 @@
                 @endforeach
             </div>
 
-            <p class="mt-4 text-sm text-ink/60">
+            <p class="mt-4 text-sm text-benguet-charcoal/60">
                 <strong>{{ $summary['usable'] }}</strong> of <strong>{{ $summary['total'] }}</strong>
                 source pages can be read at all. The rest are on domains that do not exist, or
                 refuse automated requests — crawling them again will not produce data.
@@ -167,7 +167,7 @@
             </p>
 
             @if ($search !== '' || $status !== '')
-                <p class="mt-4 text-sm text-ink/60">
+                <p class="mt-4 text-sm text-benguet-charcoal/60">
                     @if ($status !== '')
                         Filtered to <strong>{{ $status }}</strong> sources
                     @endif
@@ -181,16 +181,16 @@
             @endif
         </section>
 
-        <section class="rounded-[2rem] bg-surface-raised p-6 shadow-sm ring-1 ring-boracay-light sm:p-8">
+        <section class="rounded-[2rem] bg-island-white p-6 shadow-sm ring-1 ring-boracay-light sm:p-8">
             <div class="flex flex-wrap items-center justify-between gap-4">
                 <div>
-                    <h2 class="font-display text-3xl font-semibold text-ink-strong">
+                    <h2 class="font-display text-3xl font-semibold text-volcanic-teal">
                         Crawl progress
                     </h2>
 
                     <p
                         data-progress-line
-                        class="mt-2 text-sm text-ink/60"
+                        class="mt-2 text-sm text-benguet-charcoal/60"
                     >
                         {{ $summary['finished'] }} of {{ $summary['total'] }} sources checked@if ($summary['queued'] > 0), {{ $summary['queued'] }} waiting in the queue@endif.
                     </p>
@@ -209,7 +209,7 @@
                 @endif
             </div>
 
-            <div class="mt-6 h-3 w-full overflow-hidden rounded-full bg-surface">
+            <div class="mt-6 h-3 w-full overflow-hidden rounded-full bg-palawan-sand">
                 <div
                     data-progress-bar
                     class="h-full rounded-full bg-boracay transition-all duration-500"
@@ -224,14 +224,14 @@
                     'crawling' => 'Crawling',
                     'finished' => 'Finished',
                 ] as $key => $label)
-                    <div class="rounded-2xl bg-surface p-4">
-                        <dt class="text-xs font-semibold uppercase tracking-wide text-ink/55">
+                    <div class="rounded-2xl bg-palawan-sand p-4">
+                        <dt class="text-xs font-semibold uppercase tracking-wide text-benguet-charcoal/55">
                             {{ $label }}
                         </dt>
 
                         <dd
                             data-count="{{ $key }}"
-                            class="mt-2 text-3xl font-semibold text-ink-strong"
+                            class="mt-2 text-3xl font-semibold text-volcanic-teal"
                         >
                             @if ($key === 'finished')
                                 <span data-finished-count>{{ $summary['finished'] }}</span>
@@ -250,14 +250,14 @@
                     'blocked' => 'Blocked',
                     'failed' => 'Failed',
                 ] as $key => $label)
-                    <div class="rounded-2xl bg-surface p-4">
-                        <dt class="text-xs font-semibold uppercase tracking-wide text-ink/55">
+                    <div class="rounded-2xl bg-palawan-sand p-4">
+                        <dt class="text-xs font-semibold uppercase tracking-wide text-benguet-charcoal/55">
                             {{ $label }}
                         </dt>
 
                         <dd
                             data-count="{{ $key }}"
-                            class="mt-2 text-2xl font-semibold text-ink-strong"
+                            class="mt-2 text-2xl font-semibold text-volcanic-teal"
                         >
                             {{ $summary['counts'][$key] }}
                         </dd>
@@ -265,7 +265,7 @@
                 @endforeach
             </dl>
 
-            <p class="mt-4 text-sm text-ink/55">
+            <p class="mt-4 text-sm text-benguet-charcoal/55">
                 <span data-waiting-count>{{ $summary['waiting'] }}</span>
                 job(s) waiting in the database queue.
             </p>
@@ -279,17 +279,17 @@
             @endif
         </section>
 
-        <section class="rounded-[2rem] bg-surface-raised p-6 shadow-sm ring-1 ring-boracay-light sm:p-8">
-            <h2 class="font-display text-3xl font-semibold text-ink-strong">
+        <section class="rounded-[2rem] bg-island-white p-6 shadow-sm ring-1 ring-boracay-light sm:p-8">
+            <h2 class="font-display text-3xl font-semibold text-volcanic-teal">
                 Crawl queue
             </h2>
 
-            <p class="mt-2 text-sm text-ink/60">
+            <p class="mt-2 text-sm text-benguet-charcoal/60">
                 What is waiting to be crawled, and what is running right now.
                 This list refreshes itself.
             </p>
 
-            <p class="mt-3 rounded-2xl bg-surface px-4 py-3 text-xs leading-5 text-ink/60">
+            <p class="mt-3 rounded-2xl bg-palawan-sand px-4 py-3 text-xs leading-5 text-benguet-charcoal/60">
                 Crawls run in the background, one at a time, so a source can sit
                 in <strong>Waiting</strong> for a few seconds before it moves to
                 <strong>Running now</strong>. If the queue stops draining
@@ -307,16 +307,16 @@
                     <ul class="mt-4 space-y-3" data-running-list>
                         @forelse ($summary['running'] as $item)
                             <li class="rounded-2xl bg-blue-50 p-4">
-                                <p class="font-semibold text-ink-strong">
+                                <p class="font-semibold text-volcanic-teal">
                                     {{ $item['destination'] }}
                                 </p>
 
-                                <p class="mt-1 text-xs text-ink/60">
+                                <p class="mt-1 text-xs text-benguet-charcoal/60">
                                     {{ $item['host'] }} · started {{ $item['since'] }}
                                 </p>
                             </li>
                         @empty
-                            <li class="rounded-2xl bg-surface p-4 text-sm text-ink/60">
+                            <li class="rounded-2xl bg-palawan-sand p-4 text-sm text-benguet-charcoal/60">
                                 Nothing is crawling at the moment.
                             </li>
                         @endforelse
@@ -331,16 +331,16 @@
                     <ul class="mt-4 max-h-80 space-y-3 overflow-y-auto pr-1" data-queue-list>
                         @forelse ($summary['queue'] as $item)
                             <li class="rounded-2xl bg-indigo-50 p-4">
-                                <p class="font-semibold text-ink-strong">
+                                <p class="font-semibold text-volcanic-teal">
                                     {{ $item['destination'] }}
                                 </p>
 
-                                <p class="mt-1 text-xs text-ink/60">
+                                <p class="mt-1 text-xs text-benguet-charcoal/60">
                                     {{ $item['host'] }} · queued {{ $item['waiting'] }}
                                 </p>
                             </li>
                         @empty
-                            <li class="rounded-2xl bg-surface p-4 text-sm text-ink/60">
+                            <li class="rounded-2xl bg-palawan-sand p-4 text-sm text-benguet-charcoal/60">
                                 The queue is empty.
                             </li>
                         @endforelse
@@ -359,7 +359,7 @@
 
             <div
                 data-selection-banner
-                class="mb-5 hidden rounded-2xl border border-boracay bg-line p-4 text-ink"
+                class="mb-5 hidden rounded-2xl border border-boracay bg-boracay-light p-4 text-benguet-charcoal"
             >
                 <p class="text-sm" data-selection-text>
                     All <strong data-page-count>0</strong> sources on this page
@@ -377,7 +377,7 @@
 
             <div class="mb-5 flex flex-wrap items-center justify-between gap-4">
                 <div>
-                    <p class="text-sm text-ink/60">
+                    <p class="text-sm text-benguet-charcoal/60">
                         Select sources, then queue them. Crawling runs in the
                         background and this page keeps itself up to date.
                     </p>
@@ -392,9 +392,9 @@
                 </button>
             </div>
 
-            <div class="overflow-x-auto rounded-[2rem] bg-surface-raised shadow-sm ring-1 ring-boracay-light">
+            <div class="overflow-x-auto rounded-[2rem] bg-island-white shadow-sm ring-1 ring-boracay-light">
                 <table class="min-w-full text-left text-sm">
-                    <thead class="border-b border-line bg-surface">
+                    <thead class="border-b border-boracay-light bg-palawan-sand">
                         <tr>
                             <th class="px-5 py-4">
                                 <input
@@ -404,17 +404,17 @@
                                     class="rounded border-boracay text-boracay focus:ring-boracay"
                                 >
                             </th>
-                            <th class="px-5 py-4 font-bold text-ink-strong">Destination</th>
-                            <th class="px-5 py-4 font-bold text-ink-strong">Source</th>
-                            <th class="px-5 py-4 font-bold text-ink-strong">Status</th>
-                            <th class="px-5 py-4 font-bold text-ink-strong">Proposals</th>
-                            <th class="px-5 py-4 text-right font-bold text-ink-strong">Action</th>
+                            <th class="px-5 py-4 font-bold text-volcanic-teal">Destination</th>
+                            <th class="px-5 py-4 font-bold text-volcanic-teal">Source</th>
+                            <th class="px-5 py-4 font-bold text-volcanic-teal">Status</th>
+                            <th class="px-5 py-4 font-bold text-volcanic-teal">Proposals</th>
+                            <th class="px-5 py-4 text-right font-bold text-volcanic-teal">Action</th>
                         </tr>
                     </thead>
 
                     <tbody>
                         @forelse ($sources as $source)
-                            <tr class="border-b border-line last:border-0">
+                            <tr class="border-b border-boracay-light last:border-0">
                                 <td class="px-5 py-4">
                                     <input
                                         type="checkbox"
@@ -427,10 +427,10 @@
                                 </td>
 
                                 <td class="px-5 py-4">
-                                    <p class="font-bold text-ink-strong">
+                                    <p class="font-bold text-volcanic-teal">
                                         {{ $source->destination->name }}
                                     </p>
-                                    <p class="mt-1 text-xs text-ink/55">
+                                    <p class="mt-1 text-xs text-benguet-charcoal/55">
                                         {{ $source->destination->province }}
                                     </p>
                                     <a
@@ -442,7 +442,7 @@
                                 </td>
 
                                 <td class="max-w-xs px-5 py-4">
-                                    <p class="font-semibold text-ink">
+                                    <p class="font-semibold text-benguet-charcoal">
                                         {{ $source->source_name }}
                                     </p>
 
@@ -450,7 +450,7 @@
                                         href="{{ $source->source_url }}"
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        class="mt-1 block truncate text-xs text-ink/55"
+                                        class="mt-1 block truncate text-xs text-benguet-charcoal/55"
                                     >
                                         {{ $source->source_url }}
                                     </a>
@@ -475,13 +475,13 @@
                                     </div>
 
                                     @if ($source->fetchability_note)
-                                        <p class="mt-2 text-xs text-ink/55">
+                                        <p class="mt-2 text-xs text-benguet-charcoal/55">
                                             {{ $source->fetchability_note }}
                                         </p>
                                     @endif
 
                                     @if ($source->last_checked_at)
-                                        <p class="mt-2 text-xs text-ink/55">
+                                        <p class="mt-2 text-xs text-benguet-charcoal/55">
                                             Checked
                                             {{ $source->last_checked_at->diffForHumans() }}
                                         </p>
@@ -489,7 +489,7 @@
 
                                     @if ($source->error_message)
                                         <p
- class="mt-2 text-xs leading-5 text-red-700 dark:text-red-300"
+                                            class="mt-2 text-xs leading-5 text-red-700"
                                             title="{{ $source->error_message }}"
                                         >
                                             {{ \Illuminate\Support\Str::limit($source->error_message, 140) }}
@@ -516,7 +516,7 @@
                                             {{ $source->pending_proposals_count }} waiting
                                         </a>
                                     @else
-                                        <span class="text-ink/45">None</span>
+                                        <span class="text-benguet-charcoal/45">None</span>
                                     @endif
                                 </td>
 
@@ -530,18 +530,18 @@
                                         </a>
 
                                         @if ($source->isActivelyCrawling())
-                                            <span class="text-sm text-ink/50">
+                                            <span class="text-sm text-benguet-charcoal/50">
                                                 Crawling…
                                             </span>
                                         @elseif ($source->isQueued())
-                                            <span class="text-sm text-ink/50">
+                                            <span class="text-sm text-benguet-charcoal/50">
                                                 Queued
                                             </span>
                                         @else
                                             <button
                                                 type="submit"
                                                 form="crawl-source-{{ $source->id }}"
-                                                class="font-semibold text-ink-strong"
+                                                class="font-semibold text-volcanic-teal"
                                             >
                                                 {{ $source->isCrawlStale() ? 'Retry' : 'Crawl now' }}
                                             </button>
@@ -551,7 +551,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="6" class="px-5 py-12 text-center text-ink/60">
+                                <td colspan="6" class="px-5 py-12 text-center text-benguet-charcoal/60">
                                     @if ($search !== '' || $status !== '')
                                         No sources match your filters.
                                         <a

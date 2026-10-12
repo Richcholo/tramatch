@@ -5,7 +5,7 @@
                 Admin / Review queue
             </p>
 
-            <h1 class="mt-3 font-display text-4xl font-semibold text-ink-strong sm:text-6xl">
+            <h1 class="mt-3 font-display text-4xl font-semibold text-volcanic-teal sm:text-6xl">
                 Proposed updates.
             </h1>
         </div>
@@ -20,7 +20,7 @@
             @method('PATCH')
 
             <div class="mb-5 flex flex-wrap items-center justify-between gap-4">
-                <p class="text-sm text-ink/60">
+                <p class="text-sm text-benguet-charcoal/60">
                     Nothing is published until an administrator approves it.
                 </p>
 
@@ -28,7 +28,7 @@
                     <select
                         name="action"
                         required
-                        class="rounded-xl border-line bg-surface text-sm focus:border-boracay focus:ring-boracay"
+                        class="rounded-xl border-boracay-light bg-palawan-sand text-sm focus:border-boracay focus:ring-boracay"
                     >
                         <option value="approve">Approve selected</option>
                         <option value="reject">Reject selected</option>
@@ -45,7 +45,7 @@
 
             <div class="space-y-4">
                 @forelse ($proposals as $proposal)
-                    <article class="rounded-[2rem] bg-surface-raised p-6 shadow-sm ring-1 ring-boracay-light sm:p-8">
+                    <article class="rounded-[2rem] bg-island-white p-6 shadow-sm ring-1 ring-boracay-light sm:p-8">
                         <div class="flex flex-wrap items-start gap-5">
                             <input
                                 type="checkbox"
@@ -61,7 +61,7 @@
                                             {{ \App\Models\DestinationUpdateProposal::fieldLabel($proposal->field_name) }}
                                         </p>
 
-                                        <h2 class="mt-2 text-2xl font-bold text-ink-strong">
+                                        <h2 class="mt-2 text-2xl font-bold text-volcanic-teal">
                                             {{ $proposal->destination->name }}
                                         </h2>
                                     </div>
@@ -71,27 +71,27 @@
                                     </span>
                                 </div>
 
-                                <p class="mt-3 text-sm text-ink/55">
+                                <p class="mt-3 text-sm text-benguet-charcoal/55">
                                     Source: {{ $proposal->source->source_name }}
                                 </p>
 
                                 <div class="mt-6 grid gap-4 md:grid-cols-2">
-                                    <div class="rounded-2xl bg-surface p-4">
-                                        <p class="text-xs font-bold uppercase tracking-[0.18em] text-ink/45">
+                                    <div class="rounded-2xl bg-palawan-sand p-4">
+                                        <p class="text-xs font-bold uppercase tracking-[0.18em] text-benguet-charcoal/45">
                                             Current
                                         </p>
 
-                                        <p class="mt-3 break-words text-sm text-ink/70">
+                                        <p class="mt-3 break-words text-sm text-benguet-charcoal/70">
                                             {{ $proposal->old_value ?: 'No existing value' }}
                                         </p>
                                     </div>
 
-                                    <div class="rounded-2xl bg-line p-4">
+                                    <div class="rounded-2xl bg-boracay-light p-4">
                                         <p class="text-xs font-bold uppercase tracking-[0.18em] text-boracay-dark">
                                             Proposed
                                         </p>
 
-                                        <p class="mt-3 break-words text-sm text-ink-strong">
+                                        <p class="mt-3 break-words text-sm text-volcanic-teal">
                                             {{ $proposal->proposed_value }}
                                         </p>
                                     </div>
@@ -101,7 +101,7 @@
                                     <button
                                         type="submit"
                                         form="proposal-approve-{{ $proposal->id }}"
-                                        class="rounded-full bg-boracay px-4 py-2 text-sm font-bold text-ink-fill"
+                                        class="rounded-full bg-boracay px-4 py-2 text-sm font-bold text-benguet-charcoal"
                                     >
                                         Approve
                                     </button>
@@ -109,7 +109,7 @@
                                     <button
                                         type="submit"
                                         form="proposal-reject-{{ $proposal->id }}"
- class="rounded-full border border-red-300 px-4 py-2 text-sm font-bold text-red-600"
+                                        class="rounded-full border border-red-300 px-4 py-2 text-sm font-bold text-red-600"
                                     >
                                         Reject
                                     </button>
@@ -127,7 +127,7 @@
                         </div>
                     </article>
                 @empty
-                    <div class="rounded-[2rem] bg-volcanic-teal dark:bg-surface-raised p-10 text-white dark:text-ink-strong">
+                    <div class="rounded-[2rem] bg-volcanic-teal p-10 text-white">
                         <p class="text-xs font-bold uppercase tracking-[0.28em] text-boracay-light">
                             Review queue clear
                         </p>

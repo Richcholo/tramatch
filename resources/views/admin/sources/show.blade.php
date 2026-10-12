@@ -11,7 +11,7 @@
             <div class="flex flex-wrap items-center gap-3">
                 <a
                     href="{{ route('destinations.show', $source->destination) }}"
-                    class="rounded-full bg-boracay px-5 py-3 text-sm font-bold text-ink-fill"
+                    class="rounded-full bg-boracay px-5 py-3 text-sm font-bold text-benguet-charcoal"
                 >
                     View public page →
                 </a>
@@ -29,7 +29,7 @@
     <div class="space-y-8">
         <x-flash-toast />
 
-        <section class="relative overflow-hidden rounded-[2rem] bg-volcanic-teal dark:bg-surface-raised p-8 text-white dark:text-ink-strong shadow-xl sm:p-12">
+        <section class="relative overflow-hidden rounded-[2rem] bg-volcanic-teal p-8 text-white shadow-xl sm:p-12">
             <div class="absolute -right-24 -top-24 h-96 w-96 rounded-full bg-boracay/25 blur-3xl"></div>
 
             <div class="relative">
@@ -112,7 +112,7 @@
                         <form method="POST" action="{{ route('admin.sources.crawl', $source) }}">
                             @csrf
 
-                            <button class="rounded-full bg-philippine-gold px-5 py-3 text-sm font-bold text-ink-fill">
+                            <button class="rounded-full bg-philippine-gold px-5 py-3 text-sm font-bold text-benguet-charcoal">
                                 {{ $source->isCrawlStale() ? 'Retry crawl' : 'Crawl now' }}
                             </button>
                         </form>
@@ -121,12 +121,12 @@
             </div>
         </section>
 
-        <section class="rounded-[2rem] bg-surface-raised p-6 shadow-sm ring-1 ring-boracay-light sm:p-8">
-            <h2 class="font-display text-2xl font-semibold text-ink-strong">
+        <section class="rounded-[2rem] bg-island-white p-6 shadow-sm ring-1 ring-boracay-light sm:p-8">
+            <h2 class="font-display text-2xl font-semibold text-volcanic-teal">
                 Which page should we crawl?
             </h2>
 
-            <p class="mt-2 text-sm leading-6 text-ink/60">
+            <p class="mt-2 text-sm leading-6 text-benguet-charcoal/60">
                 Most official sites put fees and opening hours on a sub page
                 rather than the homepage. Point this at that page — for example
                 a “location info”, “visit” or “rates” page — and the crawler
@@ -145,7 +145,7 @@
                     <div>
                         <label
                             for="details_url"
-                            class="block text-sm font-medium text-ink"
+                            class="block text-sm font-medium text-benguet-charcoal"
                         >
                             Crawl page
                         </label>
@@ -156,10 +156,10 @@
                             type="url"
                             value="{{ old('details_url', $source->details_url) }}"
                             placeholder="{{ $source->source_url }}"
-                            class="mt-2 w-full rounded-xl border-line bg-surface text-sm focus:border-boracay focus:ring-boracay"
+                            class="mt-2 w-full rounded-xl border-boracay-light bg-palawan-sand text-sm focus:border-boracay focus:ring-boracay"
                         >
 
-                        <p class="mt-2 text-xs text-ink/50">
+                        <p class="mt-2 text-xs text-benguet-charcoal/50">
                             Leave empty to crawl
                             {{ $source->source_url }}
                         </p>
@@ -175,7 +175,7 @@
             </form>
 
             @if ($source->details_url)
-                <p class="mt-4 rounded-2xl bg-line p-4 text-sm text-ink">
+                <p class="mt-4 rounded-2xl bg-boracay-light p-4 text-sm text-benguet-charcoal">
                     Set, so the crawler reads
                     <span class="font-semibold break-all">{{ $source->details_url }}</span>
                     instead of
@@ -186,39 +186,39 @@
 
         @if ($feeNotice)
             <section class="rounded-[2rem] border border-philippine-gold/40 bg-philippine-gold/10 p-6 sm:p-8">
-                <h2 class="font-display text-2xl font-semibold text-ink-strong">
+                <h2 class="font-display text-2xl font-semibold text-volcanic-teal">
                     Fees found on the page
                 </h2>
 
-                <p class="mt-2 text-sm leading-6 text-ink/70">
+                <p class="mt-2 text-sm leading-6 text-benguet-charcoal/70">
                     Copied from the page we last fetched. Fees are not applied
                     automatically — compare it with what we store and update the
                     destination if a price has changed.
                 </p>
 
                 <div class="mt-5 grid gap-4 sm:grid-cols-2">
-                    <div class="rounded-2xl bg-surface-raised p-4">
-                        <p class="text-xs font-bold uppercase tracking-wide text-ink/45">
+                    <div class="rounded-2xl bg-island-white p-4">
+                        <p class="text-xs font-bold uppercase tracking-wide text-benguet-charcoal/45">
                             Currently stored
                         </p>
 
-                        <p class="mt-2 text-2xl font-semibold text-ink-strong">
+                        <p class="mt-2 text-2xl font-semibold text-volcanic-teal">
                             {{ $source->destination->entrance_fee_display ?: 'Not set' }}
                         </p>
 
                         @if ($source->destination->fee_operational_notes)
-                            <p class="mt-2 text-xs leading-5 text-ink/60">
+                            <p class="mt-2 text-xs leading-5 text-benguet-charcoal/60">
                                 {{ $source->destination->fee_operational_notes }}
                             </p>
                         @endif
                     </div>
 
-                    <div class="rounded-2xl bg-surface-raised p-4">
-                        <p class="text-xs font-bold uppercase tracking-wide text-ink/45">
+                    <div class="rounded-2xl bg-island-white p-4">
+                        <p class="text-xs font-bold uppercase tracking-wide text-benguet-charcoal/45">
                             On the page
                         </p>
 
-                        <p class="mt-2 max-h-48 overflow-y-auto whitespace-pre-line text-sm leading-6 text-ink/80">
+                        <p class="mt-2 max-h-48 overflow-y-auto whitespace-pre-line text-sm leading-6 text-benguet-charcoal/80">
                             {{ $feeNotice }}
                         </p>
                     </div>
@@ -227,33 +227,33 @@
         @endif
 
         @if ($source->error_message)
- <section class="rounded-[2rem] border border-red-200 dark:border-red-400/30 bg-red-50 dark:bg-red-500/15 p-6 sm:p-8">
- <h2 class="font-display text-2xl font-semibold text-red-900">
+            <section class="rounded-[2rem] border border-red-200 bg-red-50 p-6 sm:p-8">
+                <h2 class="font-display text-2xl font-semibold text-red-900">
                     What went wrong
                 </h2>
 
- <p class="mt-3 text-sm leading-6 text-red-800 dark:text-red-200">
+                <p class="mt-3 text-sm leading-6 text-red-800">
                     {{ $source->error_message }}
                 </p>
             </section>
         @endif
 
         <section class="grid gap-6 lg:grid-cols-2">
-            <div class="rounded-[2rem] bg-surface-raised p-6 shadow-sm ring-1 ring-boracay-light sm:p-8">
+            <div class="rounded-[2rem] bg-island-white p-6 shadow-sm ring-1 ring-boracay-light sm:p-8">
                 <h2 class="text-xs font-bold uppercase tracking-[0.25em] text-boracay-dark">
                     Freshness
                 </h2>
 
                 <dl class="mt-6 space-y-5">
                     <div>
-                        <dt class="text-sm text-ink/55">
+                        <dt class="text-sm text-benguet-charcoal/55">
                             Last checked
                         </dt>
 
-                        <dd class="mt-1 font-semibold text-ink-strong">
+                        <dd class="mt-1 font-semibold text-volcanic-teal">
                             @if ($source->last_checked_at)
                                 {{ $source->last_checked_at->diffForHumans() }}
-                                <span class="font-normal text-ink/50">
+                                <span class="font-normal text-benguet-charcoal/50">
                                     ({{ $source->last_checked_at->format('j M Y, g:i a') }})
                                 </span>
                             @else
@@ -263,14 +263,14 @@
                     </div>
 
                     <div>
-                        <dt class="text-sm text-ink/55">
+                        <dt class="text-sm text-benguet-charcoal/55">
                             Last successful crawl
                         </dt>
 
-                        <dd class="mt-1 font-semibold text-ink-strong">
+                        <dd class="mt-1 font-semibold text-volcanic-teal">
                             @if ($source->last_success_at)
                                 {{ $source->last_success_at->diffForHumans() }}
-                                <span class="font-normal text-ink/50">
+                                <span class="font-normal text-benguet-charcoal/50">
                                     ({{ $source->last_success_at->format('j M Y, g:i a') }})
                                 </span>
                             @else
@@ -280,21 +280,21 @@
                     </div>
 
                     <div>
-                        <dt class="text-sm text-ink/55">
+                        <dt class="text-sm text-benguet-charcoal/55">
                             Politeness delay
                         </dt>
 
-                        <dd class="mt-1 font-semibold text-ink-strong">
+                        <dd class="mt-1 font-semibold text-volcanic-teal">
                             {{ $source->crawl_delay_seconds }}s between requests
                         </dd>
                     </div>
 
                     <div>
-                        <dt class="text-sm text-ink/55">
+                        <dt class="text-sm text-benguet-charcoal/55">
                             Crawling policy
                         </dt>
 
-                        <dd class="mt-1 font-semibold text-ink-strong">
+                        <dd class="mt-1 font-semibold text-volcanic-teal">
                             @if ($source->robots_checked_at)
                                 robots.txt checked
                                 {{ $source->robots_checked_at->diffForHumans() }}
@@ -307,21 +307,21 @@
                 </dl>
             </div>
 
-            <div class="rounded-[2rem] bg-surface-raised p-6 shadow-sm ring-1 ring-boracay-light sm:p-8">
+            <div class="rounded-[2rem] bg-island-white p-6 shadow-sm ring-1 ring-boracay-light sm:p-8">
                 <h2 class="text-xs font-bold uppercase tracking-[0.25em] text-boracay-dark">
                     Crawl history
                 </h2>
 
-                <p class="mt-2 text-sm text-ink/60">
+                <p class="mt-2 text-sm text-benguet-charcoal/60">
                     Every attempt, newest first — including the ones that
                     failed or were refused.
                 </p>
 
                 <div class="mt-6 space-y-3">
                     @forelse ($source->crawls()->latest('started_at')->limit(12)->get() as $crawl)
-                        <div class="rounded-2xl bg-surface p-4">
+                        <div class="rounded-2xl bg-palawan-sand p-4">
                             <div class="flex flex-wrap items-baseline justify-between gap-2">
-                                <p class="font-semibold text-ink-strong">
+                                <p class="font-semibold text-volcanic-teal">
                                     {{ $crawl->started_at?->format('j M Y, g:i a') }}
                                 </p>
 
@@ -330,7 +330,7 @@
                                     'bg-emerald-100 text-emerald-800' => $crawl->outcome === 'success',
                                     'bg-teal-100 text-teal-800' => $crawl->outcome === 'unchanged',
                                     'bg-orange-100 text-orange-800' => $crawl->outcome === 'blocked',
-'bg-red-100 dark:bg-red-500/20 text-red-800 dark:text-red-200' => $crawl->outcome ==='failed',
+                                    'bg-red-100 text-red-800' => $crawl->outcome === 'failed',
                                 ])>
                                     {{ match ($crawl->outcome) {
                                         'success' => 'Fetched',
@@ -341,7 +341,7 @@
                                 </span>
                             </div>
 
-                            <p class="mt-2 text-xs text-ink/60">
+                            <p class="mt-2 text-xs text-benguet-charcoal/60">
                                 @if ($crawl->attempt > 1)
                                     Attempt {{ $crawl->attempt }} ·
                                 @endif
@@ -359,7 +359,7 @@
                             @if ($crawl->outcome === 'success')
                                 <p class="mt-2 text-sm">
                                     @if ($crawl->content_changed === false)
-                                        <span class="text-ink/60">
+                                        <span class="text-benguet-charcoal/60">
                                             Page identical to the last crawl.
                                         </span>
                                     @endif
@@ -374,7 +374,7 @@
                                             {{ $crawl->emptyReason() }}
                                         </span>
                                     @else
-                                        <span class="text-ink/70">
+                                        <span class="text-benguet-charcoal/70">
                                             Read
                                             <strong>{{ implode(', ', $crawl->extracted_fields) }}</strong>
                                             — already proposed or unchanged.
@@ -392,13 +392,13 @@
                             @endif
 
                             @if ($crawl->error_message)
- <p class="mt-2 text-xs leading-5 text-red-700 dark:text-red-300">
+                                <p class="mt-2 text-xs leading-5 text-red-700">
                                     {{ $crawl->error_message }}
                                 </p>
                             @endif
                         </div>
                     @empty
-                        <p class="text-sm text-ink/60">
+                        <p class="text-sm text-benguet-charcoal/60">
                             Never crawled. Use “Crawl now” to make the first
                             attempt — it will be recorded here either way.
                         </p>
@@ -407,7 +407,7 @@
             </div>
         </section>
 
-        <section class="rounded-[2rem] bg-surface-raised p-6 shadow-sm ring-1 ring-boracay-light sm:p-8">
+        <section class="rounded-[2rem] bg-island-white p-6 shadow-sm ring-1 ring-boracay-light sm:p-8">
             <div class="flex flex-wrap items-center justify-between gap-4">
                 <h2 class="text-xs font-bold uppercase tracking-[0.25em] text-boracay-dark">
                     Suggested changes
@@ -423,43 +423,43 @@
 
             <div class="mt-6 space-y-4">
                 @forelse ($source->proposals->take(10) as $proposal)
-                    <div class="rounded-2xl bg-surface p-5">
+                    <div class="rounded-2xl bg-palawan-sand p-5">
                         <div class="flex flex-wrap items-center justify-between gap-3">
-                            <p class="font-semibold text-ink-strong">
+                            <p class="font-semibold text-volcanic-teal">
                                 {{ \App\Models\DestinationUpdateProposal::fieldLabel($proposal->field_name) }}
                             </p>
 
                             <div class="flex items-center gap-3">
-                                <div class="h-2 w-24 overflow-hidden rounded-full bg-surface-raised">
+                                <div class="h-2 w-24 overflow-hidden rounded-full bg-island-white">
                                     <div
                                         class="h-full rounded-full bg-boracay"
                                         style="width: {{ max(0, min(100, (float) $proposal->confidence)) }}%"
                                     ></div>
                                 </div>
 
-                                <span class="text-xs text-ink/55">
+                                <span class="text-xs text-benguet-charcoal/55">
                                     {{ number_format((float) $proposal->confidence, 0) }}% sure
                                 </span>
                             </div>
                         </div>
 
-                        <p class="mt-3 text-sm leading-6 text-ink/70">
-                            <span class="text-ink/50">
+                        <p class="mt-3 text-sm leading-6 text-benguet-charcoal/70">
+                            <span class="text-benguet-charcoal/50">
                                 Currently:
                             </span>
                             {{ $proposal->old_value ?: 'nothing set' }}
                             <span class="mx-1">→</span>
-                            <span class="font-semibold text-ink-strong">
+                            <span class="font-semibold text-volcanic-teal">
                                 {{ $proposal->proposed_value }}
                             </span>
                         </p>
 
-                        <p class="mt-3 text-xs font-semibold uppercase tracking-wide text-ink/45">
+                        <p class="mt-3 text-xs font-semibold uppercase tracking-wide text-benguet-charcoal/45">
                             {{ ucfirst($proposal->status) }}
                         </p>
                     </div>
                 @empty
-                    <p class="text-sm text-ink/60">
+                    <p class="text-sm text-benguet-charcoal/60">
                         Nothing suggested yet. Suggested changes appear here
                         after a crawl, and nothing is published until an
                         administrator approves it.

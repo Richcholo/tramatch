@@ -6,14 +6,14 @@
                     Operations / Destinations
                 </p>
 
-                <h1 class="mt-3 font-display text-4xl font-semibold tracking-[-0.04em] text-ink-strong sm:text-6xl">
+                <h1 class="mt-3 font-display text-4xl font-semibold tracking-[-0.04em] text-volcanic-teal sm:text-6xl">
                     Keep the catalog alive.
                 </h1>
             </div>
 
             <a
                 href="{{ route('admin.dashboard') }}"
-                class="rounded-full border border-line px-5 py-3 text-sm font-semibold text-ink transition hover:bg-surface-raised"
+                class="rounded-full border border-boracay-light px-5 py-3 text-sm font-semibold text-benguet-charcoal transition hover:bg-island-white"
             >
                 ← Admin dashboard
             </a>
@@ -21,10 +21,10 @@
     </x-slot>
 
     <div class="space-y-8">
-        <section class="rounded-[1.5rem] border border-line bg-surface">
+        <section class="rounded-[1.5rem] border border-boracay-light bg-palawan-sand">
             <form method="GET" action="{{ route('admin.destinations.index') }}" class="grid gap-5 p-6 sm:grid-cols-3 sm:items-center sm:p-8">
                 <label class="block sm:col-span-2">
-                    <span class="text-[0.65rem] font-bold uppercase tracking-[0.25em] text-ink/60">
+                    <span class="text-[0.65rem] font-bold uppercase tracking-[0.25em] text-benguet-charcoal/60">
                         Location or destination
                     </span>
 
@@ -34,7 +34,7 @@
                         list="destination-location-options"
                         value="{{ $search }}"
                         placeholder="Search or enter a location"
-                        class="mt-3 w-full border-0 border-b border-line bg-transparent px-0 pb-3 text-sm text-ink-strong placeholder:text-ink/40 focus:border-boracay focus:ring-0"
+                        class="mt-3 w-full border-0 border-b border-boracay-light bg-transparent px-0 pb-3 text-sm text-volcanic-teal placeholder:text-benguet-charcoal/40 focus:border-boracay focus:ring-0"
                     >
                     <datalist id="destination-location-options">
                         @foreach ($locations as $location)
@@ -44,7 +44,7 @@
                 </label>
 
                 <div class="flex items-end justify-between gap-4 sm:justify-end">
-                    <span class="text-[0.65rem] font-bold uppercase tracking-[0.25em] text-ink/45">
+                    <span class="text-[0.65rem] font-bold uppercase tracking-[0.25em] text-benguet-charcoal/45">
                         {{ $destinations->total() }} places
                     </span>
 
@@ -64,27 +64,27 @@
             </a>
         </div>
 
-        <div class="overflow-x-auto rounded-[2rem] bg-surface-raised shadow-sm ring-1 ring-boracay-light">
+        <div class="overflow-x-auto rounded-[2rem] bg-island-white shadow-sm ring-1 ring-boracay-light">
             <table class="min-w-full text-left text-sm">
-                <thead class="border-b border-line bg-surface">
+                <thead class="border-b border-boracay-light bg-palawan-sand">
                     <tr>
-                        <th class="px-6 py-5 font-bold text-ink-strong">
+                        <th class="px-6 py-5 font-bold text-volcanic-teal">
                             Destination
                         </th>
 
-                        <th class="px-6 py-5 font-bold text-ink-strong">
+                        <th class="px-6 py-5 font-bold text-volcanic-teal">
                             Province
                         </th>
 
-                        <th class="px-6 py-5 font-bold text-ink-strong">
+                        <th class="px-6 py-5 font-bold text-volcanic-teal">
                             Budget
                         </th>
 
-                        <th class="px-6 py-5 font-bold text-ink-strong">
+                        <th class="px-6 py-5 font-bold text-volcanic-teal">
                             Status
                         </th>
 
-                        <th class="px-6 py-5 text-right font-bold text-ink-strong">
+                        <th class="px-6 py-5 text-right font-bold text-volcanic-teal">
                             Actions
                         </th>
                     </tr>
@@ -92,22 +92,22 @@
 
                 <tbody>
                     @forelse ($destinations as $destination)
-                        <tr class="border-b border-line last:border-0">
+                        <tr class="border-b border-boracay-light last:border-0">
                             <td class="px-6 py-5">
-                                <p class="font-bold text-ink-strong">
+                                <p class="font-bold text-volcanic-teal">
                                     {{ $destination->name }}
                                 </p>
 
-                                <p class="mt-1 text-xs text-ink/55">
+                                <p class="mt-1 text-xs text-benguet-charcoal/55">
                                     {{ $destination->municipality }}
                                 </p>
                             </td>
 
-                            <td class="px-6 py-5 text-ink/70">
+                            <td class="px-6 py-5 text-benguet-charcoal/70">
                                 {{ $destination->province }}
                             </td>
 
-                            <td class="px-6 py-5 capitalize text-ink/70">
+                            <td class="px-6 py-5 capitalize text-benguet-charcoal/70">
                                 {{ $destination->budget_level }}
                             </td>
 
@@ -127,7 +127,7 @@
                                 <div class="flex flex-wrap justify-end gap-3">
                                     <a
                                         href="{{ route('admin.destinations.edit', $destination) }}"
-                                        class="font-semibold text-boracay-dark hover:text-ink-strong"
+                                        class="font-semibold text-boracay-dark hover:text-volcanic-teal"
                                     >
                                         Edit
                                     </a>
@@ -161,7 +161,7 @@
                                     <button
                                         type="button"
                                         onclick="document.getElementById('delete-destination-confirmation-{{ $destination->id }}').showModal()"
- class="font-semibold text-red-600"
+                                        class="font-semibold text-red-600"
                                     >
                                         Delete
                                     </button>
@@ -171,20 +171,20 @@
                                         aria-labelledby="delete-destination-confirmation-title-{{ $destination->id }}"
                                         aria-describedby="delete-destination-confirmation-description-{{ $destination->id }}"
                                         onclick="if (event.target === this) this.close()"
- class="m-auto w-[calc(100%-2rem)] max-w-md rounded-lg border border-red-200 dark:border-red-400/30 bg-surface p-0 text-ink shadow-2xl backdrop:bg-volcanic-teal/60 backdrop:backdrop-blur-sm"
+                                        class="m-auto w-[calc(100%-2rem)] max-w-md rounded-lg border border-red-200 bg-palawan-sand p-0 text-benguet-charcoal shadow-2xl backdrop:bg-volcanic-teal/60 backdrop:backdrop-blur-sm"
                                     >
                                         <div class="p-6 sm:p-7">
                                             <div class="flex items-start gap-4">
- <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-300" aria-hidden="true">
+                                                <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-700" aria-hidden="true">
                                                     <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
                                                         <path stroke-linecap="round" stroke-linejoin="round" d="M6 7h12m-10 0 .7 13h6.6L16 7M9 7V4h6v3m-4 4v5m2-5v5" />
                                                     </svg>
                                                 </span>
                                                 <div>
-                                                    <h2 id="delete-destination-confirmation-title-{{ $destination->id }}" class="font-display text-xl font-semibold text-ink-strong">
+                                                    <h2 id="delete-destination-confirmation-title-{{ $destination->id }}" class="font-display text-xl font-semibold text-volcanic-teal">
                                                         Permanently delete destination?
                                                     </h2>
-                                                    <p id="delete-destination-confirmation-description-{{ $destination->id }}" class="mt-2 text-sm leading-6 text-ink/70">
+                                                    <p id="delete-destination-confirmation-description-{{ $destination->id }}" class="mt-2 text-sm leading-6 text-benguet-charcoal/70">
                                                         “{{ $destination->name }}” and its reviews, swipe history, and itinerary stops will be deleted. This cannot be undone.
                                                     </p>
                                                 </div>
@@ -193,10 +193,10 @@
                                             <form method="POST" action="{{ route('admin.destinations.destroy', $destination) }}" class="mt-7 flex justify-end gap-3">
                                                 @csrf
                                                 @method('DELETE')
-                                                <button type="button" autofocus onclick="this.closest('dialog').close()" class="rounded-full border border-line px-4 py-2 text-sm font-semibold text-ink transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-boracay focus:ring-offset-2 dark:focus:ring-offset-volcanic-teal">
+                                                <button type="button" autofocus onclick="this.closest('dialog').close()" class="rounded-full border border-boracay-light px-4 py-2 text-sm font-semibold text-benguet-charcoal transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-boracay focus:ring-offset-2">
                                                     Cancel
                                                 </button>
- <button type="submit" class="rounded-full bg-red-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-700 focus:ring-offset-2 dark:focus:ring-offset-volcanic-teal">
+                                                <button type="submit" class="rounded-full bg-red-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-700 focus:ring-offset-2">
                                                     Delete permanently
                                                 </button>
                                             </form>
@@ -207,7 +207,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="5" class="px-6 py-12 text-center text-ink/60">
+                            <td colspan="5" class="px-6 py-12 text-center text-benguet-charcoal/60">
                                 No destinations found.
                             </td>
                         </tr>

@@ -1011,174 +1011,19 @@ Contracts worth knowing:
 behind-every-word `z-index: -1`, the fly-off swipe, and the
 opaque card).
 
-### The theme toggle, and moving between places
+### Moving between places
 
-Two features that share a root: the destination page has no way to reach
-another place, and the app has one dark surface where it has two dozen light
-ones.
+The destination page has no chevrons of its own — the stage's own chevrons move
+the FAN — so this strip, in `components/destinations/place-nav.blade.php`, is
+how a visitor reaches another place.
 
-#### The theme
-
-`html.dark` is the whole mechanism. `@custom-variant dark` was already in
-`app.css` for a class strategy, so no build change was needed.
-
-- **THE APPLYING SCRIPT IS INLINE IN `<head>`, AND IT MAY NOT MOVE INTO A
-  BUNDLE.** `<x-theme-init />` sits before the first stylesheet in both
-  layouts. A module-delivered version is deferred, so the browser has already
-  painted by the time it runs — and the flash is worse than usual here,
-  because the destination page and the deck are dark *by design* rather than by
-  preference, so it is not a shade of grey, it is the whole ground changing.
-- **IT IS IN BOTH LAYOUTS AND IT IS THE ONLY SCRIPT ON THE GUEST PAGES.**
-  `layouts/guest.blade.php` loads `page-transitions.js` and never `app.js`.
-  `window.tmTheme` is public *because* of that: the toggle calls it from an
-  inline `onclick`, the same way the logout confirmation is already driven. A
-  toggle wired through Alpine or a module import would work everywhere except
-  the pages where a visitor most wants to change the theme.
-- **PREFERENCE ORDER: STORED CHOICE, THEN `prefers-color-scheme`, THEN DARK.**
-  A stored choice beats the OS, because someone who has pressed the toggle once
-  has said what they want. Both `localStorage` calls are wrapped: private
-  browsing throws, and an uncaught throw here happens *before* the rest of the
-  page's JavaScript, so the cost is not a missing preference but a broken page.
-  A visitor with no stored choice follows the OS as it changes.
-- **THE GLYPH AND THE NAME SWAP IN CSS, OFF `html.dark`, WITH
-  `display: none`.** Not `x-show` (there is no `x-cloak` rule in this
-  stylesheet, so both glyphs paint for a frame) and not a scripted `aria-label`
-  (a label written by JavaScript is briefly wrong). `display: none` is the only
-  one that also takes the element out of the accessibility tree, so the hidden
-  half of the label pair stops contributing to the button's name.
-- **`color-scheme` IS SET ON BOTH THEMES**, or scrollbars, form controls and
-  the caret stay light on a dark page.
-
-**THE MIGRATION IS DONE. It was a rename, not a restyle.** Every light value is
-byte-for-byte what the palette token it replaced already was, so light mode is
-unchanged and `/destinations` still looks exactly as it did — which is the
-constraint it was built to. `the_light_theme_is_exactly_the_palette_it_replaced`
-is the assertion the whole thing rests on.
-
-**ROLES FLIP, COLOURS DO NOT.** `--color-page`, `-surface`, `-surface-raised`,
-`-line`, `-ink`, `-ink-strong` are redefined under `.dark`; the palette tokens
-are untouched. A palette token cannot be flipped in place because several are
-used in two roles at once — `bg-island-white` is a card surface on a light page
-*and* light text on the stage, and `bg-volcanic-teal` is an always-dark header
-bar that must stay dark in both themes.
-`no_palette_token_is_flipped_in_place` guards it.
-
-**THE DARK HALF IS THE STAGE'S WORLD.** Ground is Volcanic Teal, and a card is
-the stage's own `.tm-panel` treatment — `rgb(255 255 255 / 0.04)`, lifted by
-light rather than by a different fill. A solid dark card on that ground is the
-flat colour block the stage's panel rules forbid.
-
-**`--color-ink-fill` AND `--color-ink-fill-strong` ARE NOT REDEFINED UNDER
-`.dark`, and that is their entire reason to exist.** A blanket rename gets this
-wrong: `text-ink` becomes Sea Glass on the dark theme, and Sea Glass on
-Boracay Turquoise or Philippine Gold is a weak pairing, so every filled button
-loses contrast the moment the theme flips. The ink on a bright fill is not a
-theme role — gold and turquoise stay gold and turquoise — so it gets its own
-constant pair. Two of them rather than one, because the buttons did not agree:
-charcoal measured 3.98:1 on turquoise, and the deck's primary settled on
-volcanic teal at 5.0:1.
-
-**STATUS COLOURS GET A VARIANT, NOT A SWAP.** `bg-red-50 text-red-800` cannot
-become `bg-red-500/15 text-red-200` in both themes — the light theme's dark red
-text is unreadable on a barely tinted fill. The light pair is kept and a `dark:`
-pair added beside it.
-
-**TWO SILENT FAILURES, BOTH HIT WHILE BUILDING THIS:**
-
-- **A MISSPELLED ROLE PRODUCES NO CSS AT ALL.** Tailwind v4 emits a utility
-  only where a source uses it, so `bg-surfacex` is not a wrong colour, it is no
-  rule, and the class does nothing with no warning anywhere.
-  `every_role_a_view_asked_for_is_emitted_into_the_built_stylesheet` reads the
-  role-shaped classes **out of the views** and checks each against the built
-  stylesheet; a constant list is not enough, because with `bg-surfacex` mistyped
-  on one page and `bg-surface` still used on twenty others every role is still
-  emitted and a constant list still passes. Caught in the act.
-- **A TIGHT-LOOKING PATTERN WITH NO RIGHT BOUNDARY CORRUPTS WHAT IT WAS MEANT
-  TO MAP, AND IT SHIPS GREEN.** The status sweep replaced `bg-red-50` →
-  `dark:bg-red-500/15` with no boundary, so it matched **inside the string it
-  had just created** and inside pre-existing `bg-red-50/60`, leaving
-  `dark:bg-red-500/150/15`, `bg-red-50 dark:bg-red-500/15/60` and a bare
-  `dark:bg-red-50` — 23 sites across 15 files. Every test stayed green
-  throughout, because the assertions only checked that the *correct* pair was
-  present and never that a second one was not. **Two rules for any rewrite:**
-  anchor both ends (`(?<![\w:.-])token(?![\w./-])`), and assert the ABSENCE of
-  the malformed form as well as the presence of the right one. Repaired in
-  place rather than reverted, because it had already shipped.
-- **A GUARD THAT CANNOT MATCH ANYTHING IS WORSE THAN NO GUARD, AND IT PASSES.**
-  Three separate regex mistakes during the status repair, each caught only by
-  deliberately reintroducing the exact corruption it claims to detect:
-
-  | Written | Means | Catch rate on the 3 real shapes |
-  |---|---|---|
-  | `dark:[a-z-]*:bg-red-…` | demands a **second** colon, so it never matches `dark:bg-red-50` | **0/3** |
-  | `dark:(?:[a-z-]+:)?bg-red-…` | optional state prefix — correct | 3/3 |
-  | `(?<![\w/-])\d+/\d+` | lookbehind can't sit on a slash, so `/15/60` is rejected at both ends | **0/3** |
-  | `/\/\d{1,3}\/\d{1,3}/` | doubled alpha — correct | 3/3 |
-
-  `[a-z-]*:` and `(?:[a-z-]+:)?` are not interchangeable; the first one is a
-  silent, total failure. The tell is always the same and it is cheap:
-  **falsify the guard by putting the bug back and watching it fail.** A guard
-  added and never falsified is an assumption. The `assertGreaterThan(0, …)`
-  companion helps and is not enough on its own — it proves the *positive* half
-  of a rule is live, not that the negative half can fire.
-- **THE DARK-BY-DESIGN PAGES MUST CARRY NO `dark:` VARIANT AT ALL.** A `dark:`
-  prefix on `destinations/show.blade.php` or `discover/index.blade.php` is not
-  a theme choice but a contradiction: those pages are dark in **both** themes,
-  so the variant is live at all times whatever the toggle says. The status
-  repair walked straight into it and turned the destination page's "Closed now"
-  badge — a light pill with dark text, deliberate and never allowed to tint its
-  background — into a dark tint that vanished into its own ground. Exclude
-  these from **any** sweep, not only the palette one:
-  `the_dark_by_design_pages_carry_no_dark_variant` guards it. `welcome` is
-  deliberately not in that list; it is a light page that does carry dark
-  variants, and adding it would fail the guard for a correct reason.
-- **`@property --tw-ring-offset-color` IS REGISTERED WITH `inherits: false`, SO
-  AN ANCESTOR RULE CANNOT FIX IT.** Setting the ring offset colour on `.dark`
-  puts it on `<html>` and nowhere else, and all sixteen focused controls keep
-  the initial white halo. That version of the test passed and the halos were
-  still there. The colour has to be declared on the control itself:
-  `dark:focus:ring-offset-volcanic-teal` beside each `focus:ring-offset-2`.
-
-**THE THREE THINGS LEFT OUT, ALL FOUND BY FOLLOWING A URL THAT DOES NOT
-EXIST** (`/destinations/locations` — there is no such route; the
-`{destination:slug}` binding swallows it and 404s):
-
-- **A 404 IS NOW A PAGE OF THIS APP.** `resources/views/errors/404.blade.php`
-  renders in the app layout, with the nav, the theme toggle, and two real routes
-  out. Without it Laravel renders its own: no navigation, no logo, no toggle, no
-  way back — and with `APP_DEBUG` on locally, a debug screen in the middle of an
-  otherwise themed site. **An error page whose only action is a dead end is how a
-  visitor concludes the whole application is broken.**
-- **THE GUEST PAGES OFFER THE TOGGLE.** The guest layout ran the theme script
-  from the first commit of the feature, so it painted in the saved theme — and
-  shipped with no control to change it. Anyone who picked a theme then signed
-  out, or followed a password-reset link, was stranded on it. A setting you
-  cannot change is not a setting.
-- **A BARE `bg-white` FIELD IS A LIGHT-ONLY SURFACE; A WHITE HOVER IS NOT.**
-  The main sweep had no reason to touch `bg-white` (it is not a palette token)
-  and left 26 white inputs, selects and textareas — the brightest thing on a dark
-  page. But `hover:bg-white` on a gold or turquoise button is a white hover under
-  dark ink and is CORRECT in both themes; flipping it would make a gold button go
-  muddy on hover instead of hot. Twenty-three of them, left alone on purpose.
-
-**THE GUEST HERO STAYS A DARK ISLAND, and must not be "fixed".**
-`layouts/guest.blade.php` keeps `bg-volcanic-teal` on the body and white copy
-over photographic art. Swapping the ground for `bg-page` would put white text on
-a pale background. It is the same shape of decision as the destinations stage: a
-surface that is dark by design, in both themes.
-`the_guest_hero_stays_a_dark_island_on_purpose` guards it.
-
-`tests/Feature/ThemeMigrationTest.php` (9) and
-`tests/Feature/ErrorPageAndGuestThemeTest.php` (4) pin all of it.
-
-#### Moving between places
-
-- **THE STRIP IS TEXT AND NAMES, NEVER ARROWS** (`place-nav`). The stage's
-  chevrons already own the arrow vocabulary on that page and they move the FAN
-  — one destination's photographs, no navigation. Two sets of arrows meaning
+- **THE STRIP IS TEXT AND NAMES, NEVER ARROWS.** The stage's chevrons already
+  own the arrow vocabulary on that page and they move the FAN — one
+  destination's photographs, no navigation. Two sets of arrows meaning
   different things is the confusion this app has already had one of: the
   chevrons used to navigate to a neighbouring destination while looking exactly
-  like the ones that moved the carousel.
+  like the ones that moved the carousel. "Baguio" is also the information a next
+  control owes you, and an arrow cannot tell you where you are going.
 - **IT SITS BELOW THE STAGE, IN FLOW, AFTER THE PAGER**, so there is a visible
   gap between "this controls the photographs" and "this changes which
   destination you are on".
@@ -1190,7 +1035,9 @@ surface that is dark by design, in both themes.
   carousel describe one catalogue.
 - **NOTHING WRAPS.** The first place has no previous, the last has no next, and
   the missing one says so visibly rather than disappearing — a visitor needs to
-  know WHY there is no Next.
+  know WHY there is no Next. It is `aria-hidden` in the markup: an empty control
+  is not information, and announcing "Last place in Luzon" on every page load is
+  noise where the absence of a link would have said nothing at all.
 - **QUICKHOP IS A PLAIN GET FORM TO ITS OWN ROUTE**, declared **before**
   `/{destination:slug}`. After it, route-model binding resolves "quickhop" as a
   slug, finds nothing and 404s — which reads as a broken search box rather than
@@ -1206,9 +1053,14 @@ surface that is dark by design, in both themes.
 - **AN ARCHIVED PLACE IS NEITHER A NEIGHBOUR NOR A QUICKHOP RESULT**, and is not
   counted in the total — `is_active = false` destinations 404 on their own
   page, so a link to one is a dead end dressed as a working control.
+- **THE STRIP'S CSS LIVES IN `app.css` UNDER `.tm-place-nav__*`, and restoring
+  `app.css` from an older commit silently strips it.** The component renders and
+  every HTTP test passes while the strip is unstyled, because nothing here
+  measures CSS. The tell is a class in the markup with no rule beside it. **When
+  reverting a commit that shares a file with a feature you are keeping, diff the
+  shared file's rule names against the kept component's markup.**
 
-`tests/Feature/PlaceNavigationTest.php` (11) and
-`tests/Feature/ThemeToggleTest.php` (7) pin all of it.
+`tests/Feature/PlaceNavigationTest.php` (11) pins all of it.
 
 ### Destination-source crawling
 
