@@ -9,6 +9,9 @@
     <link rel="icon" href="{{ asset('images/logo.svg') }}">
     <link rel="manifest" href="/manifest.webmanifest">
 
+    {{-- Before the stylesheet, so the page never paints in the wrong theme. --}}
+    <x-theme-init />
+
     <title>{{ $title ?? 'TraMatch' }}</title>
 
     {{-- Playfair Display backs every .font-display heading on app pages.
@@ -40,90 +43,103 @@
                 >
             </a>
 
-            <details class="group relative">
-                <summary
-                    aria-label="Toggle navigation menu"
-                    title="Navigation menu"
-                    class="flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-full border border-white/30 bg-white/10 text-white shadow-sm transition hover:bg-white/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-philippine-gold [&::-webkit-details-marker]:hidden"
-                >
-                    {{-- Three separate lines so they can rotate into the X.
-                         Previously two whole paths were swapped with
-                         hidden/group-open:hidden, which is an instant cut --
-                         the button looked like it glitched. --}}
-                    <svg
-                        class="tm-burger h-6 w-6"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        aria-hidden="true"
+            {{--
+                THE TWO HEADER CONTROLS, TOGGLE THEN BURGER.
+
+                The toggle is on the LEFT because that is the reading order, and
+                because it is the less destructive of the two: changing your
+                theme cannot lose anything, opening the menu can. They are one
+                flex row rather than two independently-positioned children so
+                they cannot drift apart at the sizes the `gap` does not cover.
+            --}}
+            <div class="flex items-center gap-3">
+                <x-theme-toggle />
+
+                <details class="group relative">
+                    <summary
+                        aria-label="Toggle navigation menu"
+                        title="Navigation menu"
+                        class="flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-full border border-white/30 bg-white/10 text-white shadow-sm transition hover:bg-white/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-philippine-gold [&::-webkit-details-marker]:hidden"
                     >
-                        <line class="tm-burger-line tm-burger-line--top" x1="4" y1="7" x2="20" y2="7" />
-                        <line class="tm-burger-line tm-burger-line--middle" x1="4" y1="12" x2="20" y2="12" />
-                        <line class="tm-burger-line tm-burger-line--bottom" x1="4" y1="17" x2="20" y2="17" />
-                    </svg>
-                </summary>
-
-                <nav aria-label="Main navigation" class="absolute right-0 top-full z-50 mt-3 w-72 max-w-[calc(100vw-2.5rem)] rounded-md border border-boracay-light bg-palawan-sand p-2 text-sm font-semibold shadow-xl shadow-benguet-charcoal/15">
-                    <a href="{{ route('dashboard') }}" class="block rounded-md px-4 py-3 transition hover:bg-boracay-light hover:text-boracay-dark">
-                        Dashboard
-                    </a>
-
-                    @if (Route::has('discover.index'))
-                        <a href="{{ route('discover.index') }}" class="block rounded-md px-4 py-3 transition hover:bg-boracay-light hover:text-boracay-dark">
-                            Discover
-                        </a>
-                    @endif
-
-                    @if (Route::has('destinations.index'))
-                        <a href="{{ route('destinations.index') }}" class="block rounded-md px-4 py-3 transition hover:bg-boracay-light hover:text-boracay-dark">
-                            Destinations
-                        </a>
-                    @endif
-
-                    @if (Route::has('recommendations.index'))
-                        <a href="{{ route('recommendations.index') }}" class="block rounded-md px-4 py-3 transition hover:bg-boracay-light hover:text-boracay-dark">
-                            Matches
-                        </a>
-                    @endif
-
-                    @if (Route::has('itineraries.index'))
-                        <a href="{{ route('itineraries.index') }}" class="block rounded-md px-4 py-3 transition hover:bg-boracay-light hover:text-boracay-dark">
-                            My trips
-                        </a>
-                    @endif
-
-                    @if (Route::has('profile.show'))
-                        <a href="{{ route('profile.show') }}" class="block rounded-md px-4 py-3 transition hover:bg-boracay-light hover:text-boracay-dark">
-                            Profile
-                        </a>
-                    @endif
-
-@if (Route::has('preferences.edit'))
-                        <a href="{{ route('preferences.edit') }}" class="block rounded-md px-4 py-3 transition hover:bg-boracay-light hover:text-boracay-dark">
-                            Preferences
-                        </a>
-                    @endif
-
-                    @if (Route::has('admin.dashboard') && auth()->check() && auth()->user()->isAdmin())
-                        <a href="{{ route('admin.dashboard') }}" class="mt-1 block rounded-md bg-philippine-gold px-4 py-3 text-benguet-charcoal transition hover:bg-boracay">
-                            Admin
-                        </a>
-                    @endif
-
-                    @if (Route::has('logout'))
-                        <div class="my-2 border-t border-boracay-light"></div>
-                        <button
-                            type="button"
-                            onclick="document.getElementById('logout-confirmation').showModal()"
-                            class="block w-full rounded-md px-4 py-3 text-left text-red-600 transition hover:bg-red-50 hover:text-red-700 active:scale-[0.98] active:duration-75"
+                        {{-- Three separate lines so they can rotate into the X.
+                             Previously two whole paths were swapped with
+                             hidden/group-open:hidden, which is an instant cut --
+                             the button looked like it glitched. --}}
+                        <svg
+                            class="tm-burger h-6 w-6"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            aria-hidden="true"
                         >
-                            Log out
-                        </button>
-                    @endif
-                </nav>
-            </details>
+                            <line class="tm-burger-line tm-burger-line--top" x1="4" y1="7" x2="20" y2="7" />
+                            <line class="tm-burger-line tm-burger-line--middle" x1="4" y1="12" x2="20" y2="12" />
+                            <line class="tm-burger-line tm-burger-line--bottom" x1="4" y1="17" x2="20" y2="17" />
+                        </svg>
+                    </summary>
+
+                    <nav aria-label="Main navigation" class="absolute right-0 top-full z-50 mt-3 w-72 max-w-[calc(100vw-2.5rem)] rounded-md border border-boracay-light bg-palawan-sand p-2 text-sm font-semibold shadow-xl shadow-benguet-charcoal/15">
+                        <a href="{{ route('dashboard') }}" class="block rounded-md px-4 py-3 transition hover:bg-boracay-light hover:text-boracay-dark">
+                            Dashboard
+                        </a>
+
+                        @if (Route::has('discover.index'))
+                            <a href="{{ route('discover.index') }}" class="block rounded-md px-4 py-3 transition hover:bg-boracay-light hover:text-boracay-dark">
+                                Discover
+                            </a>
+                        @endif
+
+                        @if (Route::has('destinations.index'))
+                            <a href="{{ route('destinations.index') }}" class="block rounded-md px-4 py-3 transition hover:bg-boracay-light hover:text-boracay-dark">
+                                Destinations
+                            </a>
+                        @endif
+
+                        @if (Route::has('recommendations.index'))
+                            <a href="{{ route('recommendations.index') }}" class="block rounded-md px-4 py-3 transition hover:bg-boracay-light hover:text-boracay-dark">
+                                Matches
+                            </a>
+                        @endif
+
+                        @if (Route::has('itineraries.index'))
+                            <a href="{{ route('itineraries.index') }}" class="block rounded-md px-4 py-3 transition hover:bg-boracay-light hover:text-boracay-dark">
+                                My trips
+                            </a>
+                        @endif
+
+                        @if (Route::has('profile.show'))
+                            <a href="{{ route('profile.show') }}" class="block rounded-md px-4 py-3 transition hover:bg-boracay-light hover:text-boracay-dark">
+                                Profile
+                            </a>
+                        @endif
+
+                        @if (Route::has('preferences.edit'))
+                            <a href="{{ route('preferences.edit') }}" class="block rounded-md px-4 py-3 transition hover:bg-boracay-light hover:text-boracay-dark">
+                                Preferences
+                            </a>
+                        @endif
+
+                        @if (Route::has('admin.dashboard') && auth()->check() && auth()->user()->isAdmin())
+                            <a href="{{ route('admin.dashboard') }}" class="mt-1 block rounded-md bg-philippine-gold px-4 py-3 text-benguet-charcoal transition hover:bg-boracay">
+                                Admin
+                            </a>
+                        @endif
+
+                        @if (Route::has('logout'))
+                            <div class="my-2 border-t border-boracay-light"></div>
+                            <button
+                                type="button"
+                                onclick="document.getElementById('logout-confirmation').showModal()"
+                                class="block w-full rounded-md px-4 py-3 text-left text-red-600 transition hover:bg-red-50 hover:text-red-700 active:scale-[0.98] active:duration-75"
+                            >
+                                Log out
+                            </button>
+                        @endif
+                    </nav>
+                </details>
+            </div>
         </div>
     </header>
 

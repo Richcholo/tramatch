@@ -103,6 +103,17 @@
                  */
             --}}
             @include('components.destinations.stage')
+
+            {{--
+                THE PLACE STRIP. Below the stage, in flow, after the pager -- so
+                there is a visible gap between "this controls the photographs"
+                and "this changes which destination you are on". It is text and
+                names rather than arrows precisely because the stage's own
+                chevrons already own the arrow vocabulary, and two sets of arrows
+                meaning different things is the confusion this app has already
+                had one of.
+            --}}
+            @include('components.destinations.place-nav')
         </section>
 
         {{-- THE FACTS. Same surface, same light-on-dark language, below the fold. --}}

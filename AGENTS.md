@@ -1011,6 +1011,104 @@ Contracts worth knowing:
 behind-every-word `z-index: -1`, the fly-off swipe, and the
 opaque card).
 
+### The theme toggle, and moving between places
+
+Two features that share a root: the destination page has no way to reach
+another place, and the app has one dark surface where it has two dozen light
+ones.
+
+#### The theme
+
+`html.dark` is the whole mechanism. `@custom-variant dark` was already in
+`app.css` for a class strategy, so no build change was needed.
+
+- **THE APPLYING SCRIPT IS INLINE IN `<head>`, AND IT MAY NOT MOVE INTO A
+  BUNDLE.** `<x-theme-init />` sits before the first stylesheet in both
+  layouts. A module-delivered version is deferred, so the browser has already
+  painted by the time it runs — and the flash is worse than usual here,
+  because the destination page and the deck are dark *by design* rather than by
+  preference, so it is not a shade of grey, it is the whole ground changing.
+- **IT IS IN BOTH LAYOUTS AND IT IS THE ONLY SCRIPT ON THE GUEST PAGES.**
+  `layouts/guest.blade.php` loads `page-transitions.js` and never `app.js`.
+  `window.tmTheme` is public *because* of that: the toggle calls it from an
+  inline `onclick`, the same way the logout confirmation is already driven. A
+  toggle wired through Alpine or a module import would work everywhere except
+  the pages where a visitor most wants to change the theme.
+- **PREFERENCE ORDER: STORED CHOICE, THEN `prefers-color-scheme`, THEN DARK.**
+  A stored choice beats the OS, because someone who has pressed the toggle once
+  has said what they want. Both `localStorage` calls are wrapped: private
+  browsing throws, and an uncaught throw here happens *before* the rest of the
+  page's JavaScript, so the cost is not a missing preference but a broken page.
+  A visitor with no stored choice follows the OS as it changes.
+- **THE GLYPH AND THE NAME SWAP IN CSS, OFF `html.dark`, WITH
+  `display: none`.** Not `x-show` (there is no `x-cloak` rule in this
+  stylesheet, so both glyphs paint for a frame) and not a scripted `aria-label`
+  (a label written by JavaScript is briefly wrong). `display: none` is the only
+  one that also takes the element out of the accessibility tree, so the hidden
+  half of the label pair stops contributing to the button's name.
+- **`color-scheme` IS SET ON BOTH THEMES**, or scrollbars, form controls and
+  the caret stay light on a dark page.
+
+**NOT FINISHED — THE PAGE MIGRATION.** The toggle, the persistence and the
+dark chrome are done; the ~650 palette-class occurrences across 60 views are
+not. So dark mode is currently a **half-flipped app**: the ground goes dark and
+the content cards stay on `bg-palawan-sand`. That is the state to finish from,
+and the order that keeps the app coherent at every commit is
+`app/` chrome → `dashboard` → `itineraries` → `profile`/`preferences` →
+`recommendations` → `admin` → `auth`, and **last** the two dark-by-design
+pages, because the destination page's palette inversion has to be re-solved
+for a light ground rather than colour-swapped (see the stage section: gold and
+Boracay Turquoise become accents *because* they fail on sand, and
+`text-volcanic-teal` at 1:1 against teal is how a heading vanishes).
+
+The palette guard to respect while doing it: a token cannot be flipped in
+place, because several are used in two roles. `bg-island-white` is a card
+surface on a light page and light text on the stage; `bg-benguet-charcoal` is
+text on the turquoise Like button *and* would be the ink token; and
+`bg-volcanic-teal` is an always-dark bar that must stay dark in both themes.
+The fix is semantic tokens (`--color-surface`, `--color-ink`, `--color-line`)
+defined once and redefined under `.dark` — never a value swap on the existing
+palette names.
+
+#### Moving between places
+
+- **THE STRIP IS TEXT AND NAMES, NEVER ARROWS** (`place-nav`). The stage's
+  chevrons already own the arrow vocabulary on that page and they move the FAN
+  — one destination's photographs, no navigation. Two sets of arrows meaning
+  different things is the confusion this app has already had one of: the
+  chevrons used to navigate to a neighbouring destination while looking exactly
+  like the ones that moved the carousel.
+- **IT SITS BELOW THE STAGE, IN FLOW, AFTER THE PAGER**, so there is a visible
+  gap between "this controls the photographs" and "this changes which
+  destination you are on".
+- **THE ORDER IS `sort_order, name`, NOT THE LISTING'S `latest()`.**
+  `latest()` sorts on `created_at` and a bulk CSV import writes many rows
+  carrying the same timestamp, so "the next place" would be effectively
+  arbitrary and two requests in the same page load could disagree about it. It
+  is the same total order the stage's payload is built on, so the strip and the
+  carousel describe one catalogue.
+- **NOTHING WRAPS.** The first place has no previous, the last has no next, and
+  the missing one says so visibly rather than disappearing — a visitor needs to
+  know WHY there is no Next.
+- **QUICKHOP IS A PLAIN GET FORM TO ITS OWN ROUTE**, declared **before**
+  `/{destination:slug}`. After it, route-model binding resolves "quickhop" as a
+  slug, finds nothing and 404s — which reads as a broken search box rather than
+  as an ordering mistake (the same trap as `admin/sources/status`). A redirect,
+  not a results dropdown: it works with scripting off, cannot drift from the
+  listing's search, and lands on the place's own URL so Back/Forward and a
+  shared link replay the place. Suggestions are a native `<datalist>`, so they
+  cost no JavaScript and no request.
+- **EXACT NAME BEATS EXACT PROVINCE BEATS NAME-PREFIX BEATS CONTAINMENT**, in
+  one query ordered by a `CASE` expression. And `%`/`_` are escaped: a visitor
+  who types `%` is not asking for all 65 places, and unescaped it would match
+  every one of them and land somewhere arbitrary.
+- **AN ARCHIVED PLACE IS NEITHER A NEIGHBOUR NOR A QUICKHOP RESULT**, and is not
+  counted in the total — `is_active = false` destinations 404 on their own
+  page, so a link to one is a dead end dressed as a working control.
+
+`tests/Feature/PlaceNavigationTest.php` (11) and
+`tests/Feature/ThemeToggleTest.php` (7) pin all of it.
+
 ### Destination-source crawling
 
 `destination_sources` → `destination_source_snapshots` (raw HTML on the `local`

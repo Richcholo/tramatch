@@ -6,6 +6,7 @@ use App\Domain\Destinations\DestinationCarousel;
 use App\Models\Destination;
 use App\Models\User;
 use App\Services\RecommendationService;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -105,6 +106,8 @@ return view('destinations.show', [
             'stageMatchScores' => $stage['matchScores'],
             'stageInterval' => self::STAGE_INTERVAL_MS,
             'destination' => $destination,
+            'neighbours' => $this->neighbours($destination),
+            'quickhopPlaces' => $this->quickhopPlaces(),
             'openState' => $this->openState($destination),
             'hoursLabel' => $this->hoursLabel($destination),
             'closedDaysLabel' => $destination->closedDaysLabel(),
@@ -114,6 +117,141 @@ return view('destinations.show', [
             'daySlugs' => Destination::daySlugs(),
             'updatedOn' => $this->updatedOn($destination),
         ]);
+    }
+
+    /**
+     * QUICKHOP: type a place, land on it.
+     *
+     * A redirect rather than a partial-update list, and that is the whole
+     * design. It works with JavaScript disabled, it is one route, it cannot
+     * disagree with the listing's own search, and the URL it lands on is the
+     * destination's own address -- so Back/Forward and a shared link replay the
+     * place rather than re-running a query.
+     *
+     * A term that matches nothing goes to the listing with the search
+     * preserved, which is the honest outcome: a visitor who typed something
+     * that is not a place gets the filtered list rather than a dead end.
+     */
+    public function quickhop(Request $request): RedirectResponse
+    {
+        $term = trim($request->string('q')->toString());
+
+        if ($term === '') {
+            return redirect()->route('destinations.index');
+        }
+
+        $destination = $this->resolveQuickhop($term);
+
+        if ($destination) {
+            return redirect()->route('destinations.show', $destination);
+        }
+
+        return redirect()->route('destinations.index', ['search' => $term]);
+    }
+
+    /**
+     * The best destination for a typed place, or null.
+     *
+     * ONE QUERY, and the ordering is match quality rather than a chain of four
+     * round trips: an exact name beats an exact province or municipality, which
+     * beats a name beginning with the term, which beats anything else
+     * containing it. A visitor typing "Baguio" gets Baguio, not whichever
+     * province happened to contain those six letters first.
+     *
+     * `%` AND `_` ARE ESCAPED. A visitor who types `%` is not asking for every
+     * destination in Luzon, and unescaped it would match all 65 of them and
+     * send them somewhere arbitrary -- which is a worse answer than none.
+     */
+    private function resolveQuickhop(string $term): ?Destination
+    {
+        $escaped = addcslashes($term, '%_\\');
+        $contains = '%'.$escaped.'%';
+        $startsWith = $escaped.'%';
+
+        return Destination::query()
+            ->where('is_active', true)
+            ->where(function ($query) use ($contains) {
+                $query->where('name', 'like', $contains)
+                    ->orWhere('province', 'like', $contains)
+                    ->orWhere('municipality', 'like', $contains);
+            })
+            ->orderByRaw(
+                'CASE WHEN name = ? THEN 0 WHEN province = ? OR municipality = ? THEN 1 WHEN name LIKE ? THEN 2 ELSE 3 END',
+                [$term, $term, $term, $startsWith]
+            )
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->first();
+    }
+
+    /**
+     * What the quickhop box offers as suggestions.
+     *
+     * A native `<datalist>`, so the suggestions cost no JavaScript and no
+     * request. Names come first because a visitor types a place far more often
+     * than a province, and the list is deduplicated across all three columns so
+     * a name and a province that share a word are offered once.
+     *
+     * @return array<int, string>
+     */
+    private function quickhopPlaces(): array
+    {
+        return Destination::query()
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get(['name', 'province', 'municipality'])
+            ->flatMap(fn (Destination $destination) => [
+                $destination->name,
+                $destination->province,
+                $destination->municipality,
+            ])
+            ->map(fn ($place) => trim((string) $place))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * The place before and the place after, in the catalogue's own order.
+     *
+     * THE ORDER IS `sort_order, name` -- NOT THE LISTING'S `latest()`. The
+     * second reason is the load-bearing one: `latest()` sorts on `created_at`,
+     * and a bulk CSV import writes many rows carrying the same timestamp, so
+     * "the next place" would be effectively arbitrary and two requests in the
+     * same page load could disagree about it. This is the same total order the
+     * stage's payload is built on, so the strip and the carousel describe one
+     * catalogue.
+     *
+     * WRAPS NOWHERE. The last place has no next, the first has no previous. A
+     * Next that quietly returns you to the first place is a carousel's trick,
+     * and here it would be a lie about there being somewhere after this.
+     *
+     * @return array{previous: ?Destination, next: ?Destination, position: int, total: int}
+     */
+    private function neighbours(Destination $destination): array
+    {
+        $ids = Destination::query()
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->pluck('id')
+            ->all();
+
+        $total = count($ids);
+        $key = array_search($destination->id, $ids, true);
+
+        if ($key === false) {
+            return ['previous' => null, 'next' => null, 'position' => 0, 'total' => $total];
+        }
+
+        return [
+            'previous' => $key > 0 ? Destination::find($ids[$key - 1]) : null,
+            'next' => $key < $total - 1 ? Destination::find($ids[$key + 1]) : null,
+            'position' => $key + 1,
+            'total' => $total,
+        ];
     }
 
 /**

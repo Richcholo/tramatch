@@ -38,6 +38,21 @@ Route::get('/destinations', [
     'index',
 ])->name('destinations.index');
 
+/*
+ * QUICKHOP, AND IT IS DECLARED BEFORE `/{destination:slug}` ON PURPOSE.
+ *
+ * `/destinations/quickhop` matches the show route's own shape exactly, so
+ * declared after it this route would never be reached: route-model binding
+ * would resolve "quickhop" as a slug, fail to find it, and 404 -- and the
+ * failure reads as a broken search box rather than as an ordering mistake.
+ * The same trap `admin/sources/status` is declared before
+ * `admin/sources/{source}` for.
+ */
+Route::get('/destinations/quickhop', [
+    DestinationController::class,
+    'quickhop',
+])->name('destinations.quickhop');
+
 Route::get('/destinations/{destination:slug}', [
     DestinationController::class,
     'show',

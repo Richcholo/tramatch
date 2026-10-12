@@ -9,6 +9,14 @@
     <link rel="icon" href="{{ asset('images/logo.svg') }}">
     <link rel="manifest" href="/manifest.webmanifest">
 
+    {{--
+        The guest pages load no bundle of their own -- just
+        `page-transitions.js` -- so this inline script is the only thing here
+        that can apply a theme. It has to be inline and early for exactly that
+        reason: see the component.
+    --}}
+    <x-theme-init />
+
     <title>{{ $title ?? 'TraMatch' }}</title>
 
     @vite([
