@@ -49,12 +49,29 @@
                     >
                 </a>
 
-                <a
-                    href="{{ url('/') }}"
-                    class="rounded-full border border-white/40 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white hover:text-ink-strong dark:hover:bg-white/15 dark:hover:text-ink-strong"
-                >
-                    Back to home
-                </a>
+                <div class="flex items-center gap-3">
+                    {{--
+                        THE TOGGLE IS HERE TOO, and its absence was a trap: the
+                        guest layout already ran the theme script, so the page
+                        painted in the visitor's saved theme -- but with no control
+                        to change it. Anyone who chose a theme, then signed out or
+                        followed a password-reset link, was stuck on whatever the
+                        script decided, with no way back. A setting you cannot
+                        change is not a setting.
+
+                        It wears the burger's ghost ring rather than the light
+                        "Back to home" pill beside it, because it is the same kind
+                        of control: a round ghost sitting on this dark hero.
+                    --}}
+                    <x-theme-toggle />
+
+                    <a
+                        href="{{ url('/') }}"
+                        class="rounded-full border border-white/40 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white hover:text-ink-strong dark:hover:bg-white/15 dark:hover:text-ink-strong"
+                    >
+                        Back to home
+                    </a>
+                </div>
             </div>
         </header>
 

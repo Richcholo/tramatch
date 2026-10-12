@@ -143,7 +143,7 @@
 
                         <select
                             name="weights[{{ $tag->id }}]"
-                            class="w-24 shrink-0 rounded-md border-line bg-white px-2 py-1.5 text-xs focus:border-boracay focus:ring-boracay"
+                            class="w-24 shrink-0 rounded-md border-line bg-surface-raised px-2 py-1.5 text-xs focus:border-boracay focus:ring-boracay"
                         >
                             <option value="0">
                                 Not selected

@@ -234,6 +234,46 @@ class ThemeMigrationTest extends TestCase
 
         return $sources;
     }
+    /**
+     * A BARE `bg-white` FIELD IS A LIGHT-ONLY SURFACE, AND A WHITE HOVER IS
+     * NOT.
+     *
+     * The split matters and getting it wrong in either direction is a
+     * regression. A pure white input on the dark ground is the brightest thing
+     * on the page and reads as unstyled. But `hover:bg-white` on a gold or
+     * turquoise button is a white hover under dark ink, and that is CORRECT in
+     * both themes -- "make it white" is what a light hover on a bright fill
+     * means, and flipping it to a translucent white would make a gold button go
+     * muddy on hover instead of hot.
+     *
+     * Twenty-six of the first kind were left behind by the main sweep, because
+     * `bg-white` is not a palette token and the sweep had no reason to touch
+     * it.
+     */
+    #[Test]
+    public function form_fields_follow_the_theme_and_button_hovers_stay_white(): void
+    {
+        $sources = $this->lightViewSources();
+
+        $fields = preg_match_all('/(?<![\w:\/-])bg-white(?![\w\/-])/', $sources);
+
+        $this->assertSame(
+            0,
+            $fields,
+            'a resting surface is still a bare `bg-white`, so it is pure white on '
+            .'the dark ground -- the brightest thing on the page, and it reads as '
+            .'unstyled rather than as themed'
+        );
+
+        $this->assertGreaterThan(
+            0,
+            preg_match_all('/hover:bg-white(?![\w\/-])/', $sources),
+            'every white hover has gone too. On a gold or turquoise button a '
+            .'white hover under dark ink is correct in BOTH themes, and a '
+            .'translucent hover would make the button go muddy instead of hot'
+        );
+    }
+
     private function darkBlock(): string
     {
         $css = $this->css();

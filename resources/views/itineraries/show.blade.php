@@ -221,7 +221,7 @@
             <template data-stop-template>
                 <li
                     data-stop
-                    class="rounded-xl border border-line bg-white p-4 shadow-sm"
+                    class="rounded-xl border border-line bg-surface-raised p-4 shadow-sm"
                 >
                     <input type="hidden" name="items[__KEY__][day_id]" data-field="day-id" value="">
                     <input type="hidden" name="items[__KEY__][sort_order]" data-field="sort-order" value="0">
@@ -495,7 +495,7 @@
                                     <li
                                         data-stop
                                         data-key="{{ $item->id }}"
-                                        class="rounded-xl border border-line bg-white p-4 shadow-sm"
+                                        class="rounded-xl border border-line bg-surface-raised p-4 shadow-sm"
                                     >
                                         {{-- data-field="day-id" is what makes cross-day dragging
                                              possible: itinerary-editor.js rewrites this value when a row
@@ -641,7 +641,7 @@
                     <button
                         type="button"
                         data-editor-cancel
-                        class="inline-flex min-h-11 items-center justify-center rounded-lg border border-benguet-charcoal/30 bg-white px-5 py-3 text-sm font-semibold text-ink transition hover:bg-surface"
+                        class="inline-flex min-h-11 items-center justify-center rounded-lg border border-benguet-charcoal/30 bg-surface-raised px-5 py-3 text-sm font-semibold text-ink transition hover:bg-surface"
                     >
                         Discard changes
                     </button>
@@ -695,7 +695,7 @@
 
                             <div class="mt-2 flex flex-wrap gap-2">
                                 @foreach ($itinerary->days as $day)
-                                    <label class="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-md border border-line bg-white px-4 py-2 text-sm font-semibold has-checked:border-boracay has-checked:bg-line">
+                                    <label class="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-md border border-line bg-surface-raised px-4 py-2 text-sm font-semibold has-checked:border-boracay has-checked:bg-line">
                                         <input
                                             type="radio"
                                             name="add-target-day"
@@ -735,7 +735,7 @@
                                 </span>
                             </label>
                         @empty
-                            <p class="rounded-lg bg-white p-6 text-sm leading-6 text-ink/70">
+                            <p class="rounded-lg bg-surface-raised p-6 text-sm leading-6 text-ink/70">
                                 Every place you liked is already on this trip. Swipe a few more in Discover to add somewhere new.
                             </p>
                         @endforelse

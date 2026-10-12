@@ -36,7 +36,7 @@
                     id="password"
                     name="password"
                     type="password"
-                    class="mt-2 block w-full rounded-md border border-line bg-white px-3 py-2.5 text-sm text-ink shadow-sm focus:border-volcanic-teal focus:outline-none focus:ring-2 focus:ring-volcanic-teal/20"
+                    class="mt-2 block w-full rounded-md border border-line bg-surface-raised px-3 py-2.5 text-sm text-ink shadow-sm focus:border-volcanic-teal focus:outline-none focus:ring-2 focus:ring-volcanic-teal/20"
                     placeholder="{{ __('Password') }}"
                 />
 

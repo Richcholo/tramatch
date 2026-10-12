@@ -1100,7 +1100,37 @@ pair added beside it.
   still there. The colour has to be declared on the control itself:
   `dark:focus:ring-offset-volcanic-teal` beside each `focus:ring-offset-2`.
 
-`tests/Feature/ThemeMigrationTest.php` (8) pins all of it.
+**THE THREE THINGS LEFT OUT, ALL FOUND BY FOLLOWING A URL THAT DOES NOT
+EXIST** (`/destinations/locations` — there is no such route; the
+`{destination:slug}` binding swallows it and 404s):
+
+- **A 404 IS NOW A PAGE OF THIS APP.** `resources/views/errors/404.blade.php`
+  renders in the app layout, with the nav, the theme toggle, and two real routes
+  out. Without it Laravel renders its own: no navigation, no logo, no toggle, no
+  way back — and with `APP_DEBUG` on locally, a debug screen in the middle of an
+  otherwise themed site. **An error page whose only action is a dead end is how a
+  visitor concludes the whole application is broken.**
+- **THE GUEST PAGES OFFER THE TOGGLE.** The guest layout ran the theme script
+  from the first commit of the feature, so it painted in the saved theme — and
+  shipped with no control to change it. Anyone who picked a theme then signed
+  out, or followed a password-reset link, was stranded on it. A setting you
+  cannot change is not a setting.
+- **A BARE `bg-white` FIELD IS A LIGHT-ONLY SURFACE; A WHITE HOVER IS NOT.**
+  The main sweep had no reason to touch `bg-white` (it is not a palette token)
+  and left 26 white inputs, selects and textareas — the brightest thing on a dark
+  page. But `hover:bg-white` on a gold or turquoise button is a white hover under
+  dark ink and is CORRECT in both themes; flipping it would make a gold button go
+  muddy on hover instead of hot. Twenty-three of them, left alone on purpose.
+
+**THE GUEST HERO STAYS A DARK ISLAND, and must not be "fixed".**
+`layouts/guest.blade.php` keeps `bg-volcanic-teal` on the body and white copy
+over photographic art. Swapping the ground for `bg-page` would put white text on
+a pale background. It is the same shape of decision as the destinations stage: a
+surface that is dark by design, in both themes.
+`the_guest_hero_stays_a_dark_island_on_purpose` guards it.
+
+`tests/Feature/ThemeMigrationTest.php` (9) and
+`tests/Feature/ErrorPageAndGuestThemeTest.php` (4) pin all of it.
 
 #### Moving between places
 
