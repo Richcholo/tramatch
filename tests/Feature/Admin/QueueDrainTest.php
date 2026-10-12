@@ -187,29 +187,90 @@ class QueueDrainTest extends TestCase
             ->once();
     }
 
+    /**
+     * A FAILING JOB IS RETIRED, NOT PUT BACK ON THE QUEUE.
+     *
+     * This is the reported bug, and the fix is that there is no retry at all.
+     *
+     * The command used to `release()` a failing job and `break`. Measured while
+     * fixing it, because the obvious explanation was wrong twice:
+     *
+     *  - `DatabaseQueue::deleteAndRelease()` deletes the row and inserts a NEW
+     *    one written with `attempts => 0`. Releasing therefore RESETS the
+     *    attempt counter, so a `$tries` limit can never be reached by
+     *    releasing — the job reads `attempts() == 1` again on every pass.
+     *    `queue:work` does not have this problem because it counts attempts
+     *    itself; this command calls `$job->fire()` directly and counted
+     *    nothing.
+     *  - So the released job came straight back on the next cron tick, threw
+     *    again, and the `break` meant the jobs behind it were never reached.
+     *    One Cloudflare-challenged host looping on itself, with 64 sources
+     *    never attempted: "the crawler only crawls Camp John Hay".
+     *
+     * Retrying the job would add nothing anyway — `EthicalSourceFetcher` already
+     * makes its own transport attempts and records the failure before
+     * rethrowing.
+     */
     #[Test]
-    public function a_job_that_throws_is_released_rather_than_failed(): void
+    public function a_failing_job_is_retired_rather_than_released_back(): void
     {
+        config(['queue.default' => 'database']);
+
         AlwaysThrowsJob::dispatch();
 
         $this->artisan('queue:drain')->assertSuccessful();
 
-        /*
-         * Deliberately released, not failed. The crawl jobs record their own
-         * status and error_message before rethrowing, so `fail()` here would
-         * strand a job whose reason nobody recorded. Releasing leaves it for the
-         * next cron run, which is what config/queue.php's retry_after is for.
-         */
         $this->assertSame(
             0,
-            $this->failedJobCount(),
-            'a released job must go back on the queue, not to failed_jobs'
+            (int) DB::table('jobs')->count(),
+            'a failing job must be taken off the queue, not released to be '
+            .'popped again on the next cron tick'
         );
+    }
+
+    /**
+     * AND IT DOES NOT COST THE JOBS BEHIND IT, which is the other half of the
+     * report: the old code broke out of the loop on the first throw.
+     */
+    #[Test]
+    public function one_failing_job_does_not_stop_the_ones_behind_it(): void
+    {
+        AlwaysThrowsJob::dispatch();
+        NoopJob::dispatch();
+        NoopJob::dispatch();
+
+        $this->assertSame(3, $this->pendingJobCount());
+
+        $this->artisan('queue:drain')->assertSuccessful();
 
         $this->assertSame(
-            1,
+            0,
             $this->pendingJobCount(),
-            'the released job should be waiting for the next cron run'
+            'the healthy jobs behind the failure were never drained'
+        );
+    }
+
+    /**
+     * A RETIRED JOB LEAVES NO `failed_jobs` ROW IN THIS APPLICATION.
+     *
+     * Recorded because the obvious assertion fails. `FailedJobProviderInterface`
+     * is not bound in the container, so `CallQueuedHandler::failed()`'s
+     * `failedJobProvider?->log(...)` silently does nothing: `$job->fail()` runs
+     * the job's own `failed()` hook and deletes the row, and that is all.
+     * Measured with a probe that called `fail()` on a real popped job.
+     *
+     * The record of a failed crawl is `destination_source_crawls` plus the
+     * source's own status, not this table.
+     */
+    #[Test]
+    public function retiring_a_job_is_recorded_in_the_crawl_log_not_failed_jobs(): void
+    {
+        config(['queue.default' => 'database']);
+
+        $this->assertFalse(
+            $this->app->bound(\Illuminate\Contracts\Queue\Failed\FailedJobProviderInterface::class),
+            'this app does not bind a failed-job provider, so failed_jobs stays '
+            .'empty; if that changed, the drain would start writing rows there'
         );
     }
 

@@ -2091,13 +2091,51 @@ the runtime never executes it.
   discards stdout on this host**. The line that matters is
   `found the queue empty`: it means the drain ran and the queue was genuinely
   empty, which is the one thing `status` stuck on `queued` does not tell you.
-- **`DrainQueue` stops on the first job that throws outside its own handling.**
-  Releasing puts the row back with `available_at` in the past, so the next
-  `pop()` returns the same job and a permanently failing job never leaves the
-  queue — the drain spun on one job until its wall-clock cap, burning the cron
-  slot every minute and draining nothing. The suite measured it: 278s before
-  the `break`, 0.5s after. This is the same shape as the `retry_after` bug
-  below, reached from the other direction.
+- **`queue:drain` USED TO STOP DEAD ON THE FIRST JOB THAT THREW, AND THE JOB WAS
+  RELEASED BACK — SO ONE UNREACHABLE HOST OWNED THE WHOLE CRAWL QUEUE.** Reported
+  as "the crawler just crawls Camp John Hay, even when it is not first in the
+  queue, and only keeps crawling it".
+
+  Three facts combine, and two of them were not the explanation I first reached:
+
+  - `DatabaseQueue::deleteAndRelease()` **DELETES the row and INSERTS A NEW ONE
+    written with `attempts => 0`.** Releasing therefore RESETS the attempt
+    counter, so a `$tries` limit **can never be reached by releasing** — a job
+    reads `attempts() == 1` again on every pass. `queue:work` does not have
+    this problem because it counts attempts itself; `queue:drain` calls
+    `$job->fire()` **directly**, bypassing the worker's attempt counting
+    entirely, so `CrawlSourceJob::$tries = 1` was never enforced by anything.
+    (I initially blamed `getNextAvailableJob()`'s `orderBy('id asc')` plus
+    `release(0)` writing `available_at = now()`. That is a real hazard but it
+    is **not** what happened, because release gives the row a NEW, higher id.
+    Measure the table after a drain rather than reasoning about the ordering.)
+  - The drain `break`ed on the throw, so **the jobs behind it were never
+    reached in that run either**. Falsifying the fix showed 3 of 3 jobs still
+    pending after one drain — the two healthy ones had never been attempted.
+  - The released row was eligible again immediately, so the next cron tick
+    re-popped it, it threw again, and the loop was invisible.
+
+  **THE FIX IS TO NOT RETRY AT ALL: a job that throws is retired and the drain
+  carries on.** `$job->fail()` runs the job's own `failed()` hook (which is
+  what writes the source's status and error message) and deletes the queue row.
+  A job-level retry adds nothing — `EthicalSourceFetcher` already makes its own
+  transport attempts (3 from here, 2 from the admin button) and persists the
+  failure before rethrowing, so re-running the whole job is the same request
+  again. An admin re-crawls from the UI when they mean to.
+
+- **A RETIRED JOB LEAVES NO `failed_jobs` ROW IN THIS APP.** `fail()` is still
+  the right call and still deletes the `jobs` row, but
+  `FailedJobProviderInterface` is **not bound in the container**, so
+  `CallQueuedHandler::failed()`'s `failedJobProvider?->log(...)` silently does
+  nothing. Measured with a probe that called `fail()` on a real popped job:
+  `failed_jobs` stayed empty while `jobs` went to zero. **Never assert a
+  `failed_jobs` row here** — assert that the job left the `jobs` table. The
+  record of a failed crawl is `destination_source_crawls` plus the source's own
+  status.
+
+- **`retire()` IS NOT `fail()`** — `Illuminate\Console\Command` already has a
+  public `fail()`, so a `private function fail()` is a fatal "access level must
+  be public" at class-load time, not a subtle bug.
 - `pop()` is called with **no argument**. The argument is a *queue* name, not a
   connection name, so `pop('database')` asked for a queue called "database" and
   always returned null — the first version drained nothing and still exited 0.
