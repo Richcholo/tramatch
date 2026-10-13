@@ -21,6 +21,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Illuminate\Foundation\DevCommands;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -73,6 +74,147 @@ class SourceCrawlingTest extends TestCase
             'source_type' => 'official_lgu',
             'status' => 'pending',
         ], $attributes));
+    }
+
+
+    /**
+     * A ROUTINE RE-CRAWL OF AN UNCHANGED PAGE MUST REPORT "NO CHANGES".
+     *
+     * This is the entire reason to re-crawl: to find out whether the published
+     * hours and fees still match what we curated. `unchanged` used to be
+     * reachable only from an HTTP `304`, which a server can only send if it
+     * gave us an `ETag` or `Last-Modified` to echo. Most of the seeded hosts
+     * send neither, so they answer `200` with byte-identical bytes every time
+     * and every re-crawl was filed as `success` — the dashboard's "Updated".
+     *
+     * An admin checking for drift was told all 65 pages had been updated when
+     * nothing had moved. The hash already made this knowable
+     * (`content_changed` was computed and stored on every log); it just was
+     * never read for the outcome.
+     *
+     * NOTE THERE IS NO `304` IN THIS TEST, ON PURPOSE. That is the whole
+     * condition: a host with no validators cannot tell us "unchanged" the
+     * cheap way, which is precisely the case that was mislabelled.
+     */
+    public function test_a_re_crawl_of_identical_content_reports_no_changes(): void
+    {
+        $html = '<html><body><h1>Opening hours</h1><p>Open 9:00 AM to 6:00 PM</p></body></html>';
+
+        Http::fake([
+            'intramuros.gov.ph/robots.txt' => Http::response("User-agent: *\nAllow: /", 200),
+            'intramuros.gov.ph/*' => Http::response($html, 200, ['Content-Type' => 'text/html']),
+        ]);
+
+        $source = $this->source(['crawl_delay_seconds' => 0]);
+        $fetcher = app(EthicalSourceFetcher::class);
+
+        $fetcher->fetch($source, 1);
+        $source->refresh();
+
+        $this->assertSame(
+            'success',
+            $source->status,
+            'a first crawl has nothing to compare against, so it is a success'
+        );
+
+        // Second pass, identical bytes, still a 200 and still no validators.
+        $fetcher->fetch($source, 1);
+        $source->refresh();
+
+        $this->assertSame(
+            'unchanged',
+            $source->status,
+            'a 200 whose bytes are identical to the last crawl is NOT an update'
+        );
+
+        $crawl = DestinationSourceCrawl::latest('id')->firstOrFail();
+
+        $this->assertSame('unchanged', $crawl->outcome);
+        $this->assertSame(200, $crawl->http_status, 'the host answered 200, not 304');
+        $this->assertFalse($crawl->content_changed);
+        $this->assertSame(
+            0,
+            $crawl->proposals_created,
+            'nothing changed, so nothing can be proposed'
+        );
+
+        // The snapshot is still written: "we checked and it was the same" is
+        // itself the result worth keeping.
+        $this->assertSame(2, $source->snapshots()->count());
+    }
+
+    /**
+     * AND A GENUINELY CHANGED PAGE STILL REPORTS AS AN UPDATE, so the check
+     * above cannot pass by simply never saying `success`.
+     */
+    public function test_a_re_crawl_of_changed_content_still_reports_an_update(): void
+    {
+        /*
+         * ONE fake that answers differently on each call, because a second
+         * Http::fake() does not layer over the first: the earlier stub still
+         * wins, so the page came back byte-identical and this test asserted
+         * success while observing unchanged. Which is a fair description of
+         * the whole class of bug this commit is about -- a check that cannot
+         * see the thing it is checking.
+         */
+        $pageCalls = 0;
+
+        // NB `Client\Request`, not the app's `Illuminate\Http\Request` — the
+        // fake factory hands the callback an outgoing client request.
+        Http::fake(function (ClientRequest $request) use (&$pageCalls) {
+            if (str_contains($request->url(), 'robots.txt')) {
+                return Http::response("User-agent: *\nAllow: /", 200);
+            }
+
+            $pageCalls++;
+
+            $body = $pageCalls === 1
+                ? '<html><body><p>Open 9:00 AM to 6:00 PM</p></body></html>'
+                : '<html><body><p>Open 8:00 AM to 5:00 PM</p></body><p>Revised notice</p></body></html>';
+
+            return Http::response($body, 200, ['Content-Type' => 'text/html']);
+        });
+
+        $source = $this->source(['crawl_delay_seconds' => 0]);
+        $fetcher = app(EthicalSourceFetcher::class);
+
+        $fetcher->fetch($source, 1);
+        $fetcher->fetch($source->fresh(), 1);
+        $source->refresh();
+
+        $this->assertSame('success', $source->status);
+
+        $crawl = DestinationSourceCrawl::latest('id')->firstOrFail();
+
+        $this->assertSame('success', $crawl->outcome);
+        $this->assertTrue($crawl->content_changed);
+    }
+
+    /**
+     * `unchanged` HAS TO STILL COUNT AS FINISHED, or every routine re-crawl
+     * leaves the progress bar short and the admin is told sources are
+     * outstanding when they are not.
+     */
+    public function test_unchanged_counts_as_finished_on_the_dashboard(): void
+    {
+        $admin = $this->admin();
+        $source = $this->source();
+
+        $source->update(['status' => 'unchanged']);
+
+        $response = $this->actingAs($admin)->get(route('admin.sources.index'));
+
+        $response->assertOk();
+
+        $body = $response->getContent();
+
+        // The progress line reads the summary's `finished`, which folds
+        // `unchanged` in. One source, one finished.
+        $this->assertMatchesRegularExpression(
+            '/1 of 1 sources checked/',
+            $body,
+            'an unchanged source is not being counted as finished'
+        );
     }
 
     public function test_single_crawl_queues_the_source_without_erroring(): void

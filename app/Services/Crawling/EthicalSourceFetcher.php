@@ -316,6 +316,33 @@ class EthicalSourceFetcher
         }
 
         $hash = hash('sha256', $body);
+
+        /*
+         * `null` on a source we have never fetched, and a real answer only
+         * once there is a previous snapshot to compare against.
+         */
+        $changed = $previousHash === null ? null : $previousHash !== $hash;
+
+        /*
+         * A `200` whose bytes are identical to the last crawl is REPORTED AS
+         * `unchanged`, and this is the whole point of a routine re-crawl.
+         *
+         * `unchanged` used to mean one thing only: the server answered `304`,
+         * which it can only do if it sent an `ETag` or a `Last-Modified` we
+         * could echo back. Most of the seeded LGU and WordPress hosts send
+         * neither, so they answer `200` with the same page every time and every
+         * re-crawl was filed as `success` — "Updated" — on the dashboard. An
+         * admin checking for drift was told the page had been updated 65 times
+         * when nothing had changed at all, which is the one reading that makes
+         * the check useless.
+         *
+         * The hash already made this knowable: `content_changed` was computed
+         * and stored on every crawl log, and nobody read it for the outcome.
+         * The snapshot is still written either way, because "we checked and it
+         * was the same" is itself the result worth keeping.
+         */
+        $outcome = $changed === false ? 'unchanged' : 'success';
+
         $path = 'crawl-snapshots/'
             . $source->id
             . '/'
@@ -337,18 +364,16 @@ class EthicalSourceFetcher
         $created = $this->parser->createProposals($source, $extracted);
 
         $source->update(array_merge([
-            'status' => 'success',
+            'status' => $outcome,
             'last_success_at' => now(),
             'error_message' => null,
         ], $this->clearedFetchability($source)));
 
-        $this->log($source, $attempt, 'success', $startedAt, [
+        $this->log($source, $attempt, $outcome, $startedAt, [
             'http_status' => $status,
             'bytes' => strlen($body),
             'content_hash' => $hash,
-            'content_changed' => $previousHash === null
-                ? null
-                : $previousHash !== $hash,
+            'content_changed' => $changed,
             'extracted_fields' => array_keys($extracted),
             'proposals_created' => $created,
             'requested_url' => $requestedUrl,

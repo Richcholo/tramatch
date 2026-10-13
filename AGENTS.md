@@ -25,6 +25,8 @@ php artisan migrate --seed         # sessions/cache/queue all use the DB driver
 php artisan migrate:fresh --seed   # destructive: drops all local data
 php artisan sources:crawl {id}     # fetch one approved source, create proposals
 php artisan sources:check          # measure whether each source page is readable
+php artisan sources:sweep          # queue a re-crawl of every source (drift check)
+php artisan sources:drift          # report which pages changed; safe, hits no host
 ```
 
 `php artisan dev` starts three processes (server, queue worker, Vite). Check
@@ -1218,6 +1220,71 @@ left in the catalogue.**
   half the seeded hosts refuse crawling (403 bot walls, unevaluable robots.txt,
   dead URLs). Check a page yourself before assuming a source will yield data.
 
+### Routine sweeps: checking for changes
+
+- **`unchanged` USED TO MEAN ONLY "THE SERVER SENT A 304", WHICH MADE A ROUTINE
+  SWEEP WORTHLESS.** A server can answer `304 Not Modified` only if it gave us
+  an `ETag` or a `Last-Modified` to echo back, and most of the seeded LGU and
+  WordPress hosts send neither. They answer `200` with byte-identical bytes
+  every time, so every re-crawl was filed as `success` — the dashboard's
+  "Updated" — and an admin checking for drift was told all 65 pages had been
+  updated when nothing had moved.
+
+  The hash already made this knowable: `content_changed` was computed and
+  stored on every crawl log row and **nobody read it for the outcome**. It is
+  now the thing that decides, and a `200` whose bytes match the previous
+  snapshot records `unchanged` — with NO `304` involved, which is the case that
+  was mislabelled. The snapshot is still written either way: "we checked and it
+  was the same" is itself the result worth keeping. `unchanged` already counts
+  toward `finished`, so the progress bar is unaffected.
+
+  **"No changes" is a RESULT and has to be printed as one.** A report that
+  lists only exceptions makes a clean sweep look identical to a broken command,
+  which is how a check nobody trusts stops being run. `sources:drift` leads
+  with the count and says `No changes found.` when there are none.
+
+- **THE ROUTINE SWEEP IS `sources:sweep` + `sources:drift`.** `sources:check`
+  asks whether a page can be READ; these two ask whether the data still agrees
+  with what we curated, which is the only reason to re-crawl on a schedule.
+  `sweep` queues `CrawlSourceJob`s rather than fetching inline, because every
+  crawl sleeps ≥ 5 s and makes two requests, so 65 sources is minutes of wall
+  clock — far too long for one process on shared hosting, where the CLI is also
+  what `queue:drain` runs from cron. `drift` is a pure report and never touches
+  a third-party host, so it is safe to run as often as you like.
+
+  - **`destination_sources` HAS NO `is_active` COLUMN.** Publishing on a SOURCE
+    is its `status`; `is_active` lives on the DESTINATION. The sweep's first
+    version filtered on it, which on SQLite matched nothing and on MySQL is a
+    hard SQL error — either way it queued zero sources and **reported success**.
+    A sweep that silently sweeps nothing is worse than no sweep, because it
+    looks like one.
+  - **`sweep` SKIPS `failed` and `blocked` unless you pass `--all`.** A source
+    that cannot be read stays unreadable until someone changes its URL, and
+    re-asking it every sweep is how a sweep becomes a slow way of rediscovering
+    the same 10 bot walls. They stay visible on the dashboard, and `--all` is
+    for proving a host is STILL refusing.
+  - **`drift` JOINS TO THE LATEST CRAWL PER SOURCE**, not to every crawl in the
+    window. A source swept three times is one data point: summing its log rows
+    reports one changed page as three, and judging it on its earliest run
+    leaves a page that changed and changed back looking permanently in flux.
+  - **`content_changed = null` IS REPORTED AS A FIRST CHECK**, never as
+    "unchanged" — there was nothing to compare against, and calling that
+    unchanged is a lie that hides the fact it was never checked.
+  - **THE COLUMN IS AN ABSOLUTE TIME, NOT `diffForHumans()`.** "0 seconds ago"
+    and "3 hours ago" are the same precision for a human reading a drift report,
+    and neither answers whether a page changed this morning or last month.
+
+- **`isCrawlStale()` IS WHAT MAKES A QUEUED ROW RETRYABLE, AND IT READS
+  `last_checked_at`.** A fixture (or a real row) with `status = 'queued'` and a
+  NULL timestamp is STALE by definition, so `hasCrawlInFlight()` is false and the
+  sweep correctly re-dispatches it. A test that sets only `status` therefore
+  passes "no double dispatch" for the wrong reason — the guard did nothing and
+  the row was merely stale. Assert `$source->hasCrawlInFlight()` is true before
+  relying on a test that says nothing was dispatched. Never make a sweep skip
+  stalled rows, or a source becomes uncrawlable forever.
+
+`tests/Feature/Admin/SourceSweepTest.php` (10) pins all of it.
+
 ### Redirects, dead hosts, and what the crawler may not propose
 
 A real crawl on 2026-09-27 exposed five defects, all now fixed. Do not
@@ -1678,6 +1745,28 @@ already exist somewhere.
   each pair, so adding `xl:px-16` to the layout without a matching
   `xl:-mx-16` here fails that test instead of shipping.
 
+- **A BLADE DIRECTIVE GLUED TO THE END OF A WORD IS NOT COMPILED, AND IT IS
+  NOT AN ERROR.** Blade's directive pattern is `\B@(...)`: it requires a
+  **non-word-boundary** before the `@`. In `sources checked@if (...)` the
+  preceding character is `d` — a word character — so there *is* a boundary,
+  `\B` fails, and `@if` was never recognised. The admin dashboard rendered
+
+  ```
+  20 of 65 sources checked@if ($summary['queued'] > 0), 0 waiting in the queue@endif.
+  ```
+
+  The `{{ }}` either side compiled normally, which is what made it read as
+  *the counts being wrong* rather than *the directive being inert* — the `0` in
+  the middle of the leaked source was a real, correct value. There is no
+  `@verbatim` involved and no unclosed tag; `php artisan view:clear` does not
+  help, because nothing is cached wrongly.
+
+  **A Blade directive must start a token.** Give it a space, a newline, or
+  build the sentence as a list in PHP. Note the JS on the same page builds this
+  exact string correctly in `renderSummary()`, so the server and the client were
+  computing the same thing two different ways and only one of them was right.
+  **To check, compile the view and search the output for the literal `@` —
+  a directive that survives the compiler never ran.**
 - **Never nest a `<form>` inside another `<form>`.** The HTML parser discards the
   inner form's start tag, then the first inner `</form>` closes the *outer* form,
   so buttons silently submit the wrong endpoint (the symptom is a bogus
@@ -2002,42 +2091,51 @@ the runtime never executes it.
   discards stdout on this host**. The line that matters is
   `found the queue empty`: it means the drain ran and the queue was genuinely
   empty, which is the one thing `status` stuck on `queued` does not tell you.
-- **A JOB THAT THROWS IS RETIRED AND THE DRAIN CARRIES ON. IT IS NOT RELEASED.**
-  The bug this replaces: releasing put the row back with `available_at` in the
-  past, so the next `pop()` returned the SAME job. One unreachable host pinned
-  the entire crawl queue — an admin clicked "crawl all", one source failed, and
-  every run thereafter burned its wall-clock cap re-popping that one row while
-  the 64 healthy sources were never attempted. Measured: 278s before the fix,
-  0.5s after. Falsifying it showed 3 of 3 jobs still `pending` after one drain.
+- **`queue:drain` USED TO STOP DEAD ON THE FIRST JOB THAT THREW, AND THE JOB WAS
+  RELEASED BACK — SO ONE UNREACHABLE HOST OWNED THE WHOLE CRAWL QUEUE.** Reported
+  as "the crawler just crawls Camp John Hay, even when it is not first in the
+  queue, and only keeps crawling it".
 
-  The release was worse than a plain retry. `pop()` returns rows ordered by id,
-  and `release()` writes a NEW, higher id, so the failing row landed at the
-  *end* of the queue — it still consumed the whole run before anything else got
-  a turn.
+  Three facts combine, and two of them were not the explanation I first reached:
 
-  `$job->fail()` is the right call. It runs the job's own `failed()` hook, which
-  is what writes the source's status and `error_message`, and it deletes the
-  queue row. A job-level retry adds nothing: `EthicalSourceFetcher` already makes
-  its own transport attempts (3 from the drain, 2 from the admin button) and
-  persists the failure *before* rethrowing, so re-running the job is just the
-  same request again. An admin re-crawls from the UI when they mean to.
+  - `DatabaseQueue::deleteAndRelease()` **DELETES the row and INSERTS A NEW ONE
+    written with `attempts => 0`.** Releasing therefore RESETS the attempt
+    counter, so a `$tries` limit **can never be reached by releasing** — a job
+    reads `attempts() == 1` again on every pass. `queue:work` does not have
+    this problem because it counts attempts itself; `queue:drain` calls
+    `$job->fire()` **directly**, bypassing the worker's attempt counting
+    entirely, so `CrawlSourceJob::$tries = 1` was never enforced by anything.
+    (I initially blamed `getNextAvailableJob()`'s `orderBy('id asc')` plus
+    `release(0)` writing `available_at = now()`. That is a real hazard but it
+    is **not** what happened, because release gives the row a NEW, higher id.
+    Measure the table after a drain rather than reasoning about the ordering.)
+  - The drain `break`ed on the throw, so **the jobs behind it were never
+    reached in that run either**. Falsifying the fix showed 3 of 3 jobs still
+    pending after one drain — the two healthy ones had never been attempted.
+  - The released row was eligible again immediately, so the next cron tick
+    re-popped it, it threw again, and the loop was invisible.
 
-  Three traps in this code, all of them silent:
+  **THE FIX IS TO NOT RETRY AT ALL: a job that throws is retired and the drain
+  carries on.** `$job->fail()` runs the job's own `failed()` hook (which is
+  what writes the source's status and error message) and deletes the queue row.
+  A job-level retry adds nothing — `EthicalSourceFetcher` already makes its own
+  transport attempts (3 from here, 2 from the admin button) and persists the
+  failure before rethrowing, so re-running the whole job is the same request
+  again. An admin re-crawls from the UI when they mean to.
 
-  - **A RETIRED JOB LEAVES NO `failed_jobs` ROW IN THIS APP.**
-    `FailedJobProviderInterface` is **not bound in the container**, so
-    `CallQueuedHandler::failed()`'s `failedJobProvider?->log(...)` does nothing.
-    Measured with a probe that called `fail()` on a real popped job:
-    `failed_jobs` stayed empty while `jobs` went to zero. **Never assert a
-    `failed_jobs` row here** — assert the job left the `jobs` table. The record
-    of a failed crawl is `destination_source_crawls` plus the source's status.
-  - **`retire()` IS NOT `fail()`.** `Illuminate\Console\Command` already has a
-    public `fail()`, so declaring `private function fail()` is a fatal "access
-    level must be public" at class-load time, not a subtle bug.
-  - **`$tries` CANNOT BE REACHED BY RELEASING.** `release()` goes through
-    `deleteAndRelease()`, which resets `attempts` to 0, so a released job's
-    attempt counter never climbs toward `$tries`. `$job->attempts` is the only
-    reliable count.
+- **A RETIRED JOB LEAVES NO `failed_jobs` ROW IN THIS APP.** `fail()` is still
+  the right call and still deletes the `jobs` row, but
+  `FailedJobProviderInterface` is **not bound in the container**, so
+  `CallQueuedHandler::failed()`'s `failedJobProvider?->log(...)` silently does
+  nothing. Measured with a probe that called `fail()` on a real popped job:
+  `failed_jobs` stayed empty while `jobs` went to zero. **Never assert a
+  `failed_jobs` row here** — assert that the job left the `jobs` table. The
+  record of a failed crawl is `destination_source_crawls` plus the source's own
+  status.
+
+- **`retire()` IS NOT `fail()`** — `Illuminate\Console\Command` already has a
+  public `fail()`, so a `private function fail()` is a fatal "access level must
+  be public" at class-load time, not a subtle bug.
 - `pop()` is called with **no argument**. The argument is a *queue* name, not a
   connection name, so `pop('database')` asked for a queue called "database" and
   always returned null — the first version drained nothing and still exited 0.
