@@ -137,6 +137,17 @@ Route::middleware('auth')->group(function () {
         'addDay',
     ])->name('itineraries.days.store');
 
+    /*
+     * The PDF export. Declared AFTER the resource so `itineraries/{itinerary}`
+     * cannot swallow it -- `download` would otherwise resolve as a show request
+     * for an itinerary whose slug is "download", the same route-ordering trap
+     * `admin/sources/status` and the quickhop form already sit on.
+     */
+    Route::get('/itineraries/{itinerary}/download', [
+        ItineraryController::class,
+        'download',
+    ])->name('itineraries.download');
+
     Route::delete('/itineraries/{itinerary}/days/{day}', [
         ItineraryController::class,
         'removeDay',

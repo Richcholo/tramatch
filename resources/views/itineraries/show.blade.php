@@ -212,6 +212,27 @@
                     >
                         Edit itinerary
                     </button>
+
+                    {{--
+                        The PDF export.
+
+                        A plain GET link, not a form or a fetch: the browser
+                        handles the Content-Disposition itself, so this works with
+                        scripting off and needs no JavaScript at all. Inside the
+                        section header rather than the editor FORM on purpose --
+                        a button in here would submit the draft payload, and a
+                        form inside the editor would be discarded by the HTML
+                        parser and take every stop field with it.
+                    --}}
+                    <a
+                        href="{{ route('itineraries.download', $itinerary) }}"
+                        class="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-boracay px-5 py-3 text-sm font-semibold text-volcanic-teal transition hover:bg-boracay hover:text-white"
+                    >
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
+                        </svg>
+                        Download PDF
+                    </a>
                 </div>
             </div>
 

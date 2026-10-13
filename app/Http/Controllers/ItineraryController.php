@@ -10,12 +10,15 @@ use App\Models\Itinerary;
 use App\Models\ItineraryDay;
 use App\Services\ItineraryEditor;
 use App\Services\ItineraryGenerator;
+use App\Services\Pdf\ItineraryPdf;
 use App\Services\RecommendationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 use RuntimeException;
 use Throwable;
@@ -223,6 +226,57 @@ class ItineraryController extends Controller
             'itinerary' => $itinerary,
             'addableDestinations' => $this->addableDestinations($itinerary),
         ]);
+    }
+
+    /**
+     * THE ITINERARY AS A PRINTABLE PDF.
+     *
+     * `ensureOwner()` runs first and unconditionally. The PDF carries the whole
+     * trip — every stop, every fee, the running total — so ownership is not a
+     * nicety on this route but the whole access control. 403, not 404: the
+     * route-model binding has already resolved the itinerary by id from the
+     * whole table, so answering 404 would claim a row nobody asked for does not
+     * exist.
+     *
+     * Generated per request rather than cached. A stale PDF handed to a
+     * traveller who has just reordered their day is worse than a slow one, and
+     * there is exactly one owner to invalidate it for.
+     */
+    public function download(Itinerary $itinerary, ItineraryPdf $pdf): Response
+    {
+        $this->ensureOwner($itinerary);
+
+        // Built ONCE. Rendering the document twice to get a length out of it
+        // doubles the work and stamps `now()` twice, so the cover and the
+        // colophon can disagree about the date on a trip that straddles
+        // midnight — for a `Content-Length` header that was already in the body.
+        $document = $pdf->build($itinerary);
+
+        return response($document, 200, [
+            'Content-Type' => 'application/pdf',
+            /*
+             * `attachment`, not `inline`: this is a file to keep, and naming it
+             * in the header is what stops Safari from rendering it in a tab and
+             * the traveller wondering why they cannot find their place.
+             */
+            'Content-Disposition' => 'attachment; filename="'.$this->pdfFilename($itinerary).'"',
+            'Content-Length' => (string) strlen($document),
+        ]);
+    }
+
+    /**
+     * A filename that is safe as a header value AND recognisable in a folder.
+     *
+     * The title is free text, so it is slugged rather than quoted: a title
+     * carrying a quote or a newline would let the traveller's own itinerary name
+     * inject a second header. A route id is in the name too, because two trips
+     * can easily share a title and a downloads folder cannot tell them apart.
+     */
+    private function pdfFilename(Itinerary $itinerary): string
+    {
+        $slug = Str::slug((string) $itinerary->title) ?: 'itinerary';
+
+        return Str::limit($slug, 60, '').'-'.$itinerary->id.'.pdf';
     }
 
     /**

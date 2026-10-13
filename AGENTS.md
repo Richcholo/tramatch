@@ -1886,6 +1886,106 @@ already exist somewhere.
 - Itinerary driving lines call the public OSRM demo API from the browser
   (`resources/js/routing.js`) and fall back to a dashed polyline on failure.
 
+### The itinerary PDF
+
+`GET /itineraries/{itinerary}/download` → `ItineraryController::download()` →
+`App\Services\Pdf\ItineraryPdf` → `App\Services\Pdf\PdfWriter`.
+
+**THE WRITER IS HAND-ROLLED, AND THAT IS THE POINT — two measured facts
+decided it, neither of them a preference:**
+
+- **GD and Imagick are both absent** (verified on the CLI *and* under XAMPP —
+  the same finding as the photo-resize note in the frontend section). Every
+  mainstream PHP PDF library resamples and recompresses images through one of
+  them, so a dependency here would ship a blank rectangle where a photograph
+  should be, silently.
+- **The host disables `exec()` and `symlink()`**, so anything with a native or
+  external-code path is a deploy-time gamble in an app that has already lost a
+  deployment to a missing binary.
+
+`PdfWriter` is rectangles, lines, bezier paths and text in the fourteen standard
+fonts. Nothing is embedded, so nothing can be missing on the server.
+
+**THE PESO SIGN CANNOT BE DRAWN, AND EVERY FIGURE SAYS "PHP" INSTEAD.** The
+standard 14 are WinAnsiEncoded and that encoding has **no peso sign** — `0xA5` is
+the yen. A U+20B1 written into the content stream renders as **¥450** on the
+traveller's page, which is a wrong currency on a document whose whole job is
+being trusted about money. `ItineraryPdf::money()` writes `PHP`, and
+`PdfWriter::escape()` maps `₱`→`PHP` as the last line of defence.
+`the_writer_refuses_a_peso_sign_even_from_a_caller_that_passes_one` exercises
+that mapping **directly**, because the itinerary path never reaches it and a
+test that only covered the happy path would let it rot unobserved.
+
+**THE LOGO IS VECTOR, READ FROM THE BLADE COMPONENT.** `logoPathData()` pulls the
+single `<path d>` out of `application-logo.blade.php` and emits it as PDF path
+operators. One home for the mark, so a rebrand cannot leave the PDF behind.
+The SVG's y axis points down and PDF's up, so the CTM carries the only flip:
+`(s, 0, 0, -s, x, yBottom + 316s)`. The translation's y term is the part that
+is easy to get wrong — without `+ 316s` the mark is mirrored *below* its box.
+
+**`logoPathData()` REFUSES COMMANDS PDF DOES NOT SHARE WITH SVG.** SVG's `A`
+(arc) and `Q`/`S` are not PDF's `A` and `c`/`s`; emitting them under PDF's
+letters **draws a different shape rather than failing**, which is the worst
+available outcome for a brand mark. The current path uses only `M L C H V Z`,
+and anything else returns null so the logo is skipped, not mangled.
+
+**A DESTINATION WITH NO PHOTOGRAPH GETS A TYPOGRAPHIC PLATE**, carrying
+municipality and province — the same rule as the stage panel and `.tm-swipe-plate`.
+**All 65 catalogue rows currently have a NULL `image_url`, so the plate is the
+NORMAL case and a photograph is the exception.** `imageSlot()` deliberately does
+not embed bitmaps yet: JPEG can go into a PDF verbatim via `DCTDecode` with no
+image library at all, and that is the only photograph path available without GD.
+
+**`always_open` DOES NOT PRINT AS `Open 00:00–23:59`.** `formatHours()` returns
+exactly that for an ungated row, so the first version told a traveller the gate
+was open at 3am about a mountainside viewpoint with no gate. `hoursLine()`
+prints **"Open — no gate"**, and a per-day week prints `perDayHoursLabel()`.
+`hours_kind` exists precisely to disambiguate this and the PDF reads it.
+
+**THE BUG THE WRITER SHIPPED WITH, AND THE TEST THAT NOW OWNS IT:**
+`addPage()` pushes the page you are *leaving*, so after drawing the final page
+its content is still in the buffer and **not in the page list**. `output()`
+serialised the list alone and silently dropped the last page — the colophon,
+gone, in a PDF that still opened and still had a plausible page count. Appending
+the buffer is not tidiness. `the_final_page_is_not_dropped_from_the_document`
+falsifies it.
+
+**`the_pdf_is_structurally_valid()` PARSES THE BYTES BACK** rather than trusting
+the writer: every xref offset must land on its `N 0 obj` header and every
+declared `/Length` must match the bytes present. Offsets are read from
+`$lines[$id + 2]` — `$lines[0]` is `xref`, `$lines[1]` the `0 N` header and
+`$lines[2]` object 0's free entry, so starting at 2 makes **every** offset read
+zero and every document look broken.
+
+**THE VALIDATOR FAILS LOUDER THAN THE CODE.** Building this took three false
+alarms from the throwaway inspection script (an off-by-one line index, a
+`PREG_OFFSET_CAPTURE` pair used as a string, and a `.`-vs-===` precedence bug
+that reported `INVALID` on a valid file). Twice it nearly sent me to "fix" a
+writer that was correct. **When a checker disagrees with the code, check the
+checker first.**
+
+`ItineraryPdfTest` (19) covers the HTTP contract, the filename header against a
+hostile title, the vector logo against the component, the plate, the peso, the
+cover labels, and the writer's own refusals.
+
+**THE COVER LABELS WERE ARRAY OFFSETS IN THE FIRST VERSION.** The facts were
+built as a list literal and read as a keyed map, and `array_filter()` preserves
+keys — so a null date left the survivors at positions 0 and 2 and the cover
+printed **`0`** and **`2`** where "LENGTH" and "EST. TOTAL" should be. Every
+assertion about the trip passed, because the values were right and nobody looked
+at the small gold type above them. Found by dumping the finished PDF's text, not
+by reading the code. `the_cover_labels_its_facts` now owns it.
+
+**`DateTimeImmutable::createFromInterface()` IS NOT A NO-OP.** A `date` cast
+returns a **Carbon**, and Carbon's `modify()` mutates in place and returns
+`$this` — so `$end = $start->modify('+1 day')` made both names the same object
+and a two-day trip starting 2 November read **"3 – 3 Nov 2026"**. `asDate()`
+always returns an immutable, whatever the cast handed over.
+
+`tests/Feature/ItineraryPdfTest.php` and the two services. **Open the PDF and
+look at it** — nothing in this repo renders it, so the composition, the spacing
+and the cover's balance are unverified by anything but the bytes.
+
 ## Deployment (Hostinger Premium, shared hPanel, over SSH)
 
 `DEPLOY.md` is the runbook. Read it before deploying. The guard and move
