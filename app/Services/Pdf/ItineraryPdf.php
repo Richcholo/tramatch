@@ -415,7 +415,16 @@ class ItineraryPdf
         $colophonWidth = $p->width() - (self::MARGIN * 2) - 12;
 
         foreach ($notes as [$heading, $body]) {
-            $p->rect(self::MARGIN, $y + 8, 2, 12, self::GOLD);
+            /*
+             * THE TICK SITS ON THE TEXT'S CAP HEIGHT, NOT ABOVE ITS BASELINE.
+             *
+             * `$y` is the BASELINE, and a 12pt Times-Bold capital stands about
+             * 8.4pt above it. Drawn from `$y + 8` upward the tick sat entirely
+             * above the word it marked — which is exactly the reported "lines
+             * aren't aligned with text". It starts a point below the baseline so
+             * its 12pt height spans the cap height and a hair of the descender.
+             */
+            $p->rect(self::MARGIN, $y - 1, 2, 12, self::GOLD);
 
             $p->text('F2', 12, self::MARGIN + 12, $y, $heading, self::WHITE);
 

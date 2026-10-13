@@ -1945,6 +1945,35 @@ being trusted about money. `ItineraryPdf::money()` writes `PHP`, and
 that mapping **directly**, because the itinerary path never reaches it and a
 test that only covered the happy path would let it rot unobserved.
 
+**THE WHOLE STRING IS CONVERTED TO WINDOWS-1252 FIRST. NEVER `str_split()` THE
+RAW UTF-8.** `escape()` originally iterated with `str_split()`, which is
+**byte-based**, so an en dash (U+2013, bytes `E2 80 93`) became three
+"characters" of 226, 128 and 147 — all below 256, so the multibyte branch never
+fired and the raw bytes were emitted as glyphs. The page read:
+
+```
+08:00 â€“ 17:30   ·   Day window 08:00 â€“ 09:30 Â· 1 planned stop
+```
+
+**WinAnsiEncoding *is* Windows-1252 for every character this app emits** — en
+dash `0x96`, middle dot `0xB7`, curly quotes `0x91`–`0x94`, ellipsis `0x85`, and
+every Latin accent. One `mb_convert_encoding($text, 'Windows-1252', 'UTF-8')`
+fixes the punctuation *and* makes `Pintô` and `Cape Engaño` print as themselves.
+Unmappable characters become `?`, which is honest; dropping them silently leaves
+holes in words.
+
+**IT DID NOT LOOK LIKE AN ENCODING FAULT, AND THAT IS THE PART WORTH KEEPING.**
+`widthOf()` measures real characters through `mb_str_split()`, so the **layout
+was correct and the glyphs were not** — the file opened, every structural check
+passed, and the bytes were a perfectly valid Latin-1 string, just the wrong one.
+**A character-set bug and a font bug look identical from the rendered page.**
+
+**ANY TEST THAT READS PDF TEXT MUST DECODE WINDOWS-1252 TOO.** Reading the
+content stream as UTF-8 makes a correct en dash (`0x96`) and middle dot (`0xB7`)
+look like invalid input, so the first version of the encoding test **failed
+against a PDF that was already correct**. `ItineraryPdfTest::textOf()` converts
+before comparing, exactly as a reader does.
+
 **THE LOGO IS VECTOR, READ FROM THE BLADE COMPONENT.** `logoPathData()` pulls the
 single `<path d>` out of `application-logo.blade.php` and emits it as PDF path
 operators. One home for the mark, so a rebrand cannot leave the PDF behind.

@@ -550,19 +550,50 @@ class PdfWriter
     /**
      * Escape a string for a PDF literal.
      *
-     * **Parentheses and backslashes are structural, not content.** A peso
-     * figure or a title carrying an unbalanced `(` truncates the string and
-     * emits raw binary into the page. Non-Latin-1 characters are dropped rather
-     * than passed through: they cannot be encoded in WinAnsiEncoding, and a
-     * byte outside it corrupts the stream.
+     * **CONVERT TO WIN-1252 FIRST, AS A WHOLE STRING.** WinAnsiEncoding *is*
+     * Windows-1252 for every character this app emits — en dash at 0x96, middle
+     * dot at 0xB7, curly quotes at 0x91–0x94, ellipsis at 0x85, and every Latin
+     * accent where a reader expects one.
+     *
+     * THE BUG THIS REPLACES. The first version iterated with `str_split()`,
+     * which is **byte-based**, so an en dash (U+2013, bytes `E2 80 93`) became
+     * three "characters" of 226, 128 and 147. Every one of those is under 256,
+     * so the `> 255` branch never fired and the three raw bytes were emitted as
+     * if each were a glyph. The page then read
+     *
+     *     08:00 â€“ 17:30          Day window 08:00 â€“ 09:30 Â· 1 planned stop
+     *
+     * which is exactly what a PDF reader does with UTF-8 bytes it was told were
+     * Latin-1. Nothing errored; the file opened, every structural check passed,
+     * and the text was wrong on the page. `widthOf()` used `mb_str_split()` and
+     * measured the real characters, so the layout was correct and the glyphs were
+     * not — which is why this looked like a font problem and was not one.
+     *
+     * Converting the whole string up front also fixes accented names:
+     * `Pintô` and `Cape Engaño` now print as themselves rather than as `?`.
+     *
+     * **Parentheses and backslashes are structural, not content.** A title
+     * carrying an unbalanced `(` truncates the string and spills raw binary into
+     * the page, so they are escaped in the second pass — after conversion, since
+     * conversion is what decides the bytes.
      */
     private static function escape(string $text): string
     {
+        // The peso sign first: it has no WinAnsi representation at all, so it
+        // must be replaced before conversion rather than converted to `?`.
         $text = strtr($text, ['₱' => 'PHP']);
+
+        // Unmappable characters become `?` here, which is honest. Dropping them
+        // silently leaves words with holes in them.
+        $converted = @mb_convert_encoding($text, 'Windows-1252', 'UTF-8');
+
+        if ($converted === false || $converted === '') {
+            $converted = $text;
+        }
 
         $out = '';
 
-        foreach (str_split($text) as $char) {
+        foreach (str_split($converted) as $char) {
             $code = ord($char);
 
             if ($char === '(' || $char === ')' || $char === '\\') {
@@ -571,29 +602,8 @@ class PdfWriter
                 continue;
             }
 
+            // A control character is not drawable and can terminate the string.
             if ($code < 32) {
-                continue;
-            }
-
-            if ($code > 255) {
-                // Reachable for accented names written outside Latin-1.
-                $folded = @iconv('UTF-8', 'ISO-8859-1//TRANSLIT', $char);
-
-                if ($folded === false || $folded === '') {
-                    continue;
-                }
-
-                foreach (str_split($folded) as $foldedChar) {
-                    $foldedCode = ord($foldedChar);
-
-                    // The transliteration of an unmappable character can land on
-                    // 0x3F ('?') or 0xA0 (a non-breaking space WinAnsi spells
-                    // differently). Both are dropped rather than mis-printed.
-                    $out .= ($foldedCode > 190 && $foldedCode !== 0xA0)
-                        ? chr($foldedCode)
-                        : ($foldedCode === 0x3F ? '?' : '');
-                }
-
                 continue;
             }
 

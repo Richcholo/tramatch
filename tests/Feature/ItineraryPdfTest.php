@@ -257,6 +257,140 @@ class ItineraryPdfTest extends TestCase
     }
 
     /**
+     * PUNCTUATION SURVIVES AS PUNCTUATION, NOT AS MOJIBAKE.
+     *
+     * THE BUG THIS EXISTS FOR. `escape()` iterated with `str_split()`, which is
+     * **byte-based**, so an en dash (U+2013, bytes `E2 80 93`) was three
+     * "characters" of 226, 128 and 147. All three are below 256, so the
+     * multibyte branch never ran and the raw UTF-8 bytes were emitted as glyphs.
+     * The page read:
+     *
+     *     08:00 â€“ 17:30 · Day window 08:00 â€“ 09:30 Â· 1 planned stop
+     *
+     * Every structural check still passed and the file opened, because the bytes
+     * were a perfectly valid Latin-1 string — just the wrong one. `widthOf()`
+     * measured real characters via `mb_str_split()`, so the layout was right and
+     * the glyphs were not, which is why it presented as a font problem.
+     *
+     * WinAnsiEncoding *is* Windows-1252 for every character this app emits, so
+     * converting the whole string first fixes the dash, the middle dot, the
+     * ellipsis and every accented name at once.
+     */
+    #[Test]
+    public function punctuation_and_accents_are_encoded_as_themselves(): void
+    {
+        $writer = new PdfWriter;
+
+        $writer->text('F1', 12, 10, 10, '08:00–17:30 · and…');
+        $writer->text('F1', 12, 10, 40, 'Pintô — Cape Engaño');
+
+        $pdf = $writer->output();
+
+        // The UTF-8 bytes of U+2013 must not survive as three separate glyphs.
+        $this->assertStringNotContainsString("\xE2\x80\x93", $pdf, 'a raw UTF-8 en dash reached the content stream');
+        $this->assertStringNotContainsString("\xC2\xB7", $pdf, 'a raw UTF-8 middle dot reached the content stream');
+
+        // … and the reader sees what was written.
+        $this->assertStringContainsString('08:00–17:30', $this->textOf($pdf));
+        $this->assertStringContainsString('·', $this->textOf($pdf));
+        $this->assertStringContainsString('Pintô', $this->textOf($pdf));
+        $this->assertStringContainsString('Cape Engaño', $this->textOf($pdf));
+
+        // The mojibake spellings must appear nowhere in the document.
+        $this->assertStringNotContainsString('â€“', $this->textOf($pdf));
+        $this->assertStringNotContainsString('Â·', $this->textOf($pdf));
+    }
+
+    /**
+     * EVERY BYTE EMITTED IS ONE A WINANSI READER HAS A GLYPH FOR.
+     *
+     * A byte outside the encoding renders as whatever the reader substitutes,
+     * which is how the mojibake reached the page. The peso's replacement is
+     * asserted separately, and this is the belt to that braces.
+     */
+    #[Test]
+    public function no_unencodable_byte_reaches_the_content_stream(): void
+    {
+        $writer = new PdfWriter;
+
+        // A CJK character, an emoji and a peso sign: none of which WinAnsi has.
+        $writer->text('F1', 12, 10, 10, ' Manila ₱250 台灣 ');
+
+        $pdf = $writer->output();
+
+        $this->assertStringNotContainsString("\xE2\x82", $pdf, 'a raw UTF-8 byte sequence reached the stream');
+        $this->assertStringContainsString('PHP250', $this->textOf($pdf));
+    }
+
+    /**
+     * THE COLOPHON'S GOLD TICK ALIGNS WITH THE HEADING IT MARKS.
+     *
+     * `$y` is the text BASELINE and a 12pt Times-Bold capital stands ~8.4pt
+     * above it. The tick was drawn from `$y + 8` upward, which put it entirely
+     * above the word — the reported "lines aren't aligned with text". It has to
+     * span the cap height, so its bottom sits a point below the baseline.
+     */
+    #[Test]
+    public function the_colophon_ticks_align_with_their_headings(): void
+    {
+        preg_match_all('/<< \/Length \d+ \/?[^>]*>>\nstream\n(.*?)\nendstream/s', $this->pdf(), $streams);
+
+        $colophon = (string) end($streams[1]);
+
+        $this->assertStringContainsString('BEFORE YOU GO', $colophon, 'the colophon is not the last page');
+
+        // Gold rules are narrow vertical ticks: 2pt wide. `rect()` emits
+        // `%.2F` throughout, so the width is `2.00` — matching a bare `2` finds
+        // nothing and the assertion below passes for the wrong reason.
+        preg_match_all('/(-?[\d\.]+) (-?[\d\.]+) 2\.00 (-?[\d\.]+) re\s+f/', $colophon, $ticks, PREG_SET_ORDER);
+
+        $this->assertNotEmpty($ticks, 'the colophon drew no gold ticks');
+
+        // And the heading baselines they mark. `text()` emits `x y Td` -- TWO numbers,
+        // not three, so a pattern expecting an extra operand matches nothing.
+        preg_match_all('/BT \/F2 ([\d\.]+) Tf (-?[\d\.]+) (-?[\d\.]+) Td \((Check the hours|Fees are estimates|Some places are ungated|Respect the sites you visit)\)/', $colophon, $headings, PREG_SET_ORDER);
+
+        $this->assertCount(
+            count($ticks),
+            $headings,
+            'every gold tick should have a heading beside it'
+        );
+
+        foreach ($ticks as $i => $tick) {
+            // PREG_SET_ORDER groups: [0] is the whole match, then one entry per
+            // capture group. The regex has three groups -- x, y, height.
+            $tickBottom = (float) $tick[2];
+            $tickHeight = (float) $tick[3];
+            $headingBaseline = (float) $headings[$i][3];
+            $headingSize = (float) $headings[$i][1];
+
+            // Cap height of Times-Bold is ~0.68em.
+            $capTop = $headingBaseline + ($headingSize * 0.68);
+
+            /*
+             * THE TICK SPANS THE CAP HEIGHT. It is a marker, so it may rise
+             * ABOVE the capital — what it must not do is float clear of it.
+             *
+             * Drawn from `$y + 8` the tick ran from the cap top to `$y + 20`,
+             * i.e. entirely above the word, which is the reported misalignment.
+             * From `$y - 1` it starts a hair below the baseline and rises
+             * through the capital.
+             */
+            $this->assertLessThanOrEqual(
+                $headingBaseline + 1.0,
+                $tickBottom,
+                'a gold tick floats above its heading instead of starting at its baseline'
+            );
+
+            $this->assertGreaterThanOrEqual(
+                $capTop - 1.0,
+                $tickBottom + $tickHeight,
+                'a gold tick is too short to reach the cap height of the heading it marks'
+            );
+        }
+    }
+
+    /**
      * THE WRITER REFUSES A PESO EVEN WHEN A CALLER PASSES ONE.
      *
      * `ItineraryPdf::money()` already writes "PHP", so the itinerary path never
@@ -578,6 +712,13 @@ class ItineraryPdfTest extends TestCase
      * A test that greps the raw PDF for a destination name would pass or fail
      * on escaping accidents rather than on content, so text is pulled out of
      * the `(...) Tj` operators and unescaped first.
+     *
+     * **THEN DECODED FROM WIN-1252, WHICH IS WHAT THE FONT SAYS IT IS.** The
+     * stream is a byte string in the font's own encoding; reading those bytes as
+     * UTF-8 makes a correct en dash (0x96) and a correct middle dot (0xB7) look
+     * like invalid input, and an assertion for `–` fails against a document that
+     * prints it correctly. A reader decodes WinAnsiEncoding, so the helper does
+     * the same.
      */
     private function textOf(string $pdf): string
     {
@@ -589,7 +730,9 @@ class ItineraryPdfTest extends TestCase
             preg_match_all('/\((.*?)\) Tj/s', $content, $found);
 
             foreach ($found[1] as $raw) {
-                $text .= str_replace(['\\(', '\\)', '\\\\'], ['(', ')', '\\'], $raw)."\n";
+                $unescaped = str_replace(['\\(', '\\)', '\\\\'], ['(', ')', '\\'], $raw);
+
+                $text .= mb_convert_encoding($unescaped, 'UTF-8', 'Windows-1252')."\n";
             }
         }
 
