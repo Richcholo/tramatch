@@ -135,24 +135,55 @@
         </section>
     @endisset
 
+    @php
+        /*
+         * THE FLASH BANNER HAS TO BE GIVEN THE PAGE'S OWN FIELD.
+         *
+         * On every route except `discover.index`, `main` carries the padding
+         * and the banner inherits it for free. On `discover.index` `main` is
+         * deliberately `w-full` -- the deck is one dark surface edge to edge and
+         * needs no container of its own -- so a banner left bare there rendered
+         * full-bleed: flush against both viewport edges, hard under the nav bar,
+         * and outside the `max-w-6xl px-5 sm:px-8 lg:px-12` field every other
+         * element on that page sits in.
+         *
+         * It read as a banner that had escaped the page rather than one placed
+         * on it. Resetting the discovery deck is the action that produces it --
+         * `SwipeDiscoveryController::reset()` flashes 'Your discovery deck was
+         * reset.' -- so this is the page's most-reachable layout fault, and it
+         * was never visible in a test because the markup is genuinely valid and
+         * nothing here measures geometry.
+         *
+         * The banner STAYS in the layout. `discover/index.blade.php` must not
+         * render its own, or the two stack and every message appears twice.
+         */
+        $bareMain = request()->routeIs('discover.index');
+    @endphp
+
     <main @class([
         'relative z-10',
-        'w-full' => request()->routeIs('discover.index'),
-        'mx-auto max-w-[1600px] px-5 py-10 sm:px-8 lg:px-12' => ! request()->routeIs('discover.index'),
+        'w-full' => $bareMain,
+        'mx-auto max-w-[1600px] px-5 py-10 sm:px-8 lg:px-12' => ! $bareMain,
     ])>
-        @if (session('status'))
-            <div class="mb-8 rounded-2xl border border-boracay bg-boracay-light p-4 text-benguet-charcoal">
-                {{ session('status') }}
-            </div>
-        @endif
+        @if (session('status') || $errors->any())
+            <div @class([
+                'mx-auto max-w-6xl px-5 pt-10 sm:px-8 sm:pt-12 lg:px-12' => $bareMain,
+            ])>
+                @if (session('status'))
+                    <div class="mb-8 rounded-2xl border border-boracay bg-boracay-light p-4 text-benguet-charcoal">
+                        {{ session('status') }}
+                    </div>
+                @endif
 
-        @if ($errors->any())
-            <div class="mb-8 rounded-2xl border border-red-200 bg-red-50 p-4 text-red-800">
-                <ul class="list-disc space-y-1 pl-5">
-                    @foreach ($errors->all() as $error)
-                        <li>{{ $error }}</li>
-                    @endforeach
-                </ul>
+                @if ($errors->any())
+                    <div class="mb-8 rounded-2xl border border-red-200 bg-red-50 p-4 text-red-800">
+                        <ul class="list-disc space-y-1 pl-5">
+                            @foreach ($errors->all() as $error)
+                                <li>{{ $error }}</li>
+                            @endforeach
+                        </ul>
+                    </div>
+                @endif
             </div>
         @endif
 

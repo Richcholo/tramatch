@@ -634,4 +634,107 @@ class DiscoverDeckTest extends TestCase
             .'the wash bleed through the words'
         );
     }
+
+    /**
+     * THE FLASH BANNER MUST SIT INSIDE THE PAGE'S FIELD.
+     *
+     * THE BUG. `main` is deliberately `w-full` on this route so the deck can be
+     * one dark surface edge to edge, which means it carries NO padding -- on
+     * every other route the banner inherits the field from `main` for free. Left
+     * bare, "Your discovery deck was reset." rendered full-bleed: flush against
+     * both viewport edges, hard under the nav bar, and outside the
+     * `max-w-6xl px-5 sm:px-8 lg:px-12` field that every other element on this
+     * page sits in. It read as a banner that had escaped the page rather than
+     * one placed on it.
+     *
+     * Resetting the deck is the ONLY user action that produces this banner, so
+     * `deckHtml()` -- which never flashes anything -- could never have caught
+     * it. That is why this test performs the real redirect rather than seeding
+     * the session: rendering the view and reproducing the message are not the
+     * same thing, and the distinction is the whole bug.
+     *
+     * The fix lives in the layout, because the layout owns the banner. A page
+     * rendering its own would stack the two copies.
+     */
+    #[Test]
+    public function the_flash_banner_stays_inside_the_pages_field(): void
+    {
+        $response = $this->actingAs($this->user)
+            ->post(route('discover.reset'))
+            ->assertRedirect(route('discover.index'));
+
+        $this->assertSame(
+            'Your discovery deck was reset.',
+            $response->getSession()->get('status'),
+            'the reset action should still flash its confirmation -- this test is '
+            .'about where the banner RENDERS, not whether the message exists'
+        );
+
+        $dom = $this->dom((string) $response->getSession()->get('status') !== ''
+            ? (string) $this->actingAs($this->user)->get(route('discover.index'))->getContent()
+            : '');
+
+        $main = $dom->query('//main')->item(0);
+
+        $this->assertNotNull($main, 'the layout did not render a <main>');
+
+        // `main` carries no padding here -- that is the deliberate decision this
+        // page is built on, and the reason the banner needs its own field.
+        $this->assertStringNotContainsString(
+            'px-',
+            (string) $main->getAttribute('class'),
+            '`main` grew padding on this route. If that is intentional the banner '
+            .'may now be double-padded, and the two must not both answer for it'
+        );
+
+        $banner = $dom->query(
+            '//div[contains(concat(" ", normalize-space(@class), " "), " bg-boracay-light ")]'
+        )->item(0);
+
+        $this->assertNotNull($banner, 'the flash banner did not render on this page');
+
+        // Walk up to `main` and assert SOMETHING between them carries the field.
+        // The banner must not be a direct child of `main`: that is precisely the
+        // full-bleed shape, and asserting the wrapper exists catches it without
+        // pinning the exact padding values.
+        $wrapper = $banner->parentNode;
+
+        $this->assertNotSame(
+            $main,
+            $wrapper,
+            'the flash banner is a direct child of `main`, so with no padding '
+            .'there it spans the full viewport width and breaks out of the page\'s field'
+        );
+
+        $wrapperClass = (string) $wrapper->getAttribute('class');
+
+        foreach (['max-w-6xl', 'px-5', 'sm:px-8', 'lg:px-12'] as $expected) {
+            $this->assertStringContainsString(
+                $expected,
+                $wrapperClass,
+                'the banner\'s wrapper does not carry "'.$expected.'", so the banner '
+                .'is not aligned to the field the rest of this page uses'
+            );
+        }
+    }
+
+    /**
+     * THE PAGE MUST NOT RENDER ITS OWN BANNER.
+     *
+     * The layout already renders `session('status')` inside `<main>`, and a
+     * reset lands back on this page. A second copy in the view would stack the
+     * two, and the message would appear twice for every reset.
+     */
+    #[Test]
+    public function the_page_does_not_render_a_second_flash_banner(): void
+    {
+        $html = $this->deckHtml();
+
+        $this->assertSame(
+            0,
+            substr_count($html, 'bg-boracay-light p-4 text-benguet-charcoal'),
+            'the discover view renders its own flash banner, which stacks with the '
+            .'one the layout already draws'
+        );
+    }
 }
