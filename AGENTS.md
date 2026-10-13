@@ -1768,6 +1768,35 @@ already exist somewhere.
   `toast_message`, bottom-right, auto-dismiss) instead of the banner, so
   "Queued …" does not push the page around. A test pins the key so the two do
   not both fire.
+- **THE DECK RESET USES THE TOAST TOO, AND IT TOOK TWO WRONG FIXES TO GET
+  THERE.** "Your discovery deck was reset." went through `session('status')`,
+  which the layout renders as a **light** banner inside `<main>` — and on
+  `/discover` `main` is deliberately `w-full`, so the banner rendered
+  **full-bleed**: flush to both viewport edges, hard under the nav bar, outside
+  the field everything else on the page sits in, and a large light rectangle on
+  a Deep Volcanic Teal page. It read as a slab that had escaped the design.
+
+  **FIX ONE WAS WRONG AND IT LOOKED RIGHT.** Wrapping the banner in the page's
+  own `max-w-6xl px-5 sm:px-8 lg:px-12` field made it *fit*, and the markup was
+  valid, and every test passed — and the notice was still a big light slab
+  pushing the deck down the screen. Matching the complaint's *geometry* without
+  asking why a confirmation needed page-filling space at all.
+
+  **THE REAL QUESTION WAS "IS THIS PAGE STATE OR CONFIRMATION?"** It is
+  confirmation. A reset changes nothing about the deck it lands on, so a banner
+  that pushes the page is describing a page that did not change. `reset()` now
+  flashes `toast_message` and `discover/index.blade.php` includes
+  `<x-flash-toast />` — bottom-right, self-dismissing, taking no layout space,
+  and reusing the component the crawl pages already use.
+
+  **WHEN A NOTICE LOOKS LIKE IT DOES NOT BELONG, CHECK WHAT IT IS BEFORE WHERE
+  IT IS.** "It breaks out of the field" was a true description of a true bug and
+  a misleading description of the fix.
+
+  `the_page_renders_the_toast_once_and_only_when_there_is_a_message` counts
+  `//*[@data-toast]` as an **element**: the component's inline script queries
+  `[data-toast]` and carries a `data-toast-script` marker, so `substr_count`
+  finds five on a page with exactly one toast.
 - A new JS/CSS entry must be registered in **two** places: the
   `laravel({ input: [...] })` array in `vite.config.js` *and* the
   `@vite([...])` array in the layout that should load it.

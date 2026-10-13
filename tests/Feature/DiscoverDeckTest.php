@@ -636,105 +636,135 @@ class DiscoverDeckTest extends TestCase
     }
 
     /**
-     * THE FLASH BANNER MUST SIT INSIDE THE PAGE'S FIELD.
+     * RESETTING THE DECK IS A TOAST, NOT THE LAYOUT'S FLASH BANNER.
      *
-     * THE BUG. `main` is deliberately `w-full` on this route so the deck can be
-     * one dark surface edge to edge, which means it carries NO padding -- on
-     * every other route the banner inherits the field from `main` for free. Left
-     * bare, "Your discovery deck was reset." rendered full-bleed: flush against
-     * both viewport edges, hard under the nav bar, and outside the
-     * `max-w-6xl px-5 sm:px-8 lg:px-12` field that every other element on this
-     * page sits in. It read as a banner that had escaped the page rather than
-     * one placed on it.
+     * THE TWO FAILURES THIS REPLACES. The banner is a light slab inside
+     * `<main>`, and on this route `main` is deliberately `w-full` so the deck can
+     * be one dark surface edge to edge — which means it carries NO padding. The
+     * banner therefore rendered **full-bleed**, flush against both viewport
+     * edges and hard under the nav bar, outside the field every other element
+     * sits in, and as a large light rectangle that pushed the deck down the
+     * screen.
      *
-     * Resetting the deck is the ONLY user action that produces this banner, so
-     * `deckHtml()` -- which never flashes anything -- could never have caught
-     * it. That is why this test performs the real redirect rather than seeding
-     * the session: rendering the view and reproducing the message are not the
-     * same thing, and the distinction is the whole bug.
+     * Wrapping the banner in the page's own field was tried first and was the
+     * WRONG FIX: it made the notice fit while leaving the light slab and the
+     * layout shift. Resetting a deck changes nothing about the page it lands
+     * on, so there is no state here for a banner to describe — and the existing
+     * `<x-flash-toast />` already does exactly this job for the crawl pages.
      *
-     * The fix lives in the layout, because the layout owns the banner. A page
-     * rendering its own would stack the two copies.
+     * The test performs the real redirect, because `deckHtml()` never flashes
+     * anything and rendering the view is not the same as reproducing the
+     * message.
      */
     #[Test]
-    public function the_flash_banner_stays_inside_the_pages_field(): void
+    public function resetting_the_deck_is_a_toast_and_not_the_flash_banner(): void
     {
         $response = $this->actingAs($this->user)
             ->post(route('discover.reset'))
             ->assertRedirect(route('discover.index'));
 
+        $session = $response->getSession();
+
         $this->assertSame(
             'Your discovery deck was reset.',
-            $response->getSession()->get('status'),
-            'the reset action should still flash its confirmation -- this test is '
-            .'about where the banner RENDERS, not whether the message exists'
+            $session->get('toast_message'),
+            'the reset should flash through the toast key'
         );
 
-        $dom = $this->dom((string) $response->getSession()->get('status') !== ''
-            ? (string) $this->actingAs($this->user)->get(route('discover.index'))->getContent()
-            : '');
-
-        $main = $dom->query('//main')->item(0);
-
-        $this->assertNotNull($main, 'the layout did not render a <main>');
-
-        // `main` carries no padding here -- that is the deliberate decision this
-        // page is built on, and the reason the banner needs its own field.
-        $this->assertStringNotContainsString(
-            'px-',
-            (string) $main->getAttribute('class'),
-            '`main` grew padding on this route. If that is intentional the banner '
-            .'may now be double-padded, and the two must not both answer for it'
+        $this->assertNull(
+            $session->get('status'),
+            'the reset still flashes the layout banner key, so the light slab '
+            .'renders full-bleed on a page whose `main` carries no padding'
         );
 
-        $banner = $dom->query(
-            '//div[contains(concat(" ", normalize-space(@class), " "), " bg-boracay-light ")]'
-        )->item(0);
+        $html = (string) $this->actingAs($this->user)->get(route('discover.index'))->getContent();
 
-        $this->assertNotNull($banner, 'the flash banner did not render on this page');
-
-        // Walk up to `main` and assert SOMETHING between them carries the field.
-        // The banner must not be a direct child of `main`: that is precisely the
-        // full-bleed shape, and asserting the wrapper exists catches it without
-        // pinning the exact padding values.
-        $wrapper = $banner->parentNode;
-
-        $this->assertNotSame(
-            $main,
-            $wrapper,
-            'the flash banner is a direct child of `main`, so with no padding '
-            .'there it spans the full viewport width and breaks out of the page\'s field'
+        $this->assertStringContainsString(
+            'Your discovery deck was reset.',
+            $html,
+            'the toast did not render'
         );
 
-        $wrapperClass = (string) $wrapper->getAttribute('class');
+        $dom = $this->dom($html);
 
-        foreach (['max-w-6xl', 'px-5', 'sm:px-8', 'lg:px-12'] as $expected) {
-            $this->assertStringContainsString(
-                $expected,
-                $wrapperClass,
-                'the banner\'s wrapper does not carry "'.$expected.'", so the banner '
-                .'is not aligned to the field the rest of this page uses'
-            );
-        }
+        $toast = $dom->query('//*[@data-toast]')->item(0);
+
+        $this->assertNotNull($toast, 'the toast component did not render on this page');
+
+        // Fixed to the corner, so it cannot push the deck around.
+        $this->assertStringContainsString('fixed', (string) $toast->getAttribute('class'));
+        $this->assertStringContainsString('bottom-6', (string) $toast->getAttribute('class'));
+
+        // The banner's own classes must not appear: the light slab is the thing
+        // that was wrong, and asserting only the toast's presence would pass on
+        // a page rendering both.
+        $this->assertSame(
+            0,
+            $dom->query('//div[contains(concat(" ", normalize-space(@class), " "), " bg-boracay-light ")]')->length,
+            'the light flash banner rendered on this page -- it has no padding to '
+            .'live inside and reads as a slab outside the design'
+        );
     }
 
     /**
-     * THE PAGE MUST NOT RENDER ITS OWN BANNER.
+     * THE TWO FLASH KEYS NEVER BOTH FIRE.
      *
-     * The layout already renders `session('status')` inside `<main>`, and a
-     * reset lands back on this page. A second copy in the view would stack the
-     * two, and the message would appear twice for every reset.
+     * The layout draws `session('status')` and the toast component draws
+     * `session('toast_message')`. Both are in the container on this page, so an
+     * action that set both would show the traveller the same news twice — the
+     * failure AGENTS.md records for admin pages once already.
      */
     #[Test]
-    public function the_page_does_not_render_a_second_flash_banner(): void
+    public function no_action_sets_both_flash_keys(): void
     {
-        $html = $this->deckHtml();
+        $session = $this->actingAs($this->user)
+            ->post(route('discover.reset'))
+            ->getSession();
 
+        $this->assertFalse(
+            $session->has('status') && $session->has('toast_message'),
+            'the reset sets both the banner key and the toast key, so the same '
+            .'message renders twice'
+        );
+    }
+
+    /**
+     * THE PAGE RENDERS THE TOAST EXACTLY ONCE, AND NOTHING WHEN THERE IS NO
+     * MESSAGE.
+     *
+     * `<x-flash-toast />` is included per page rather than by the layout, so a
+     * page can render it more than once by accident and every notification
+     * doubles. Both states matter: an empty toast container sitting in the
+     * markup is the ghost of a dismissed one, and a message with no container
+     * means the traveller is told nothing at all.
+     */
+    #[Test]
+    public function the_page_renders_the_toast_once_and_only_when_there_is_a_message(): void
+    {
+        // No message: the component renders NOTHING. Not an empty container --
+        // a fixed, empty, once-opaque box in the corner of a dark page is
+        // visible on its own.
         $this->assertSame(
             0,
-            substr_count($html, 'bg-boracay-light p-4 text-benguet-charcoal'),
-            'the discover view renders its own flash banner, which stacks with the '
-            .'one the layout already draws'
+            $this->dom($this->deckHtml())->query('//*[@data-toast]')->length,
+            'the toast container rendered with no message set'
+        );
+
+        $this->actingAs($this->user)->post(route('discover.reset'));
+
+        /*
+         * COUNTED AS AN ELEMENT, NOT A SUBSTRING. The component's inline script
+         * queries `[data-toast]` and `[data-toast-close]` and carries a
+         * `data-toast-script` marker of its own, so `substr_count($html,
+         * 'data-toast')` counts five on a page with exactly one toast.
+         */
+        $this->assertSame(
+            1,
+            $this->dom(
+                (string) $this->actingAs($this->user)->get(route('discover.index'))->getContent()
+            )->query('//*[@data-toast]')->length,
+            'the toast should appear exactly once -- twice and every notification '
+            .'shows a duplicate'
         );
     }
 }

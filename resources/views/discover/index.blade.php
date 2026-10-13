@@ -22,6 +22,25 @@
         dark text, the same "light pill on teal" the stage's status
         badges use.
     --}}
+    {{--
+        Transient feedback is a TOAST, not the layout's flash banner.
+
+        The banner is a light slab inside `<main>`, and on this route `main` has
+        no padding -- it is `w-full` so the deck can be one dark surface edge to
+        edge. A light banner there renders full-bleed against the viewport edges
+        and reads as a slab that escaped the design rather than as part of it.
+        Wrapping it in the page's own field was tried first and was the wrong
+        fix: that made the notice fit while keeping a large light rectangle
+        pushing the deck down the screen.
+
+        Resetting the deck also changes nothing about the page it lands on, so
+        there is no page state here for a banner to describe.
+
+        `toast_message` is the key the crawl pages already use with this
+        component, so the two keys never fire together.
+    --}}
+    <x-flash-toast />
+
     <div class="tm-page relative isolate overflow-hidden py-10 sm:py-12">
         {{--
             THE BACKDROP: the page's own ground, a blurred and
