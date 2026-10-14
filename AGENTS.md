@@ -139,6 +139,18 @@ not make `pint --test` a pass/fail gate.
 - Archive is `is_active = false`; there are no soft deletes. Permanent delete
   manually removes reviews, swipes, itinerary items, and tag pivots inside a
   transaction (`Admin\DestinationController::destroy`).
+- Shared behaviour lives in traits next to its users, not in a `Helpers` class:
+  `HasOpeningHours` (`app/Models/Concerns`, Destination + Place),
+  `ReadsCatalogueRows` (`database/seeders/Concerns`, both CSV seeders —
+  mechanics only, never honesty policy),
+  `HandlesPostedHours` (`Admin\Concerns`, posted-hours normalisation and the
+  verification fingerprint). A second copy of any of these is the failure.
+- `ItineraryStop` (`app/Services`) is the seam every itinerary stop resolves
+  through: `preload()` reads both catalogue tables once per draft,
+  `fromFields()`/`forItem()` resolve one row, and name/position delegate to
+  the item's own readers via an unsaved related item — so they cannot drift.
+  Validation (liked-only, active-only, no-repeat) stays in the editor, and
+  `snapshotCost()` returns null for unknown prices rather than zero.
 
 ### Editing a generated itinerary
 

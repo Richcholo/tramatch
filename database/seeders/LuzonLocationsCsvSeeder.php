@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\Destination;
 use App\Models\Tag;
+use Database\Seeders\Concerns\ReadsCatalogueRows;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -13,6 +14,8 @@ use RuntimeException;
 
 class LuzonLocationsCsvSeeder extends Seeder
 {
+    use ReadsCatalogueRows;
+
     public function run(): void
     {
         $path = database_path('data/luzon-locations-clean.csv');
@@ -252,169 +255,6 @@ class LuzonLocationsCsvSeeder extends Seeder
         $this->command?->info(
             "Imported {$imported} Luzon destinations."
         );
-    }
-
-    private function normalizeHeader(?string $header): string
-    {
-        $header = trim((string) $header);
-        $header = preg_replace('/^\xEF\xBB\xBF/', '', $header);
-
-        return Str::slug($header);
-    }
-
-    private function clean(mixed $value): string
-    {
-        return preg_replace(
-            '/\s+/',
-            ' ',
-            trim((string) $value)
-        );
-    }
-
-    private function cleanTime(mixed $value): ?string
-    {
-        $value = trim((string) $value);
-
-        if ($value === '') {
-            return null;
-        }
-
-        return preg_match('/\A(\d{1,2}):(\d{2})\z/', $value, $match) === 1
-            ? sprintf('%02d:%02d', (int) $match[1], (int) $match[2])
-            : null;
-    }
-
-    private function normalizeClosedDays(mixed $value): array
-    {
-        $days = array_map(
-            fn ($day) => strtolower(trim((string) $day)),
-            is_array($value)
-                ? $value
-                : explode(',', (string) $value)
-        );
-
-        $days = array_values(array_intersect(Destination::daySlugs(), $days));
-
-        return array_values(array_unique($days));
-    }
-
-    private function normalizeHoursKind(
-        mixed $value,
-        ?array $dailyHours,
-        ?string $openingTime,
-        ?string $closingTime
-    ): ?string {
-        $value = strtolower(trim((string) $value));
-
-        if (in_array($value, Destination::HOURS_KINDS, true)) {
-            return $value;
-        }
-
-        if ($dailyHours !== null) {
-            return Destination::HOURS_PER_DAY;
-        }
-
-        if ($openingTime === '00:00' && $closingTime === '23:59') {
-            return Destination::HOURS_ALWAYS_OPEN;
-        }
-
-        return null;
-    }
-
-    private function cleanOrNull(mixed $value): ?string
-    {
-        $value = $this->clean($value);
-
-        return $value === '' ? null : $value;
-    }
-
-    private function normalizeDailyHours(mixed $value): ?array
-    {
-        if (is_string($value)) {
-            $decoded = json_decode(trim($value), true);
-
-            if (!is_array($decoded)) {
-                return null;
-            }
-
-            $value = $decoded;
-        }
-
-        if (!is_array($value)) {
-            return null;
-        }
-
-        $hours = [];
-
-        foreach (Destination::daySlugs() as $day) {
-            $window = $value[$day] ?? null;
-
-            if (is_string($window)) {
-                $window = $this->parseTimeRange($window);
-            }
-
-            if (!is_array($window)) {
-                continue;
-            }
-
-            if (($window['closed'] ?? false) === true) {
-                $hours[$day] = ['closed' => true];
-
-                continue;
-            }
-
-            $open = $this->cleanTime($window['open'] ?? null);
-            $close = $this->cleanTime($window['close'] ?? null);
-
-            if ($open === null || $close === null || $open === $close) {
-                continue;
-            }
-
-            $hours[$day] = ['open' => $open, 'close' => $close];
-        }
-
-        return $hours === [] ? null : $hours;
-    }
-
-    private function parseTimeRange(string $value): ?array
-    {
-        if (preg_match(
-            '/\A(\d{1,2}:\d{2})\s*(?:-|–|to)\s*(\d{1,2}:\d{2})\z/i',
-            trim($value),
-            $match
-        ) !== 1) {
-            return null;
-        }
-
-        return ['open' => $match[1], 'close' => $match[2]];
-    }
-
-    private function normalizeOperatingStatus(?string $value): string
-    {
-        $value = strtolower(trim((string) $value));
-        $value = str_replace([' ', '-'], '_', $value);
-
-        return in_array(
-            $value,
-            ['open', 'temporarily_closed', 'permanently_closed', 'unknown'],
-            true
-        )
-            ? $value
-            : 'unknown';
-    }
-
-    private function normalizeBudget(?string $value): string
-    {
-        $value = strtolower(trim((string) $value));
-        $value = str_replace(['–', '—', ' '], '-', $value);
-
-        return in_array(
-            $value,
-            ['economy', 'mid-range', 'premium'],
-            true
-        )
-            ? $value
-            : 'economy';
     }
 
     private function parseNumber(mixed $value): float

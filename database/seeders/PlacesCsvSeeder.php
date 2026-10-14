@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\Destination;
 use App\Models\Place;
+use Database\Seeders\Concerns\ReadsCatalogueRows;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -40,6 +41,8 @@ use RuntimeException;
  */
 class PlacesCsvSeeder extends Seeder
 {
+    use ReadsCatalogueRows;
+
     /**
      * A meal slot the seeder accepts, mirrored from Place::MEAL_SLOTS.
      *
@@ -376,38 +379,6 @@ class PlacesCsvSeeder extends Seeder
         }
     }
 
-    private function normalizeHeader(?string $header): string
-    {
-        $header = trim((string) $header);
-        $header = preg_replace('/^\xEF\xBB\xBF/', '', $header);
-
-        return Str::slug($header);
-    }
-
-    private function clean(mixed $value): string
-    {
-        return preg_replace('/\s+/', ' ', trim((string) $value));
-    }
-
-    private function cleanOrNull(mixed $value): ?string
-    {
-        $value = $this->clean($value);
-
-        return $value === '' ? null : $value;
-    }
-
-    private function cleanTime(mixed $value): ?string
-    {
-        $value = trim((string) $value);
-
-        if ($value === '') {
-            return null;
-        }
-
-        return preg_match('/\A(\d{1,2}):(\d{2})\z/', $value, $match) === 1
-            ? sprintf('%02d:%02d', (int) $match[1], (int) $match[2])
-            : null;
-    }
 
     /**
      * A required coordinate. Returns null rather than 0.0 so the caller can tell
@@ -468,15 +439,6 @@ class PlacesCsvSeeder extends Seeder
         return in_array($value, Place::TYPES, true) ? $value : null;
     }
 
-    private function normalizeBudget(mixed $value): string
-    {
-        $value = strtolower($this->clean($value));
-        $value = str_replace(['–', '—', ' ', '-'], '-', $value);
-
-        return in_array($value, ['economy', 'mid-range', 'premium'], true)
-            ? $value
-            : 'economy';
-    }
 
     private function normalizePriceBasis(mixed $value, ?float $priceMin): ?string
     {
@@ -515,129 +477,6 @@ class PlacesCsvSeeder extends Seeder
         return $slots === [] ? null : $slots;
     }
 
-    private function normalizeClosedDays(mixed $value): array
-    {
-        $days = array_map(
-            fn ($day) => strtolower($this->clean($day)),
-            is_array($value) ? $value : explode(',', (string) $value)
-        );
-
-        return array_values(array_unique(array_intersect(
-            Destination::daySlugs(),
-            $days
-        )));
-    }
-
-    private function normalizeHoursKind(
-        mixed $value,
-        ?array $dailyHours,
-        ?string $openingTime,
-        ?string $closingTime
-    ): ?string {
-        $value = strtolower($this->clean($value));
-
-        if (in_array($value, Place::HOURS_KINDS, true)) {
-            return $value;
-        }
-
-        if ($dailyHours !== null) {
-            return Place::HOURS_PER_DAY;
-        }
-
-        if ($openingTime === '00:00' && $closingTime === '23:59') {
-            return Place::HOURS_ALWAYS_OPEN;
-        }
-
-        return null;
-    }
-
-    private function normalizeOperatingStatus(?string $value): string
-    {
-        $value = strtolower($this->clean($value));
-        $value = str_replace([' ', '-'], '_', $value);
-
-        return in_array(
-            $value,
-            ['open', 'temporarily_closed', 'permanently_closed', 'unknown'],
-            true
-        )
-            ? $value
-            : 'unknown';
-    }
-
-    /**
-     * A per-day window map, or null when there is nothing usable.
-     *
-     * A day whose window will not parse, or whose open and close are the same,
-     * is DISCARDED rather than stored: a restaurant with one broken day should
-     * still show a clean window for the other six, and a junk cell must never
-     * make the whole column unreadable.
-     */
-    private function normalizeDailyHours(mixed $value): ?array
-    {
-        if (is_string($value)) {
-            $decoded = json_decode(trim($value), true);
-
-            if (! is_array($decoded)) {
-                return null;
-            }
-
-            $value = $decoded;
-        }
-
-        if (! is_array($value)) {
-            return null;
-        }
-
-        $hours = [];
-
-        foreach (Destination::daySlugs() as $day) {
-            $window = $value[$day] ?? null;
-
-            // A curator writing "09:00-21:00" in one cell rather than JSON.
-            if (is_string($window)) {
-                $window = $this->parseTimeRange($window);
-            }
-
-            if (! is_array($window)) {
-                continue;
-            }
-
-            if (($window['closed'] ?? false) === true) {
-                $hours[$day] = ['closed' => true];
-
-                continue;
-            }
-
-            $open = $this->cleanTime($window['open'] ?? null);
-            $close = $this->cleanTime($window['close'] ?? null);
-
-            if ($open === null || $close === null || $open === $close) {
-                continue;
-            }
-
-            $hours[$day] = ['open' => $open, 'close' => $close];
-        }
-
-        return $hours === [] ? null : $hours;
-    }
-
-    /**
-     * `09:00-21:00`, `09:00–21:00` and `09:00 to 21:00` are all a curator's way
-     * of writing a window into one CSV cell.
-     */
-    private function parseTimeRange(string $value): ?array
-    {
-        if (preg_match(
-            '/\A(\d{1,2}:\d{2})\s*(?:-|–|to)\s*(\d{1,2}:\d{2})\z/i',
-            trim($value),
-            $match
-        ) !== 1) {
-            return null;
-        }
-
-        return ['open' => $match[1], 'close' => $match[2]];
-    }
 
     private function normalizeMinutes(mixed $value, ?string $type = null): int
     {

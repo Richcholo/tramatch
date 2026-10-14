@@ -24,6 +24,10 @@ use RuntimeException;
  *                                            |destination_id|note]
  *
  * There is deliberately no estimated_cost in that list. See costFor().
+ *
+ * Every catalogue read below goes through `ItineraryStop`: one preload per
+ * apply, one resolution per row. The editor never queries Destination or Place
+ * itself any more, so adding a stop kind touches the seam, not five methods.
  */
 class ItineraryEditor
 {
@@ -49,14 +53,17 @@ class ItineraryEditor
 
             $this->deleteRemovedStops($stored, $draft);
 
-            $destinations = $this->resolveDestinations(
+            [$destinations, $places] = ItineraryStop::preload($draft);
+
+            $this->resolveDestinations(
                 $user,
                 $stored,
-                $draft
+                $draft,
+                $destinations
             );
 
             foreach ($days as $day) {
-                $this->writeDay($day, $stored, $draft, $destinations);
+                $this->writeDay($day, $stored, $draft, $destinations, $places);
             }
 
             $this->refreshTotals($itinerary, $user);
@@ -80,7 +87,7 @@ class ItineraryEditor
     {
         $days = $itinerary->days()->get()->keyBy('id');
 
-        $destinations = $this->lookupDestinations($draft);
+        [$destinations, $places] = ItineraryStop::preload($draft);
 
         $result = [];
 
@@ -90,7 +97,14 @@ class ItineraryEditor
             foreach ($this->entriesForDay($day, $draft) as $entry) {
                 $stops[] = [
                     'id' => (int) $entry['key'],
-                    'duration' => $this->durationFor($entry, $destinations),
+                    'duration' => $this->durationFor(
+                        $entry,
+                        ItineraryStop::fromFields(
+                            $entry['fields'],
+                            $destinations,
+                            $places
+                        )
+                    ),
                 ];
             }
 
@@ -290,12 +304,14 @@ class ItineraryEditor
      * @param  Collection<int, ItineraryItem>  $stored
      * @param  array<int|string, array<string, mixed>>  $draft
      * @param  Collection<int, Destination>  $destinations
+     * @param  Collection<int, \App\Models\Place>  $places
      */
     private function writeDay(
         ItineraryDay $day,
         Collection $stored,
         array $draft,
-        Collection $destinations
+        Collection $destinations,
+        Collection $places
     ): void {
         $placed = [];
         $previousEnd = null;
@@ -303,9 +319,8 @@ class ItineraryEditor
         foreach ($this->entriesForDay($day, $draft) as $position => $entry) {
             $key = (int) $entry['key'];
             $fields = $entry['fields'];
-            $destination = $destinations->get(
-                (int) ($fields['destination_id'] ?? 0)
-            );
+            $stop = ItineraryStop::fromFields($fields, $destinations, $places);
+            $destination = $stop?->destination;
 
             $item = $key > 0 ? $stored->get($key) : null;
 
@@ -323,13 +338,10 @@ class ItineraryEditor
             // A stop with no usable window was added seconds ago and has not
             // been placed yet. Give it the next free slot so saving does not
             // dump it at 00:00.
-            if (($start === null || $end === null) && $destination) {
+            if (($start === null || $end === null) && $stop) {
                 $slot = ItinerarySchedule::nextSlot(
                     $placed,
-                    max(
-                        1,
-                        (int) ceil((float) $destination->recommended_minutes)
-                    )
+                    max(1, $stop->durationMinutes())
                 );
 
                 $start ??= ItinerarySchedule::parse($slot['start_time']);
@@ -339,6 +351,7 @@ class ItineraryEditor
             $attributes = [
                 'itinerary_day_id' => $day->id,
                 'destination_id' => $destination?->id,
+                'place_id' => $stop?->place?->id,
                 'sort_order' => $position + 1,
                 'start_time' => $start === null ? null : ItinerarySchedule::format($start),
                 'end_time' => $end === null ? null : ItinerarySchedule::format($end),
@@ -346,7 +359,7 @@ class ItineraryEditor
                     $previousEnd,
                     $start
                 ),
-                'estimated_cost' => $this->costFor($item, $destination),
+                'estimated_cost' => $this->costFor($item, $stop),
                 'note' => $this->noteFor($fields),
             ];
 
@@ -395,17 +408,20 @@ class ItineraryEditor
      * repeats one, so allowing it here would quietly double a cost and draw a
      * second pin on the map.
      *
+     * The catalogue rows arrive preloaded — see `ItineraryStop::preload()` —
+     * because this validates while `writeDay()` resolves, and two queries for
+     * the same rows would be the seam leaking.
+     *
      * @param  Collection<int, ItineraryItem>  $stored
      * @param  array<int|string, array<string, mixed>>  $draft
-     * @return Collection<int, Destination>
+     * @param  Collection<int, Destination>  $destinations
      */
     private function resolveDestinations(
         User $user,
         Collection $stored,
-        array $draft
-    ): Collection {
-        $destinations = $this->lookupDestinations($draft);
-
+        array $draft,
+        Collection $destinations
+    ): void {
         $liked = DestinationSwipe::query()
             ->where('user_id', $user->id)
             ->where('action', 'liked')
@@ -444,37 +460,15 @@ class ItineraryEditor
 
             $alreadyInItinerary->push($destinationId);
         }
-
-        return $destinations;
     }
 
     /**
-     * Every destination the draft mentions, whether stored or freshly added.
-     * Lookups only: nothing here is trusted, because this is also the path the
-     * reflow preview takes on a draft that has not been validated for saving.
+     * How long a reflowed stop runs: the window the traveller typed, falling
+     * back to the stop's own visit length.
      *
-     * @param  array<int|string, array<string, mixed>>  $draft
-     * @return Collection<int, Destination>
-     */
-    private function lookupDestinations(array $draft): Collection
-    {
-        $ids = collect($draft)
-            ->map(fn ($fields) => (int) ($fields['destination_id'] ?? 0))
-            ->filter(fn (int $id) => $id > 0)
-            ->unique()
-            ->values();
-
-        return Destination::query()
-            ->whereIn('id', $ids)
-            ->get()
-            ->keyBy('id');
-    }
-
-    /**
      * @param  array<string, mixed>  $entry
-     * @param  Collection<int, Destination>  $destinations
      */
-    private function durationFor(array $entry, Collection $destinations): int
+    private function durationFor(array $entry, ?ItineraryStop $stop): int
     {
         $fields = $entry['fields'];
 
@@ -487,32 +481,30 @@ class ItineraryEditor
             return $duration;
         }
 
-        $destination = $destinations->get(
-            (int) ($fields['destination_id'] ?? 0)
-        );
-
-        return max(
-            1,
-            (int) ceil((float) ($destination?->recommended_minutes ?? 60))
-        );
+        return max(1, $stop?->durationMinutes() ?? 60);
     }
 
     /**
      * A price is curated catalogue data, not something a traveller edits.
      *
      * A stored stop therefore keeps the figure it was generated with, and a
-     * stop the traveller just added takes the destination's own estimate. The
-     * posted value is ignored outright: there is no cost field in the form, and
+     * stop the traveller just added takes the stop's own snapshot. The posted
+     * value is ignored outright: there is no cost field in the form, and
      * honouring one anyway would let anyone rewrite a price by crafting a
      * request. Editing a time must not quietly restate what a place costs.
+     *
+     * The `?? 0` is the column talking, not the catalogue: `estimated_cost`
+     * cannot hold null today, so an unpriced stop stores 0 while the stop
+     * itself still reports unknown. Days 4-5 teach the totals to say the
+     * budget is incomplete instead.
      */
-    private function costFor(?ItineraryItem $item, ?Destination $destination): float
+    private function costFor(?ItineraryItem $item, ?ItineraryStop $stop): float
     {
         if ($item) {
             return round((float) $item->estimated_cost, 2);
         }
 
-        return round((float) ($destination?->estimated_cost ?? 0), 2);
+        return round($stop?->snapshotCost() ?? 0, 2);
     }
 
     /**
