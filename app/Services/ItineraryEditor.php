@@ -55,20 +55,31 @@ class ItineraryEditor
 
             [$destinations, $places] = ItineraryStop::preload($draft);
 
-            $this->resolveDestinations(
+            $this->resolveNewStops(
+                $itinerary,
                 $user,
                 $stored,
                 $draft,
-                $destinations
+                $destinations,
+                $places
             );
 
+            // Overnight stays charge once per trip, not once per night they
+            // appear: the first occurrence in draft order carries the price and
+            // every repeat stores 0. Seeded before any day is written so a
+            // repeat processed on day one still finds the original.
+            $chargedLodging = $stored
+                ->filter(fn (ItineraryItem $item) => $item->isLodging() && $item->place_id)
+                ->map(fn (ItineraryItem $item) => (int) $item->place_id)
+                ->all();
+
             foreach ($days as $day) {
-                $this->writeDay($day, $stored, $draft, $destinations, $places);
+                $this->writeDay($day, $stored, $draft, $destinations, $places, $chargedLodging);
             }
 
             $this->refreshTotals($itinerary, $user);
 
-            return $itinerary->load('days.items.destination');
+            return $itinerary->load('days.items.destination', 'days.items.place');
         });
     }
 
@@ -305,13 +316,18 @@ class ItineraryEditor
      * @param  array<int|string, array<string, mixed>>  $draft
      * @param  Collection<int, Destination>  $destinations
      * @param  Collection<int, \App\Models\Place>  $places
+     * @param  array<int, int>  $chargedLodging  place ids already carrying a
+     *     price on this trip, shared by reference across every day so the
+     *     second night at the same hotel stores 0 rather than a second room
+     *     charge. See apply().
      */
     private function writeDay(
         ItineraryDay $day,
         Collection $stored,
         array $draft,
         Collection $destinations,
-        Collection $places
+        Collection $places,
+        array &$chargedLodging
     ): void {
         $placed = [];
         $previousEnd = null;
@@ -350,8 +366,15 @@ class ItineraryEditor
 
             $attributes = [
                 'itinerary_day_id' => $day->id,
+                'item_type' => $item?->item_type
+                    ?? $stop?->kind
+                    ?? ItineraryItem::TYPE_ATTRACTION,
                 'destination_id' => $destination?->id,
                 'place_id' => $stop?->place?->id,
+                'custom_name' => $this->customText($fields['custom_name'] ?? null, 150),
+                'custom_address' => $this->customText($fields['custom_address'] ?? null, 255),
+                'custom_latitude' => $this->customCoordinate($fields['custom_latitude'] ?? null),
+                'custom_longitude' => $this->customCoordinate($fields['custom_longitude'] ?? null),
                 'sort_order' => $position + 1,
                 'start_time' => $start === null ? null : ItinerarySchedule::format($start),
                 'end_time' => $end === null ? null : ItinerarySchedule::format($end),
@@ -359,13 +382,13 @@ class ItineraryEditor
                     $previousEnd,
                     $start
                 ),
-                'estimated_cost' => $this->costFor($item, $stop),
+                'estimated_cost' => $this->costFor($item, $stop, $chargedLodging),
                 'note' => $this->noteFor($fields),
             ];
 
             if ($item) {
                 $item->update($attributes);
-            } elseif ($destination) {
+            } elseif ($stop) {
                 $item = $day->items()->create($attributes);
             }
 
@@ -400,27 +423,41 @@ class ItineraryEditor
     }
 
     /**
-     * Look up every destination the draft touches.
+     * What a stop the traveller just added is allowed to be.
      *
-     * A stored stop keeps the destination it already had. A stop the traveller
-     * just added has to be an active destination they actually liked, and it
-     * cannot repeat a place the itinerary already visits: the generator never
-     * repeats one, so allowing it here would quietly double a cost and draw a
-     * second pin on the map.
+     * Stored rows skip this entirely: they were validated when they were new,
+     * and re-checking them on every save would refuse a trip its own history
+     * the moment a catalogue row changed. Only negative keys — stops that do
+     * not exist yet — are judged.
      *
-     * The catalogue rows arrive preloaded — see `ItineraryStop::preload()` —
-     * because this validates while `writeDay()` resolves, and two queries for
-     * the same rows would be the seam leaking.
+     *   attraction  active, liked while swiping, and not already on the trip.
+     *               The liked rule is what ties the editor to the discovery
+     *               deck: the picker and this check read the same swipes.
+     *   meal/lodging  active, in this trip's province, and not already stored
+     *               on it. There is no liked rule because places have no
+     *               swipes; the picker and this check read the same active rows
+     *               instead. The province rule is what ties a stop to the trip:
+     *               the generator only ever plans inside one province, so a
+     *               Batangas hotel on a Benguet trip is a nonsense the editor
+     *               must not create. Repeats inside one save are allowed — two
+     *               nights at one hotel, lunch twice at a favorite — while a
+     *               repeat of a stored stop is still a duplicate.
+     *   custom  the traveller's own booking. Always allowed — it is theirs,
+     *               not the catalogue's, and there is nothing to check it
+     *               against.
      *
      * @param  Collection<int, ItineraryItem>  $stored
      * @param  array<int|string, array<string, mixed>>  $draft
      * @param  Collection<int, Destination>  $destinations
+     * @param  Collection<int, \App\Models\Place>  $places
      */
-    private function resolveDestinations(
+    private function resolveNewStops(
+        Itinerary $itinerary,
         User $user,
         Collection $stored,
         array $draft,
-        Collection $destinations
+        Collection $destinations,
+        Collection $places
     ): void {
         $liked = DestinationSwipe::query()
             ->where('user_id', $user->id)
@@ -428,8 +465,13 @@ class ItineraryEditor
             ->pluck('destination_id')
             ->map(fn ($id) => (int) $id);
 
-        $alreadyInItinerary = $stored
+        $usedDestinations = $stored
             ->pluck('destination_id')
+            ->map(fn ($id) => (int) $id);
+
+        $usedPlaces = $stored
+            ->pluck('place_id')
+            ->filter(fn ($id) => $id !== null)
             ->map(fn ($id) => (int) $id);
 
         foreach ($draft as $key => $fields) {
@@ -437,29 +479,95 @@ class ItineraryEditor
                 continue;
             }
 
-            $destinationId = (int) ($fields['destination_id'] ?? 0);
-            $destination = $destinations->get($destinationId);
+            $fields = is_array($fields) ? $fields : [];
+            $stop = ItineraryStop::fromFields($fields, $destinations, $places);
 
-            if (! $destination || ! $destination->is_active) {
-                throw new RuntimeException(
-                    'One of the places you tried to add is no longer available.'
-                );
+            if ($stop && $stop->isAttraction()) {
+                $this->resolveNewDestination($stop, $liked, $usedDestinations);
+
+                continue;
             }
 
-            if (! $liked->contains($destinationId)) {
-                throw new RuntimeException(
-                    'You can only add places you liked while swiping.'
-                );
+            if ($stop && $stop->place) {
+                $this->resolveNewPlace($itinerary, $stop, $usedPlaces);
+
+                continue;
             }
 
-            if ($alreadyInItinerary->contains($destinationId)) {
-                throw new RuntimeException(
-                    $destination->name.' is already on this trip.'
-                );
-            }
-
-            $alreadyInItinerary->push($destinationId);
+            // Custom entries and rows pointing at catalogue rows that are gone
+            // need nothing: the former is the traveller's own, and the latter
+            // is rejected earlier by the request's exists rules.
         }
+    }
+
+    /**
+     * @param  Collection<int, int>  $liked
+     * @param  Collection<int, int>  $usedDestinations
+     */
+    private function resolveNewDestination(
+        ItineraryStop $stop,
+        Collection $liked,
+        Collection $usedDestinations
+    ): void {
+        $destination = $stop->destination;
+        $destinationId = (int) $destination?->id;
+
+        if (! $destination || ! $destination->is_active) {
+            throw new RuntimeException(
+                'One of the places you tried to add is no longer available.'
+            );
+        }
+
+        if (! $liked->contains($destinationId)) {
+            throw new RuntimeException(
+                'You can only add places you liked while swiping.'
+            );
+        }
+
+        if ($usedDestinations->contains($destinationId)) {
+            throw new RuntimeException(
+                $destination->name.' is already on this trip.'
+            );
+        }
+
+        $usedDestinations->push($destinationId);
+    }
+
+    /**
+     * @param  Collection<int, int>  $usedPlaces
+     */
+    private function resolveNewPlace(
+        Itinerary $itinerary,
+        ItineraryStop $stop,
+        Collection $usedPlaces
+    ): void {
+        $place = $stop->place;
+        $placeId = (int) $place?->id;
+
+        if (! $place || ! $place->is_active) {
+            throw new RuntimeException(
+                'One of the places you tried to add is no longer available.'
+            );
+        }
+
+        if ($place->province !== $itinerary->area) {
+            throw new RuntimeException(
+                $place->name.' is in '.$place->province.', not on this trip.'
+            );
+        }
+
+        if ($usedPlaces->contains($placeId)) {
+            throw new RuntimeException(
+                $place->name.' is already on this trip.'
+            );
+        }
+
+        // Deliberately NOT pushed: two new rows for the same hotel in one save
+        // are a multi-night stay, and the first night carries the charge while
+        // the repeats store 0 (see apply()). Refusing the second row would make
+        // a two-night stay unsavable. Stored rows are what this guards — they
+        // were seeded into $usedPlaces above, and a repeat of one of those is
+        // still a duplicate.
     }
 
     /**
@@ -497,11 +605,25 @@ class ItineraryEditor
      * cannot hold null today, so an unpriced stop stores 0 while the stop
      * itself still reports unknown. Days 4-5 teach the totals to say the
      * budget is incomplete instead.
+     *
+     * A second night at the same hotel stores 0: the first occurrence carries
+     * the room charge and repeats must not double it. `$chargedLodging` is the
+     * trip-wide record apply() seeds from the stored rows.
      */
-    private function costFor(?ItineraryItem $item, ?ItineraryStop $stop): float
+    private function costFor(?ItineraryItem $item, ?ItineraryStop $stop, array &$chargedLodging): float
     {
         if ($item) {
             return round((float) $item->estimated_cost, 2);
+        }
+
+        if ($stop && $stop->kind === ItineraryItem::TYPE_LODGING && $stop->place) {
+            $placeId = (int) $stop->place->id;
+
+            if (in_array($placeId, $chargedLodging, true)) {
+                return 0.0;
+            }
+
+            $chargedLodging[] = $placeId;
         }
 
         return round($stop?->snapshotCost() ?? 0, 2);
@@ -515,6 +637,55 @@ class ItineraryEditor
         $note = trim((string) ($fields['note'] ?? ''));
 
         return $note === '' ? null : $note;
+    }
+
+    /**
+     * Traveller-typed text for a custom stop: blank collapses to null so the
+     * column answers "nothing typed" rather than holding an empty string that
+     * reads as a name. Truncated to the column, because the request's max and
+     * the schema's varchar must agree and the schema wins.
+     */
+    private function customText(mixed $value, int $length): ?string
+    {
+        $text = trim((string) ($value ?? ''));
+
+        return $text === '' ? null : mb_substr($text, 0, $length);
+    }
+
+    /**
+     * A traveller-typed pin: numeric or nothing. The request already enforces
+     * the ranges; this only decides what reaches the column.
+     */
+    private function customCoordinate(mixed $value): ?float
+    {
+        return is_numeric($value) ? (float) $value : null;
+    }
+
+    /**
+     * How many stops on a saved trip have no price anyone verified.
+     *
+     * A custom entry is always unpriced — it is the traveller's own, and the
+     * catalogue has no figure for it. A meal or a hotel is unpriced when its
+     * place row carries no verified band. Attractions always carry their
+     * curated estimate. The header total sums stored figures, so this count
+     * is what stops "₱8,375" from reading as a complete answer when three of
+     * the stops were counted at zero.
+     */
+    public function countUnpricedStops(Itinerary $itinerary): int
+    {
+        return $itinerary->days()
+            ->with('items.place')
+            ->get()
+            ->pluck('items')
+            ->flatten()
+            ->filter(function (ItineraryItem $item): bool {
+                if ($item->isCustom()) {
+                    return true;
+                }
+
+                return $item->place && ! $item->place->hasVerifiedPrice();
+            })
+            ->count();
     }
 
     /**

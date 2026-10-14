@@ -155,6 +155,29 @@ class ItineraryItem extends Model
     }
 
     /**
+     * The words a trip page puts above this stop's name.
+     *
+     * One method rather than a ternary in every view that renders a stop,
+     * because the read view, the editor row and the add dialog all label one.
+     */
+    public function kindLabel(): string
+    {
+        if ($this->isMeal()) {
+            return 'Where to eat';
+        }
+
+        if ($this->isLodging()) {
+            return 'Where to stay';
+        }
+
+        if ($this->isCustom()) {
+            return 'Your stop';
+        }
+
+        return 'Attraction';
+    }
+
+    /**
      * The name to print for this stop.
      *
      * Every reader goes through here rather than reaching for

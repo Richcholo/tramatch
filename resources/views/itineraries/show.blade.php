@@ -15,14 +15,16 @@
     @php
         $mapPoints = $itinerary->days
             ->flatMap(function ($day) {
-                return $day->items->map(function ($item) use ($day) {
-                    return [
-                        'day' => $day->day_number,
-                        'name' => $item->destination->name,
-                        'lat' => $item->destination->latitude,
-                        'lng' => $item->destination->longitude,
-                    ];
-                });
+                return $day->items
+                    ->filter(fn ($item) => $item->hasKnownLocation())
+                    ->map(function ($item) use ($day) {
+                        return [
+                            'day' => $day->day_number,
+                            'name' => $item->placeName(),
+                            'lat' => $item->latitude(),
+                            'lng' => $item->longitude(),
+                        ];
+                    });
             })
             ->values()
             ->toArray();
@@ -54,6 +56,15 @@
                         · {{ $itinerary->match_score }}% average match
                         · ₱{{ number_format($itinerary->total_estimated_cost, 2) }}
                     </p>
+
+                    {{-- The total sums stored figures, and an unpriced stop stores
+                         0. Without this line ₱8,375 reads as a complete answer
+                         when three of the stops were counted at zero. --}}
+                    @if ($unpricedStops > 0)
+                        <p class="mt-2 text-sm font-semibold text-philippine-gold">
+                            {{ $unpricedStops }} stop(s) without a verified price — the total above is incomplete.
+                        </p>
+                    @endif
                 </div>
 
                 <div class="flex flex-wrap gap-3">
@@ -329,6 +340,13 @@
                             value=""
                         >
 
+                        <input type="hidden" name="items[__KEY__][item_type]" data-field="item-type" value="attraction">
+                        <input type="hidden" name="items[__KEY__][place_id]" data-field="place-id" value="">
+                        <input type="hidden" name="items[__KEY__][custom_name]" data-field="custom-name" value="">
+                        <input type="hidden" name="items[__KEY__][custom_address]" data-field="custom-address" value="">
+                        <input type="hidden" name="items[__KEY__][custom_latitude]" data-field="custom-latitude" value="">
+                        <input type="hidden" name="items[__KEY__][custom_longitude]" data-field="custom-longitude" value="">
+
                         <div class="flex gap-2">
                             <button
                                 type="button"
@@ -386,6 +404,10 @@
                                         <span class="absolute -left-[0.45rem] top-0 h-3 w-3 rounded-full bg-philippine-gold"></span>
 
                                         <p class="text-xs font-bold uppercase tracking-[0.18em] text-boracay-dark">
+                                            {{ $item->kindLabel() }}
+                                        </p>
+
+                                        <p class="mt-1 text-xs font-bold uppercase tracking-[0.18em] text-boracay-dark/70">
                                             @if ($item->start_time && $item->end_time)
                                                 {{ substr($item->start_time, 0, 5) }}
                                                 –
@@ -395,16 +417,32 @@
                                             @endif
                                         </p>
 
-                                        <a
-                                            href="{{ route('destinations.show', $item->destination) }}"
-                                            class="mt-2 block text-xl font-bold text-volcanic-teal hover:text-boracay-dark"
-                                        >
-                                            {{ $item->destination->name }}
-                                        </a>
+                                        {{-- Attractions link to their page. A meal,
+                                             a hotel or a custom entry has no page
+                                             here, so its name is text — a link
+                                             needs a destination, and inventing
+                                             one would be a dead control. --}}
+                                        @if ($item->isAttraction() && $item->destination)
+                                            <a
+                                                href="{{ route('destinations.show', $item->destination) }}"
+                                                class="mt-2 block text-xl font-bold text-volcanic-teal hover:text-boracay-dark"
+                                            >
+                                                {{ $item->placeName() }}
+                                            </a>
+                                        @else
+                                            <span class="mt-2 block text-xl font-bold text-volcanic-teal">
+                                                {{ $item->placeName() }}
+                                            </span>
+                                        @endif
 
                                         <p class="mt-2 text-sm text-benguet-charcoal/60">
-                                            {{ $item->destination->municipality }},
-                                            {{ $item->destination->province }}
+                                            @if ($item->isCustom())
+                                                {{ $item->custom_address ?: 'Your own stop' }}
+                                            @elseif ($item->place)
+                                                {{ $item->place->municipality }}, {{ $item->place->province }}
+                                            @elseif ($item->destination)
+                                                {{ $item->destination->municipality }}, {{ $item->destination->province }}
+                                            @endif
                                         </p>
 
                                         <div class="mt-3 flex flex-wrap gap-3 text-xs font-semibold text-benguet-charcoal/60">
@@ -527,12 +565,18 @@
                                         <input type="hidden" name="items[{{ $item->id }}][day_id]" data-field="day-id" value="{{ $day->id }}">
                                         <input type="hidden" name="items[{{ $item->id }}][sort_order]" data-field="sort-order" value="{{ $item->sort_order }}">
                                         <input type="hidden" name="items[{{ $item->id }}][destination_id]" data-field="destination-id" value="{{ $item->destination_id }}">
+                                        <input type="hidden" name="items[{{ $item->id }}][item_type]" data-field="item-type" value="{{ $item->item_type }}">
+                                        <input type="hidden" name="items[{{ $item->id }}][place_id]" data-field="place-id" value="{{ $item->place_id }}">
+                                        <input type="hidden" name="items[{{ $item->id }}][custom_name]" data-field="custom-name" value="{{ $item->custom_name }}">
+                                        <input type="hidden" name="items[{{ $item->id }}][custom_address]" data-field="custom-address" value="{{ $item->custom_address }}">
+                                        <input type="hidden" name="items[{{ $item->id }}][custom_latitude]" data-field="custom-latitude" value="{{ $item->custom_latitude }}">
+                                        <input type="hidden" name="items[{{ $item->id }}][custom_longitude]" data-field="custom-longitude" value="{{ $item->custom_longitude }}">
 
                                         <div class="flex items-start gap-3">
                                             <button
                                                 type="button"
                                                 data-drag-handle
-                                                aria-label="Drag to reorder {{ $item->destination->name }}"
+                                                aria-label="Drag to reorder {{ $item->placeName() }}"
                                                 class="mt-1 shrink-0 cursor-grab touch-none rounded-md p-2 text-benguet-charcoal/40 transition hover:bg-boracay-light hover:text-volcanic-teal active:cursor-grabbing"
                                             >
                                                 <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -547,13 +591,22 @@
 
                                             <div class="min-w-0 flex-1">
                                                 <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                                                    <a
-                                                        data-stop-name
-                                                        href="{{ route('destinations.show', $item->destination) }}"
-                                                        class="text-lg font-bold text-volcanic-teal hover:text-boracay-dark"
-                                                    >
-                                                        {{ $item->destination->name }}
-                                                    </a>
+                                                    @if ($item->isAttraction() && $item->destination)
+                                                        <a
+                                                            data-stop-name
+                                                            href="{{ route('destinations.show', $item->destination) }}"
+                                                            class="text-lg font-bold text-volcanic-teal hover:text-boracay-dark"
+                                                        >
+                                                            {{ $item->placeName() }}
+                                                        </a>
+                                                    @else
+                                                        <span
+                                                            data-stop-name
+                                                            class="text-lg font-bold text-volcanic-teal"
+                                                        >
+                                                            {{ $item->placeName() }}
+                                                        </span>
+                                                    @endif
 
                                                     <span data-stop-cost class="text-xs font-semibold text-benguet-charcoal/60">
                                                         ₱{{ number_format($item->estimated_cost, 2) }}
@@ -561,8 +614,13 @@
                                                 </div>
 
                                                 <p data-stop-place class="mt-1 text-xs text-benguet-charcoal/55">
-                                                    {{ $item->destination->municipality }},
-                                                    {{ $item->destination->province }}
+                                                    @if ($item->isCustom())
+                                                        {{ $item->custom_address ?: 'Your own stop' }}
+                                                    @elseif ($item->place)
+                                                        {{ $item->place->municipality }}, {{ $item->place->province }}
+                                                    @elseif ($item->destination)
+                                                        {{ $item->destination->municipality }}, {{ $item->destination->province }}
+                                                    @endif
                                                 </p>
                                             </div>
                                         </div>
@@ -613,7 +671,7 @@
                                             <button
                                                 type="button"
                                                 data-move="up"
-                                                aria-label="Move {{ $item->destination->name }} earlier"
+                                                aria-label="Move {{ $item->placeName() }} earlier"
                                                 class="inline-flex h-11 w-11 items-center justify-center rounded-md border border-boracay-light text-benguet-charcoal/70 transition hover:bg-boracay-light disabled:cursor-not-allowed disabled:opacity-30"
                                             >
                                                 <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
@@ -624,7 +682,7 @@
                                             <button
                                                 type="button"
                                                 data-move="down"
-                                                aria-label="Move {{ $item->destination->name }} later"
+                                                aria-label="Move {{ $item->placeName() }} later"
                                                 class="inline-flex h-11 w-11 items-center justify-center rounded-md border border-boracay-light text-benguet-charcoal/70 transition hover:bg-boracay-light disabled:cursor-not-allowed disabled:opacity-30"
                                             >
                                                 <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
@@ -732,7 +790,12 @@
                     </div>
 
                     <div class="min-h-0 flex-1 overflow-y-auto p-6">
-                        @forelse ($addableDestinations as $destination)
+                        <p class="text-xs font-bold uppercase tracking-[0.2em] text-benguet-charcoal/55">
+                            Attractions you liked
+                        </p>
+
+                        <div class="mt-2">
+                            @forelse ($addableDestinations as $destination)
                             <label class="flex cursor-pointer items-start gap-3 rounded-lg border border-transparent px-3 py-3 transition hover:border-boracay-light hover:bg-white has-checked:border-boracay has-checked:bg-white">
                                 <input
                                     type="checkbox"
@@ -760,6 +823,115 @@
                                 Every place you liked is already on this trip. Swipe a few more in Discover to add somewhere new.
                             </p>
                         @endforelse
+                        </div>
+
+                        {{-- Food and lodging in this trip's province. No liked
+                             rule: places have no swipes, so the picker lists
+                             active rows the same way the editor accepts them. --}}
+                        <p class="mt-6 text-xs font-bold uppercase tracking-[0.2em] text-benguet-charcoal/55">
+                            Where to eat and stay
+                        </p>
+
+                        <div class="mt-2">
+                            @forelse ($addablePlaces as $place)
+                                <label class="flex cursor-pointer items-start gap-3 rounded-lg border border-transparent px-3 py-3 transition hover:border-boracay-light hover:bg-white has-checked:border-boracay has-checked:bg-white">
+                                    <input
+                                        type="checkbox"
+                                        data-place="{{ $place->id }}"
+                                        data-kind="{{ $place->isLodging() ? 'lodging' : 'meal' }}"
+                                        data-name="{{ $place->name }}"
+                                        data-place-label="{{ $place->municipality }}, {{ $place->province }}"
+                                        data-fee="{{ $place->priceLabel() }}"
+                                        data-url="{{ $place->source_url }}"
+                                        class="mt-1 h-5 w-5 shrink-0 accent-boracay"
+                                    >
+
+                                    <span class="min-w-0 flex-1">
+                                        <span class="block font-bold text-volcanic-teal">{{ $place->name }}</span>
+                                        <span class="mt-0.5 block text-sm text-benguet-charcoal/60">
+                                            {{ $place->typeLabel() }} · {{ $place->municipality }}, {{ $place->province }}
+                                        </span>
+                                    </span>
+
+                                    <span class="shrink-0 text-sm font-semibold text-benguet-charcoal/70">
+                                        {{ $place->priceLabel() }}
+                                    </span>
+                                </label>
+                            @empty
+                                <p class="rounded-lg bg-white p-6 text-sm leading-6 text-benguet-charcoal/70">
+                                    Nothing curated here yet. Add your own booking below instead.
+                                </p>
+                            @endforelse
+                        </div>
+
+                        {{-- The traveller's own booking: a hotel already
+                             reserved, a restaurant someone recommended. It has
+                             no catalogue row, so it is typed here rather than
+                             picked — and it posts the same draft shape under a
+                             browser-invented key. --}}
+                        <div class="mt-6 rounded-lg border border-boracay-light bg-white p-4">
+                            <p class="text-xs font-bold uppercase tracking-[0.2em] text-benguet-charcoal/55">
+                                Your own stop
+                            </p>
+
+                            <div class="mt-3 grid gap-3 sm:grid-cols-2">
+                                <label class="block sm:col-span-2">
+                                    <span class="text-xs font-semibold text-benguet-charcoal/60">Place name *</span>
+                                    <input
+                                        type="text"
+                                        maxlength="150"
+                                        data-custom-name
+                                        placeholder="The hotel you already booked"
+                                        class="mt-1 block min-h-11 w-full rounded-md border border-boracay-light bg-palawan-sand px-3 py-2 text-sm"
+                                    >
+                                </label>
+
+                                <label class="block sm:col-span-2">
+                                    <span class="text-xs font-semibold text-benguet-charcoal/60">Address</span>
+                                    <input
+                                        type="text"
+                                        maxlength="255"
+                                        data-custom-address
+                                        placeholder="Street, town"
+                                        class="mt-1 block min-h-11 w-full rounded-md border border-boracay-light bg-palawan-sand px-3 py-2 text-sm"
+                                    >
+                                </label>
+
+                                <p class="text-xs text-benguet-charcoal/55 sm:col-span-2">
+                                    Without a map pin this stop cannot be routed to — the leg will say so rather than guess.
+                                </p>
+
+                                <label class="block">
+                                    <span class="text-xs font-semibold text-benguet-charcoal/60">Latitude</span>
+                                    <input
+                                        type="number"
+                                        step="any"
+                                        data-custom-latitude
+                                        placeholder="16.4120"
+                                        class="mt-1 block min-h-11 w-full rounded-md border border-boracay-light bg-palawan-sand px-3 py-2 text-sm"
+                                    >
+                                </label>
+
+                                <label class="block">
+                                    <span class="text-xs font-semibold text-benguet-charcoal/60">Longitude</span>
+                                    <input
+                                        type="number"
+                                        step="any"
+                                        data-custom-longitude
+                                        placeholder="120.5960"
+                                        class="mt-1 block min-h-11 w-full rounded-md border border-boracay-light bg-palawan-sand px-3 py-2 text-sm"
+                                    >
+                                </label>
+                            </div>
+
+                            <button
+                                type="button"
+                                data-add-custom
+                                class="mt-4 inline-flex min-h-11 items-center justify-center rounded-md border border-boracay px-4 py-2 text-sm font-semibold text-boracay-dark transition hover:bg-boracay-light"
+                            >
+                                Add this stop
+                            </button>
+                        </div>
                     </div>
 
                     <div class="flex flex-wrap items-center justify-between gap-3 border-t border-boracay-light p-6">

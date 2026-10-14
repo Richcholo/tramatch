@@ -1262,12 +1262,16 @@ database and never from the model's reply.
 
 #### What is NOT verified yet
 
-**Nothing here has been clicked in a browser or rendered on a page.** No
-`places` row exists, no admin screen manages one, no picker offers one, and the
-itinerary still renders only attractions. The models and the schema are
-exercised by `tests/Feature/PlacesCatalogueTest.php` (31) against SQLite and
-against a throwaway **MySQL** database, because the two disagree about dropping a
-column in a foreign key and about nullability introspection.
+**Nothing here has been clicked in a browser or rendered on a page except by
+the suite.** The admin manages 36 researched places, and the itinerary renders
+meals, hotels and custom entries through the editor — but no hand has dragged a
+meal row, opened the custom-stop form, or watched the incomplete-total notice
+appear. The models, the schema and the markup contracts are exercised by
+`tests/Feature/PlacesCatalogueTest.php` (31),
+`tests/Feature/ItineraryEditingTest.php` (60+) and
+`tests/Feature/ItineraryStopTest.php` against SQLite, with the schema also
+proven against a throwaway **MySQL** database, because the two disagree about
+dropping a column in a foreign key and about nullability introspection.
 
 #### The places catalogue (36 rows, 2026-10-14)
 
@@ -2499,6 +2503,21 @@ the runtime never executes it.
   `--no-dev` composer step *removes* dev packages rather than skipping them, so
   running it on a developer machine deletes PHPUnit out from under the test
   suite. Verified by accident once already.
+- **The itinerary expansion (Days 1-5) adds nothing the host cannot already
+  run.** Verified, not assumed: no new PHP extension (no GD/Imagick, no new
+  composer package), no `exec()`/`symlink()`/shell-out anywhere in the new
+  code, no new migration since Day 1's three (all MySQL-checked), no JS/CSS
+  change (so no `npm run build` needed), no new queue job or cron entry, and
+  every new config key degrades to a safe default under `config:cache`. A
+  standard `deploy.sh` run carries it.
+- **Catalogue data does NOT arrive with `migrate`.** Both seed CSVs are tracked
+  in git, but `deploy.sh` runs `migrate --force`, never `db:seed`. After the
+  first deploy carrying the expansion, run once over SSH (both are idempotent
+  on slug, so re-running is safe):
+  `php artisan db:seed --class=LuzonLocationsCsvSeeder --force` (100
+  destinations) and `php artisan db:seed --class=PlacesCsvSeeder --force`
+  (36 places). Skipping this leaves the new tables empty with no error
+  anywhere — the app renders "nothing planned" states, not failures.
 - **The queue worker is `deploy/queue-worker.sh`, registered as an hPanel cron
   job every minute.** Shared hosting will not run `queue:work` as a daemon.
   Without a worker, `/admin/sources` queues crawls that nobody picks up and the

@@ -8,6 +8,7 @@ use App\Models\Destination;
 use App\Models\DestinationSwipe;
 use App\Models\Itinerary;
 use App\Models\ItineraryDay;
+use App\Models\Place;
 use App\Services\ItineraryEditor;
 use App\Services\ItineraryGenerator;
 use App\Services\Pdf\ItineraryPdf;
@@ -216,15 +217,17 @@ class ItineraryController extends Controller
             ->with('status', 'Your itinerary was generated.');
     }
 
-    public function show(Itinerary $itinerary): View
+    public function show(Itinerary $itinerary, ItineraryEditor $editor): View
     {
         $this->ensureOwner($itinerary);
 
-        $itinerary->load('days.items.destination');
+        $itinerary->load('days.items.destination', 'days.items.place');
 
         return view('itineraries.show', [
             'itinerary' => $itinerary,
             'addableDestinations' => $this->addableDestinations($itinerary),
+            'addablePlaces' => $this->addablePlaces($itinerary),
+            'unpricedStops' => $editor->countUnpricedStops($itinerary),
         ]);
     }
 
@@ -310,6 +313,35 @@ class ItineraryController extends Controller
                 $inItinerary->isNotEmpty(),
                 fn ($query) => $query->whereNotIn('id', $inItinerary)
             )
+            ->orderBy('name')
+            ->get();
+    }
+
+    /**
+     * Food and lodging in this trip's province that it does not visit yet.
+     *
+     * No liked rule: places have no swipes, so the picker and the editor rule
+     * agree on active plus in-province instead. `ItineraryEditor` validates
+     * additions against the same scope, for the same reason the destinations
+     * picker reads the swipes the editor checks.
+     */
+    private function addablePlaces(Itinerary $itinerary): Collection
+    {
+        $inItinerary = $itinerary->days
+            ->pluck('items')
+            ->flatten()
+            ->pluck('place_id')
+            ->filter(fn ($id) => $id !== null)
+            ->map(fn ($id) => (int) $id);
+
+        return Place::query()
+            ->where('is_active', true)
+            ->where('province', $itinerary->area)
+            ->when(
+                $inItinerary->isNotEmpty(),
+                fn ($query) => $query->whereNotIn('id', $inItinerary)
+            )
+            ->orderBy('type')
             ->orderBy('name')
             ->get();
     }

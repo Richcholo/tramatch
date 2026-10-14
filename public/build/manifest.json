@@ -20,7 +20,7 @@
     "src": "node_modules/leaflet/dist/images/marker-shadow.png"
   },
   "resources/css/app.css": {
-    "file": "assets/app-CphyIb0q.css",
+    "file": "assets/app-BbUsfQjH.css",
     "name": "app",
     "names": [
       "app.css"
@@ -55,7 +55,7 @@
     "isEntry": true
   },
   "resources/js/itinerary-editor.js": {
-    "file": "assets/itinerary-editor-0TzAW_gL.js",
+    "file": "assets/itinerary-editor-D321E93G.js",
     "name": "itinerary-editor",
     "src": "resources/js/itinerary-editor.js",
     "isEntry": true

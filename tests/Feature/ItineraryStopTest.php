@@ -148,6 +148,35 @@ class ItineraryStopTest extends TestCase
         $this->assertSame($item->fresh()->longitude(), $stop->longitude());
     }
 
+    public function test_kind_labels_read_the_same_in_every_view(): void
+    {
+        $this->assertSame('Attraction', $this->item()->kindLabel());
+
+        $meal = $this->item([
+            'item_type' => ItineraryItem::TYPE_MEAL,
+            'destination_id' => null,
+            'place_id' => $this->place()->id,
+        ]);
+
+        $this->assertSame('Where to eat', $meal->kindLabel());
+
+        $hotel = $this->item([
+            'item_type' => ItineraryItem::TYPE_LODGING,
+            'destination_id' => null,
+            'place_id' => $this->place(['type' => Place::TYPE_LODGING])->id,
+        ]);
+
+        $this->assertSame('Where to stay', $hotel->kindLabel());
+
+        $custom = $this->item([
+            'item_type' => ItineraryItem::TYPE_CUSTOM,
+            'destination_id' => null,
+            'custom_name' => 'Ours',
+        ]);
+
+        $this->assertSame('Your stop', $custom->kindLabel());
+    }
+
     public function test_a_stored_item_whose_place_is_gone_resolves_to_nothing(): void
     {
         $place = $this->place();

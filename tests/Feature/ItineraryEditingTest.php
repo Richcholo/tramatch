@@ -6,6 +6,7 @@ use App\Models\Destination;
 use App\Models\DestinationSwipe;
 use App\Models\Itinerary;
 use App\Models\ItineraryItem;
+use App\Models\Place;
 use App\Models\Tag;
 use App\Models\TravelProfile;
 use App\Models\User;
@@ -1710,5 +1711,431 @@ public function test_the_editor_itself_ignores_a_cost_in_the_draft(): void
             $xpath->query('//form//form')->length,
             'a form is nested inside another, which makes the browser submit to the wrong endpoint'
         );
+    }
+
+    /**
+     * A restaurant in this file's fixtures. Laguna, so it passes the
+     * same-province rule on the trips built here; pass a province to test the
+     * refusal instead.
+     */
+    private function place(array $overrides = []): Place
+    {
+        static $sequence = 0;
+
+        $sequence++;
+
+        return Place::create(array_merge([
+            'name' => 'Editorial Eatery '.$sequence,
+            'slug' => 'editorial-eatery-'.$sequence,
+            'type' => Place::TYPE_FOOD,
+            'province' => 'Laguna',
+            'municipality' => 'San Pablo City',
+            'latitude' => 14.06,
+            'longitude' => 121.32,
+            'budget_level' => 'economy',
+            'price_min' => 300,
+            'price_max' => 300,
+            'price_basis' => Place::PRICE_PER_PERSON_MEAL,
+            'recommended_minutes' => 60,
+            'source_url' => 'https://example.test/editorial-'.$sequence,
+        ], $overrides));
+    }
+
+    /**
+     * A new meal row the way the add dialog posts it: a browser-invented key,
+     * an item type, a place, and an empty destination the form always sends.
+     */
+    private function mealRow(int $dayId, int $placeId, int $sortOrder = 2): array
+    {
+        return [
+            'day_id' => $dayId,
+            'sort_order' => $sortOrder,
+            'item_type' => 'meal',
+            'destination_id' => null,
+            'place_id' => $placeId,
+            'custom_name' => null,
+            'custom_address' => null,
+            'custom_latitude' => null,
+            'custom_longitude' => null,
+            'start_time' => null,
+            'end_time' => null,
+        ];
+    }
+
+    public function test_a_meal_can_be_added_to_a_day(): void
+    {
+        $itinerary = $this->generateItinerary('alpha');
+        $day = $itinerary->days->first();
+        $item = $day->items->first();
+        $place = $this->place();
+
+        $this->actingAs($this->user)
+            ->patch(route('itineraries.update', $itinerary), [
+                'items' => [
+                    $item->id => $this->row($item),
+                    '-1' => $this->mealRow($day->id, $place->id),
+                ],
+            ])
+            ->assertRedirect(route('itineraries.show', $itinerary));
+
+        $meal = $itinerary->fresh()->days->first()->items()
+            ->where('place_id', $place->id)
+            ->firstOrFail();
+
+        $this->assertSame('meal', $meal->item_type);
+        $this->assertNull($meal->destination_id);
+        // The middle of the ₱300–₱300 band.
+        $this->assertSame(300.0, (float) $meal->estimated_cost);
+    }
+
+    public function test_a_second_night_at_the_same_hotel_stores_zero(): void
+    {
+        $itinerary = $this->tripOfDays(2, ['alpha']);
+
+        $hotel = $this->place([
+            'name' => 'Two Night Hotel',
+            'type' => Place::TYPE_LODGING,
+            'price_min' => 4500,
+            'price_max' => 4500,
+            'price_basis' => Place::PRICE_PER_ROOM_NIGHT,
+            'recommended_minutes' => 0,
+        ]);
+
+        $days = $itinerary->fresh()->days;
+        $item = $days->first()->items->first();
+
+        $this->actingAs($this->user)
+            ->patch(route('itineraries.update', $itinerary), [
+                'items' => [
+                    $item->id => $this->row($item),
+                    '-1' => array_merge(
+                        $this->mealRow($days[0]->id, $hotel->id),
+                        ['item_type' => 'lodging']
+                    ),
+                    '-2' => array_merge(
+                        $this->mealRow($days[1]->id, $hotel->id),
+                        ['item_type' => 'lodging']
+                    ),
+                ],
+            ])
+            ->assertRedirect(route('itineraries.show', $itinerary));
+
+        $stays = $itinerary->fresh()->days
+            ->pluck('items')
+            ->flatten()
+            ->where('place_id', $hotel->id)
+            ->sortBy('id')
+            ->values();
+
+        $this->assertCount(2, $stays);
+        $this->assertSame(4500.0, (float) $stays[0]->estimated_cost);
+        // The room is charged once per trip, not once per night it appears.
+        $this->assertSame(0.0, (float) $stays[1]->estimated_cost);
+
+        // Alpha at ₱800 plus one room charge.
+        $this->assertSame(5300.0, (float) $itinerary->fresh()->total_estimated_cost);
+    }
+
+    public function test_a_custom_stop_is_saved_from_what_was_typed(): void
+    {
+        $itinerary = $this->generateItinerary('alpha');
+        $day = $itinerary->days->first();
+        $item = $day->items->first();
+
+        $this->actingAs($this->user)
+            ->patch(route('itineraries.update', $itinerary), [
+                'items' => [
+                    $item->id => $this->row($item),
+                    '-1' => [
+                        'day_id' => $day->id,
+                        'sort_order' => 2,
+                        'item_type' => 'custom',
+                        'destination_id' => null,
+                        'place_id' => null,
+                        'custom_name' => 'Our booking at the Lake Hotel',
+                        'custom_address' => 'Lakeside Road',
+                        'custom_latitude' => null,
+                        'custom_longitude' => null,
+                        'start_time' => null,
+                        'end_time' => null,
+                    ],
+                ],
+            ])
+            ->assertRedirect(route('itineraries.show', $itinerary));
+
+        $custom = $itinerary->fresh()->days->first()->items()
+            ->where('item_type', 'custom')
+            ->firstOrFail();
+
+        $this->assertSame('Our booking at the Lake Hotel', $custom->placeName());
+        $this->assertFalse($custom->hasKnownLocation());
+    }
+
+    public function test_a_stop_with_two_sources_is_rejected(): void
+    {
+        $itinerary = $this->generateItinerary('alpha');
+        $day = $itinerary->days->first();
+        $item = $day->items->first();
+        $place = $this->place();
+
+        $this->actingAs($this->user)
+            ->from(route('itineraries.show', $itinerary))
+            ->patch(route('itineraries.update', $itinerary), [
+                'items' => [
+                    $item->id => $this->row($item),
+                    '-1' => array_merge(
+                        $this->mealRow($day->id, $place->id),
+                        ['destination_id' => $this->destinations['bravo']->id]
+                    ),
+                ],
+            ])
+            ->assertSessionHasErrors('items');
+
+        $this->assertSame(1, $itinerary->fresh()->days->first()->items()->count());
+    }
+
+    public function test_a_stop_with_no_source_is_rejected(): void
+    {
+        $itinerary = $this->generateItinerary('alpha');
+        $day = $itinerary->days->first();
+        $item = $day->items->first();
+
+        $this->actingAs($this->user)
+            ->from(route('itineraries.show', $itinerary))
+            ->patch(route('itineraries.update', $itinerary), [
+                'items' => [
+                    $item->id => $this->row($item),
+                    '-1' => [
+                        'day_id' => $day->id,
+                        'sort_order' => 2,
+                        'destination_id' => null,
+                        'place_id' => null,
+                        'custom_name' => null,
+                        'start_time' => null,
+                        'end_time' => null,
+                    ],
+                ],
+            ])
+            ->assertSessionHasErrors('items');
+
+        $this->assertSame(1, $itinerary->fresh()->days->first()->items()->count());
+    }
+
+    public function test_a_place_outside_the_trip_province_is_refused(): void
+    {
+        $itinerary = $this->generateItinerary('alpha');
+        $day = $itinerary->days->first();
+        $item = $day->items->first();
+        $far = $this->place(['province' => 'Benguet', 'name' => 'Faraway Kitchen']);
+
+        $this->actingAs($this->user)
+            ->from(route('itineraries.show', $itinerary))
+            ->patch(route('itineraries.update', $itinerary), [
+                'items' => [
+                    $item->id => $this->row($item),
+                    '-1' => $this->mealRow($day->id, $far->id),
+                ],
+            ])
+            ->assertSessionHasErrors('itinerary');
+
+        $this->assertSame(1, $itinerary->fresh()->days->first()->items()->count());
+    }
+
+    public function test_an_unpriced_stop_marks_the_header_total_incomplete(): void
+    {
+        $itinerary = $this->generateItinerary('alpha');
+        $day = $itinerary->days->first();
+        $item = $day->items->first();
+        $unpriced = $this->place([
+            'name' => 'Unpriced Kitchen',
+            'price_min' => null,
+            'price_max' => null,
+            'price_basis' => null,
+        ]);
+
+        $this->actingAs($this->user)
+            ->patch(route('itineraries.update', $itinerary), [
+                'items' => [
+                    $item->id => $this->row($item),
+                    '-1' => $this->mealRow($day->id, $unpriced->id),
+                ],
+            ])
+            ->assertRedirect(route('itineraries.show', $itinerary));
+
+        $this->actingAs($this->user)
+            ->get(route('itineraries.show', $itinerary))
+            ->assertOk()
+            ->assertSee('without a verified price', false)
+            ->assertSee('the total above is incomplete', false);
+    }
+
+    public function test_a_meal_reflows_alongside_attractions(): void
+    {
+        $itinerary = $this->generateItinerary('alpha');
+        $day = $itinerary->days->first();
+        $item = $day->items->first();
+        $place = $this->place();
+
+        $response = $this->actingAs($this->user)
+            ->postJson(route('itineraries.schedule', $itinerary), [
+                'items' => [
+                    $item->id => $this->row($item, [
+                        'start_time' => null,
+                        'end_time' => null,
+                    ]),
+                    '-1' => $this->mealRow($day->id, $place->id),
+                ],
+            ])
+            ->assertOk();
+
+        $slots = $response->json('days.'.(string) $day->id);
+
+        // Both rows laid out: the attraction on its 120 minutes and the meal
+        // on the place's 60, separated by the travel gap.
+        $this->assertCount(2, $slots);
+        $this->assertSame('08:00', $slots[$item->id]['start_time']);
+        $this->assertSame('10:00', $slots[$item->id]['end_time']);
+        $this->assertSame('10:45', $slots['-1']['start_time']);
+        $this->assertSame('11:45', $slots['-1']['end_time']);
+    }
+
+    public function test_the_add_dialog_offers_food_lodging_and_a_custom_form(): void
+    {
+        $itinerary = $this->generateItinerary('alpha');
+        $hotel = $this->place([
+            'name' => 'Dialog Hotel',
+            'type' => Place::TYPE_LODGING,
+        ]);
+
+        $html = $this->actingAs($this->user)
+            ->get(route('itineraries.show', $itinerary))
+            ->assertOk()
+            ->getContent();
+
+        $document = new DOMDocument();
+
+        @$document->loadHTML($html);
+
+        libxml_clear_errors();
+
+        $xpath = new DOMXPath($document);
+
+        $boxes = $xpath->query('//*[@data-place="'.$hotel->id.'"]');
+
+        $this->assertSame(1, $boxes->length, 'the hotel is missing from the add dialog');
+
+        $this->assertSame(
+            'lodging',
+            $boxes->item(0)->getAttribute('data-kind'),
+            'the dialog must say which kind of stop a place becomes'
+        );
+
+        foreach (['data-custom-name', 'data-custom-address', 'data-add-custom'] as $hook) {
+            $this->assertGreaterThan(
+                0,
+                $xpath->query('//*[@'.$hook.']')->length,
+                $hook.' is missing from the add dialog, so a custom stop cannot be typed'
+            );
+        }
+    }
+
+    /**
+     * Every rendered row and the row template expose the stop's identity to
+     * the script, the way the day-id binding already pins. A field the
+     * template forgets is a stop the browser cannot fully describe: the row
+     * saves, and the place silently becomes whatever the server defaults to.
+     */
+    public function test_every_rendered_row_exposes_its_stop_shape_to_the_script(): void
+    {
+        $itinerary = $this->generateItinerary('alpha');
+
+        $html = $this->actingAs($this->user)
+            ->get(route('itineraries.show', $itinerary))
+            ->assertOk()
+            ->getContent();
+
+        $document = new DOMDocument();
+
+        @$document->loadHTML($html);
+
+        libxml_clear_errors();
+
+        $xpath = new DOMXPath($document);
+
+        $rows = $xpath->query('//*[@data-stop][@data-key]');
+
+        $this->assertGreaterThan(0, $rows->length);
+
+        foreach ($rows as $row) {
+            foreach (['item-type', 'place-id', 'custom-name', 'custom-latitude', 'custom-longitude'] as $field) {
+                $this->assertGreaterThan(
+                    0,
+                    $xpath->query('.//*[@data-field="'.$field.'"]', $row)->length,
+                    'a rendered stop row is missing its '.$field.' field'
+                );
+            }
+        }
+
+        $template = $xpath->query('//*[@data-stop-template]')->item(0);
+
+        $this->assertNotNull($template, 'the row template is missing');
+
+        foreach (['item-type', 'place-id', 'custom-name'] as $field) {
+            $this->assertGreaterThan(
+                0,
+                $xpath->query('.//*[@data-field="'.$field.'"]', $template)->length,
+                'the row template is missing its '.$field.' field'
+            );
+        }
+    }
+
+    public function test_the_map_skips_a_stop_without_a_pin(): void
+    {
+        $itinerary = $this->generateItinerary('alpha');
+        $day = $itinerary->days->first();
+        $item = $day->items->first();
+
+        $this->actingAs($this->user)
+            ->patch(route('itineraries.update', $itinerary), [
+                'items' => [
+                    $item->id => $this->row($item),
+                    '-1' => [
+                        'day_id' => $day->id,
+                        'sort_order' => 2,
+                        'item_type' => 'custom',
+                        'destination_id' => null,
+                        'place_id' => null,
+                        'custom_name' => 'Pinless Stop',
+                        'custom_address' => 'Somewhere',
+                        'custom_latitude' => null,
+                        'custom_longitude' => null,
+                        'start_time' => null,
+                        'end_time' => null,
+                    ],
+                ],
+            ])
+            ->assertRedirect(route('itineraries.show', $itinerary));
+
+        $html = $this->actingAs($this->user)
+            ->get(route('itineraries.show', $itinerary))
+            ->assertOk()
+            ->getContent();
+
+        $document = new DOMDocument();
+
+        @$document->loadHTML($html);
+
+        libxml_clear_errors();
+
+        $xpath = new DOMXPath($document);
+        $map = $xpath->query('//*[@data-itinerary-points]')->item(0);
+
+        $this->assertNotNull($map, 'the map element is missing');
+
+        $points = json_decode($map->getAttribute('data-itinerary-points'), true);
+
+        $this->assertCount(1, $points, 'a stop with no pin must not get a map point');
+        $this->assertSame('Alpha Trail', $points[0]['name']);
+        $this->assertStringContainsString('Pinless Stop', $html, 'the pinless stop still renders as a stop');
     }
 }

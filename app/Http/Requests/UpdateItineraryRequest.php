@@ -19,6 +19,13 @@ use Illuminate\Validation\Rule;
  * There are no rules for estimated_cost because the editor cannot change a
  * price. ItineraryEditor::costFor() ignores any posted value, so adding a rule
  * here would validate a field whose value is discarded.
+ *
+ * A stop has exactly one source: a destination, a place, or the traveller's
+ * own entry. `destination_id` used to be required because attractions were the
+ * only shape; a meal without a destination would then fail validation for
+ * describing itself correctly. The one-source rule in `after()` is what keeps
+ * a crafted request from filing a stop against two catalogues at once — or
+ * against none, which would save a row nothing can render.
  */
 class UpdateItineraryRequest extends FormRequest
 {
@@ -61,9 +68,44 @@ class UpdateItineraryRequest extends FormRequest
             'items.*.end_time' => ['nullable', 'date_format:H:i'],
 
             'items.*.destination_id' => [
-                'required',
+                'nullable',
                 'integer',
                 'exists:destinations,id',
+            ],
+
+            'items.*.item_type' => [
+                'nullable',
+                Rule::in(ItineraryItem::TYPES),
+            ],
+
+            'items.*.place_id' => [
+                'nullable',
+                'integer',
+                'exists:places,id',
+            ],
+
+            'items.*.custom_name' => [
+                'nullable',
+                'string',
+                'max:150',
+            ],
+
+            'items.*.custom_address' => [
+                'nullable',
+                'string',
+                'max:255',
+            ],
+
+            'items.*.custom_latitude' => [
+                'nullable',
+                'numeric',
+                'between:-90,90',
+            ],
+
+            'items.*.custom_longitude' => [
+                'nullable',
+                'numeric',
+                'between:-180,180',
             ],
 
             'items.*.note' => ['nullable', 'string', 'max:500'],
@@ -78,6 +120,7 @@ class UpdateItineraryRequest extends FormRequest
         return [
             'items.*.day_id.in' => 'One of the days you edited does not belong to this trip.',
             'items.*.destination_id.exists' => 'One of the places you added is no longer available.',
+            'items.*.place_id.exists' => 'One of the places you added is no longer available.',
             'items.*.start_time.date_format' => 'Start times must look like 09:30.',
             'items.*.end_time.date_format' => 'End times must look like 11:45.',
         ];
@@ -92,6 +135,7 @@ class UpdateItineraryRequest extends FormRequest
             function (Validator $validator): void {
                 $this->validateItemKeys($validator);
                 $this->validateWindows($validator);
+                $this->validateOneSource($validator);
             },
         ];
     }
@@ -165,6 +209,53 @@ class UpdateItineraryRequest extends FormRequest
                 $validator->errors()->add(
                     'items',
                     'A stop cannot finish before it starts.'
+                );
+
+                return;
+            }
+        }
+    }
+
+    /**
+     * Each stop names exactly one thing.
+     *
+     * A destination plus a place on one row would save against the wrong
+     * catalogue on read, and neither on its own leaves a row no view can
+     * render — `placeName()` would fall through to "Place no longer in the
+     * catalogue" for a stop that was never in any catalogue. A custom entry
+     * is defined by its name: an address with no name is a pin with no label.
+     */
+    private function validateOneSource(Validator $validator): void
+    {
+        $items = $this->input('items', []);
+
+        if (! is_array($items)) {
+            return;
+        }
+
+        foreach ($items as $fields) {
+            if (! is_array($fields)) {
+                continue;
+            }
+
+            $sources = 0;
+
+            if ((int) ($fields['destination_id'] ?? 0) > 0) {
+                $sources++;
+            }
+
+            if ((int) ($fields['place_id'] ?? 0) > 0) {
+                $sources++;
+            }
+
+            if (trim((string) ($fields['custom_name'] ?? '')) !== '') {
+                $sources++;
+            }
+
+            if ($sources !== 1) {
+                $validator->errors()->add(
+                    'items',
+                    'Each stop needs exactly one of a destination, a place, or your own entry.'
                 );
 
                 return;

@@ -293,12 +293,23 @@ function initItineraryEditor(root) {
 
     /* ----------------------------------------------------------------- add */
 
-    function addStop(destinationId, dayId) {
+    /**
+     * Add one stop to a day from the dialog.
+     *
+     * `selection` is one of three shapes, matching the three things a stop can
+     * be: { kind: 'destination', id, name, place, fee, url },
+     * { kind: 'place', id, itemType, name, place, fee, url }, or
+     * { kind: 'custom', name, place, fee, custom: { name, address, latitude,
+     * longitude } }. The hidden inputs carry the shape the server validates —
+     * names underscored, data-fields hyphenated, exactly like the rows the
+     * page shipped with — so a stop added here posts a payload the request
+     * reads the same way.
+     */
+    function addStop(selection, dayId) {
         const template = root.querySelector('[data-stop-template]');
         const list = editView.querySelector(`[data-stop-list][data-day-id="${dayId}"]`);
-        const checkbox = dialog.querySelector(`[data-destination="${destinationId}"]`);
 
-        if (!template || !list || !checkbox) {
+        if (!template || !list) {
             return;
         }
 
@@ -315,7 +326,6 @@ function initItineraryEditor(root) {
         const field = (name) => row.querySelector(`[data-field="${name}"]`);
 
         field('day-id').value = dayId;
-        field('destination-id').value = destinationId;
         field('sort-order').value = String(list.querySelectorAll('[data-stop]').length + 1);
         field('start-time').value = '';
         field('end-time').value = '';
@@ -323,18 +333,46 @@ function initItineraryEditor(root) {
 
         const link = row.querySelector('[data-stop-name]');
 
-        link.textContent = checkbox.dataset.name;
-        link.href = checkbox.dataset.url;
-        row.querySelector('[data-stop-place]').textContent = checkbox.dataset.place;
-        row.querySelector('[data-stop-cost]').textContent = checkbox.dataset.fee;
-        row.querySelector('[data-remove]').setAttribute('aria-label', `Remove ${checkbox.dataset.name}`);
+        if (selection.kind === 'place') {
+            field('item-type').value = selection.itemType;
+            field('destination-id').value = '';
+            field('place-id').value = selection.id;
+            link.textContent = selection.name;
+            link.href = selection.url;
+        } else if (selection.kind === 'custom') {
+            // The traveller's own entry has no page anywhere, so the row's
+            // name becomes text rather than a link. A link needs somewhere to
+            // go, and there is nowhere.
+            field('item-type').value = 'custom';
+            field('destination-id').value = '';
+            field('custom-name').value = selection.custom.name;
+            field('custom-address').value = selection.custom.address;
+            field('custom-latitude').value = selection.custom.latitude;
+            field('custom-longitude').value = selection.custom.longitude;
+
+            const label = document.createElement('span');
+
+            label.dataset.stopName = '';
+            label.className = link.className;
+            label.textContent = selection.name;
+            link.replaceWith(label);
+        } else {
+            field('item-type').value = 'attraction';
+            field('destination-id').value = selection.id;
+            link.textContent = selection.name;
+            link.href = selection.url;
+        }
+
+        row.querySelector('[data-stop-place]').textContent = selection.place;
+        row.querySelector('[data-stop-cost]').textContent = selection.fee;
+        row.querySelector('[data-remove]').setAttribute('aria-label', `Remove ${selection.name}`);
 
         for (const [label, verb] of [
             ['[data-drag-handle]', 'Drag to reorder'],
             ['[data-move="up"]', 'Move earlier'],
             ['[data-move="down"]', 'Move later'],
         ]) {
-            row.querySelector(label).setAttribute('aria-label', `${verb} ${checkbox.dataset.name}`);
+            row.querySelector(label).setAttribute('aria-label', `${verb} ${selection.name}`);
         }
 
         list.appendChild(row);
@@ -595,9 +633,17 @@ function initItineraryEditor(root) {
         // Clear the last batch too, otherwise reopening the dialog still shows
         // it ticked, the count still reads it, and confirming silently adds
         // the same place a second time to whichever day is now chosen.
-        dialog.querySelectorAll('[data-destination]').forEach((box) => {
+        dialog.querySelectorAll('[data-destination], [data-place]').forEach((box) => {
             box.checked = false;
         });
+
+        // The custom form is not a checkbox and is never counted, but it holds
+        // the last typed entry the same way — clear it or reopening offers to
+        // add the same booking twice.
+        dialog.querySelector('[data-custom-name]').value = '';
+        dialog.querySelector('[data-custom-address]').value = '';
+        dialog.querySelector('[data-custom-latitude]').value = '';
+        dialog.querySelector('[data-custom-longitude]').value = '';
         dialog.querySelector('[data-add-count]').textContent = '0';
         dialog.querySelector('[data-add-confirm]').disabled = true;
 
@@ -610,8 +656,8 @@ function initItineraryEditor(root) {
     }
 
     dialog.addEventListener('change', (event) => {
-        if (event.target.matches('[data-destination]')) {
-            const picked = dialog.querySelectorAll('[data-destination]:checked');
+        if (event.target.matches('[data-destination], [data-place]')) {
+            const picked = dialog.querySelectorAll('[data-destination]:checked, [data-place]:checked');
 
             dialog.querySelector('[data-add-count]').textContent = String(picked.length);
             dialog.querySelector('[data-add-confirm]').disabled = picked.length === 0;
@@ -620,18 +666,66 @@ function initItineraryEditor(root) {
 
     dialog.querySelector('[data-add-confirm]').addEventListener('click', () => {
         const dayId = chosenDay();
-        const picked = [...dialog.querySelectorAll('[data-destination]:checked')];
+        const picked = [...dialog.querySelectorAll('[data-destination]:checked, [data-place]:checked')];
 
         if (!dayId || picked.length === 0) {
             return;
         }
 
-        picked.forEach((checkbox) => addStop(checkbox.dataset.destination, dayId));
+        picked.forEach((checkbox) => {
+            if (checkbox.hasAttribute('data-place')) {
+                addStop({
+                    kind: 'place',
+                    id: checkbox.dataset.place,
+                    itemType: checkbox.dataset.kind,
+                    name: checkbox.dataset.name,
+                    place: checkbox.dataset.placeLabel,
+                    fee: checkbox.dataset.fee,
+                    url: checkbox.dataset.url,
+                }, dayId);
+            } else {
+                addStop({
+                    kind: 'destination',
+                    id: checkbox.dataset.destination,
+                    name: checkbox.dataset.name,
+                    place: checkbox.dataset.place,
+                    fee: checkbox.dataset.fee,
+                    url: checkbox.dataset.url,
+                }, dayId);
+            }
+        });
 
         dialog.close();
         say(
             `${picked.length} ${picked.length === 1 ? 'stop' : 'stops'} added. Give ${picked.length === 1 ? 'it a time' : 'them times'} or reflow the day.`
         );
+    });
+
+    dialog.querySelector('[data-add-custom]').addEventListener('click', () => {
+        const dayId = chosenDay();
+        const name = dialog.querySelector('[data-custom-name]').value.trim();
+
+        if (!dayId || name === '') {
+            say('Name your stop before adding it.', 'error');
+
+            return;
+        }
+
+        addStop({
+            kind: 'custom',
+            name,
+            place: dialog.querySelector('[data-custom-address]').value.trim() || 'Your own stop',
+            fee: 'Not priced',
+            custom: {
+                name,
+                address: dialog.querySelector('[data-custom-address]').value.trim(),
+                latitude: dialog.querySelector('[data-custom-latitude]').value.trim(),
+                longitude: dialog.querySelector('[data-custom-longitude]').value.trim(),
+            },
+        }, dayId);
+
+        dialog.close();
+        say('Stop added. Give it a time or reflow the day.');
     });
 
     root.querySelectorAll('[data-editor-toggle]').forEach((button) => {
