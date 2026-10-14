@@ -1697,6 +1697,50 @@ If any of these comes back, re-add the row to the CSV *first* — the seeder's
 `firstOrNew(['slug' => ...])` will create it, but only with the columns the CSV
 carries.
 
+### The 100-row expansion (2026-10-14)
+
+A panel review said the catalogue was too small, so 35 famous spots were added:
+65 → 100 destinations and 100 sources. Chosen for **source availability** —
+famous places have official pages with published hours, which is the only thing
+that makes a new row verifiable rather than fabricated.
+
+- **Baguio/Benguet +5** — Mines View Park, the Mansion (official `.gov.ph`
+  hours, Tue–Sun 09–18), Baguio Cathedral, Strawberry Farm, Diplomat Hotel.
+  Benguet is now 13 rows, the densest province.
+- **Cordillera +3** — Buscalan Village (registration window), Bomod-ok Falls
+  (official Sagada Tourism trek window), Kaparkan Falls (reservation-required,
+  seasonal Jul–Oct, coordinates from a Plus Code — verify on the ground).
+- **Metro Manila +5** — Manila Ocean Park, San Agustin Church and Museum,
+  Manila Cathedral, Binondo Church, National Museum of Natural History.
+- **Central Luzon +6** — Mt. Samat, Monasterio de Tarlac (closed Thu), Manaoag
+  Church (Mass times only, **no closing time published — the cells stay blank**),
+  Barasoain Church, Ma-Cho Temple, Mt. Arayat (no official hours found).
+- **Cavite/Tagaytay +5** — Sky Ranch (hours conflict across sources — blank),
+  People's Park in the Sky, Caleruega, Corregidor (tour-dependent access, no
+  regular public ferry — blank), Puzzle Mansion.
+- **Batangas/Laguna/Quezon +4** — Fantasy World (**seeded as
+  `temporarily_closed`**, reported shut 2021–2026), Pagsanjan Falls, Villa
+  Escudero (no gate hours published — blank), Kamay ni Hesus.
+- **Ilocos +3** — Malacañang of the North (official Ilocos Norte fee page),
+  Baluarte (no LGU hours — blank), Bantay Bell Tower (ungated — blank).
+- **Batanes +3, a new province** — Basco Lighthouse, Marlboro Hills, Valugan
+  Boulder Beach. All ungated with no LGU hours, so all three stay blank with a
+  note; every Batanes visitor pays the ₱405 provincial registration regardless.
+- **Zambales +1** — Inflatable Island (official 07:30–18:00).
+
+**THE STANDARD HELD:** 19 of the 35 carry verified hours; 16 stay blank with a
+source and a note saying why, because "Hours not listed" beats a wrong number.
+Every row has a real, non-Wikipedia `hours_source_url` and a
+`destination_sources` entry, so the seeder reports 100/100 with zero skipped.
+`test_the_csv_seeder_keeps_every_place_name_intact` now asserts 100.
+
+**What is still unmeasured:** the crawl-yield figures elsewhere in this file
+(38 success / 27 failed, 8 bot walls, etc.) were measured on the original 65.
+The 35 new sources have never been crawled or `sources:check`ed — run both
+before trusting any `fetchability` verdict on them. Coordinates for Kaparkan,
+Inflatable Island, Diplomat Hotel and Strawberry Farm are approximate and need a
+ground check.
+
 ### Regenerating the CSV from the database
 
 `C:\Users\cholo\.opencode\plan\rebuild-csv.php` (outside the repo) rewrites all

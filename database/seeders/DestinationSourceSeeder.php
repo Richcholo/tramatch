@@ -423,6 +423,234 @@ class DestinationSourceSeeder extends Seeder
                 'source_url' => 'https://sanjuanlaunion.gov.ph/',
                 'source_type' => 'official_lgu',
             ],
+
+            // ==================== BAGUIO / BENGUET EXPANSION ====================
+            [
+                'destination_slug' => 'mines-view-park',
+                'source_name' => 'The Baguio Channel',
+                'source_url' => 'https://thebaguiochannel.com/?p=3888',
+                'source_type' => 'official_site',
+            ],
+            [
+                'destination_slug' => 'the-mansion-mansion-house-presidential-museum',
+                'source_name' => 'Baguio Mansion House',
+                'source_url' => 'https://baguiomansionhouse.gov.ph/',
+                'source_type' => 'official_lgu',
+            ],
+            [
+                'destination_slug' => 'baguio-cathedral-our-lady-of-atonement',
+                'source_name' => 'Baguio Cathedral Parish',
+                'source_url' => 'https://www.facebook.com/baguiocathedralofficial/',
+                'source_type' => 'official_site',
+            ],
+            [
+                'destination_slug' => 'strawberry-farm',
+                'source_name' => 'Baguio Transient Guide',
+                'source_url' => 'https://baguiotransient.net/guides/baguio-strawberry-farm-guide',
+                'source_type' => 'official_site',
+            ],
+            [
+                'destination_slug' => 'diplomat-hotel-dominican-hill-heritage-hill-and-nature-park',
+                'source_name' => 'Shellwanders Guide',
+                'source_url' => 'https://shellwanders.com/diplomat-hotel-baguio-all-you-need-to-know/',
+                'source_type' => 'official_site',
+            ],
+
+            // ==================== CORDILLERA EXPANSION ====================
+            [
+                'destination_slug' => 'buscalan-village-apo-whang-od',
+                'source_name' => 'JoansFootprints Guide',
+                'source_url' => 'https://joansfootprints.com/2026/06/17/2022-buscalan-travel-guide-itinerary-expenses/',
+                'source_type' => 'official_site',
+            ],
+            [
+                'destination_slug' => 'bomod-ok-falls',
+                'source_name' => 'Sagada Tourism',
+                'source_url' => 'https://tourism.sagada.gov.ph/sagada-tourist-sites/',
+                'source_type' => 'official_lgu',
+            ],
+            [
+                'destination_slug' => 'kaparkan-falls-mulawin-falls',
+                'source_name' => 'Tara Lets Anywhere',
+                'source_url' => 'https://www.taraletsanywhere.com/kaparkan-falls-abra/',
+                'source_type' => 'official_site',
+            ],
+
+            // ==================== METRO MANILA EXPANSION ====================
+            [
+                'destination_slug' => 'manila-ocean-park',
+                'source_name' => 'Manila Ocean Park',
+                'source_url' => 'https://manilaoceanpark.com/first-visit',
+                'source_type' => 'official_site',
+            ],
+            [
+                'destination_slug' => 'san-agustin-church-and-museum',
+                'source_name' => 'Intramuros Administration',
+                'source_url' => 'https://intramuros.gov.ph/sites-museums',
+                'source_type' => 'official_lgu',
+            ],
+            [
+                'destination_slug' => 'manila-cathedral-minor-basilica-of-the-immaculate-conception',
+                'source_name' => 'Manila Cathedral',
+                'source_url' => 'https://www.manilacathedral.com.ph/history',
+                'source_type' => 'official_site',
+            ],
+            [
+                'destination_slug' => 'binondo-church-minor-basilica-of-st-lorenzo-ruiz',
+                'source_name' => 'Binondo Church Parish',
+                'source_url' => 'https://www.facebook.com/binondochurch1596',
+                'source_type' => 'official_site',
+            ],
+            [
+                'destination_slug' => 'national-museum-of-natural-history',
+                'source_name' => 'National Museum of the Philippines',
+                'source_url' => 'https://www.nationalmuseum.gov.ph/',
+                'source_type' => 'official_site',
+            ],
+
+            // ==================== CENTRAL LUZON EXPANSION ====================
+            [
+                'destination_slug' => 'mt-samat-national-shrine-dambana-ng-kagitingan',
+                'source_name' => 'Bataan Provincial Government',
+                'source_url' => 'https://bataan.gov.ph/behold-bataan/mt-samat-national-shrine',
+                'source_type' => 'official_lgu',
+            ],
+            [
+                'destination_slug' => 'monasterio-de-tarlac',
+                'source_name' => 'Monasterio de Tarlac',
+                'source_url' => 'http://monasterio-de-tarlac.weebly.com/events.html',
+                'source_type' => 'official_site',
+            ],
+            [
+                'destination_slug' => 'manaoag-church-minor-basilica-of-our-lady-of-manaoag',
+                'source_name' => 'Minor Basilica of Manaoag',
+                'source_url' => 'https://www.manaoagminorbasilica.org/',
+                'source_type' => 'official_site',
+            ],
+            [
+                'destination_slug' => 'barasoain-church-our-lady-of-mt-carmel-parish',
+                'source_name' => 'NHCP Barasoain Museum',
+                'source_url' => 'https://www.facebook.com/nhcp.barasoainmuseum',
+                'source_type' => 'official_site',
+            ],
+            [
+                'destination_slug' => 'ma-cho-temple',
+                'source_name' => 'Ma-Cho Temple',
+                'source_url' => 'https://machotemple.org/',
+                'source_type' => 'official_site',
+            ],
+            [
+                'destination_slug' => 'mt-arayat-national-park',
+                'source_name' => 'Trail Adventours',
+                'source_url' => 'https://www.trailadventours.com/philippine-mountains/mt-arayat',
+                'source_type' => 'official_site',
+            ],
+
+            // ==================== CAVITE / TAGAYTAY EXPANSION ====================
+            [
+                'destination_slug' => 'sky-ranch-tagaytay',
+                'source_name' => 'SM Supermalls Sky Ranch',
+                'source_url' => 'https://www.smsupermalls.com/skyranch',
+                'source_type' => 'official_site',
+            ],
+            [
+                'destination_slug' => 'peoples-park-in-the-sky',
+                'source_name' => 'Wondering Wanderer Guide',
+                'source_url' => 'https://www.wonderingwanderer.com/peoples-park-in-the-sky-tagaytay-city-cavite',
+                'source_type' => 'official_site',
+            ],
+            [
+                'destination_slug' => 'caleruega-church-transfiguration-chapel',
+                'source_name' => 'Caleruega Philippines',
+                'source_url' => 'https://www.facebook.com/CaleruegaPhilippines',
+                'source_type' => 'official_site',
+            ],
+            [
+                'destination_slug' => 'corregidor-island',
+                'source_name' => 'Corregidor Island',
+                'source_url' => 'https://corregidorisland.com.ph/',
+                'source_type' => 'official_site',
+            ],
+            [
+                'destination_slug' => 'puzzle-mansion',
+                'source_name' => 'Puzzle Mansion',
+                'source_url' => 'https://www.facebook.com/PuzzleMansion',
+                'source_type' => 'official_site',
+            ],
+
+            // ==================== BATANGAS / LAGUNA / QUEZON EXPANSION ====================
+            [
+                'destination_slug' => 'fantasy-world',
+                'source_name' => 'The Poor Traveler',
+                'source_url' => 'https://www.thepoortraveler.net/2018/06/fantasy-world-batangas-lemery-itinerary',
+                'source_type' => 'official_site',
+            ],
+            [
+                'destination_slug' => 'pagsanjan-falls-magdapio-falls',
+                'source_name' => 'Municipality of Pagsanjan',
+                'source_url' => 'https://pagsanjan.gov.ph',
+                'source_type' => 'official_lgu',
+            ],
+            [
+                'destination_slug' => 'villa-escudero-plantations-and-resort',
+                'source_name' => 'Villa Escudero',
+                'source_url' => 'https://villaescudero.com/day-tour-activities',
+                'source_type' => 'official_site',
+            ],
+            [
+                'destination_slug' => 'kamay-ni-hesus-shrine',
+                'source_name' => 'Kamay ni Hesus Healing Church',
+                'source_url' => 'https://www.facebook.com/knhhealingchurch',
+                'source_type' => 'official_site',
+            ],
+
+            // ==================== ILOCOS EXPANSION ====================
+            [
+                'destination_slug' => 'malacanang-of-the-north',
+                'source_name' => 'Ilocos Norte Tourism',
+                'source_url' => 'https://www.ilocosnorte.ph/tour/fees',
+                'source_type' => 'official_lgu',
+            ],
+            [
+                'destination_slug' => 'baluarte-resort-and-mini-zoo',
+                'source_name' => 'Baluarte Zoo',
+                'source_url' => 'https://www.facebook.com/BaluarteZooViganOfficialPage/',
+                'source_type' => 'official_site',
+            ],
+            [
+                'destination_slug' => 'bantay-bell-tower',
+                'source_name' => 'City of Vigan',
+                'source_url' => 'https://www.vigan.ph/attractions/bantay-belfry.html',
+                'source_type' => 'official_lgu',
+            ],
+
+            // ==================== BATANES (NEW PROVINCE) ====================
+            [
+                'destination_slug' => 'basco-lighthouse-naidi-hills',
+                'source_name' => 'LetsGoBatanes',
+                'source_url' => 'https://www.letsgobatanes.com/destinations/basco-lighthouse-naidi-hills',
+                'source_type' => 'official_site',
+            ],
+            [
+                'destination_slug' => 'marlboro-hills-racuh-a-payaman',
+                'source_name' => 'LetsGoBatanes',
+                'source_url' => 'https://www.letsgobatanes.com/destinations/racuh-a-payaman',
+                'source_type' => 'official_site',
+            ],
+            [
+                'destination_slug' => 'valugan-boulder-beach',
+                'source_name' => 'LetsGoBatanes',
+                'source_url' => 'https://www.letsgobatanes.com/destinations/valugan-boulder-beach',
+                'source_type' => 'official_site',
+            ],
+
+            // ==================== ZAMBALES EXPANSION ====================
+            [
+                'destination_slug' => 'inflatable-island-ph',
+                'source_name' => 'Inflatable Island',
+                'source_url' => 'https://www.theinflatableisland.com/',
+                'source_type' => 'official_site',
+            ],
         ];
 
         $created = 0;
