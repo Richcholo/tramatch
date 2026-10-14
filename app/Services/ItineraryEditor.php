@@ -8,6 +8,8 @@ use App\Models\Itinerary;
 use App\Models\ItineraryDay;
 use App\Models\ItineraryItem;
 use App\Models\User;
+use App\Services\Routing\RouteLeg;
+use App\Services\Routing\RouteService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -32,7 +34,8 @@ use RuntimeException;
 class ItineraryEditor
 {
     public function __construct(
-        private RecommendationService $recommendations
+        private RecommendationService $recommendations,
+        private RouteService $routes,
     ) {
     }
 
@@ -88,8 +91,12 @@ class ItineraryEditor
      * the editor can show the traveller what a reflow would produce.
      *
      * Durations come from the window the traveller typed, falling back to the
-     * destination's own recommended visit length, so a stop whose times are
-     * still blank lands somewhere sensible instead of at 00:00.
+     * stop's own visit length, so a stop whose times are still blank lands
+     * somewhere sensible instead of at 00:00. Gaps come from the road: each
+     * consecutive pair with two known pins is routed, and anything else keeps
+     * the flat estimate. Routing here is what makes a reflowed day disagree
+     * with a generated one on purpose — the generated day has never met the
+     * road, and its legs stay unresolved until this runs.
      *
      * @param  array<int|string, array<string, mixed>>  $draft
      * @return array<string, array<string, array<string, mixed>>> keyed by day id
@@ -103,26 +110,67 @@ class ItineraryEditor
         $result = [];
 
         foreach ($days as $day) {
-            $stops = [];
+            $entries = $this->entriesForDay($day, $draft);
 
-            foreach ($this->entriesForDay($day, $draft) as $entry) {
+            $stops = [];
+            $previous = null;
+
+            foreach ($entries as $entry) {
+                $stop = ItineraryStop::fromFields(
+                    $entry['fields'],
+                    $destinations,
+                    $places
+                );
+
                 $stops[] = [
                     'id' => (int) $entry['key'],
-                    'duration' => $this->durationFor(
-                        $entry,
-                        ItineraryStop::fromFields(
-                            $entry['fields'],
-                            $destinations,
-                            $places
-                        )
-                    ),
+                    'duration' => $this->durationFor($entry, $stop),
+                    'travel' => $this->routedMinutes($previous, $stop),
                 ];
+
+                $previous = $stop;
             }
 
             $result[(string) $day->id] = ItinerarySchedule::reflow($stops);
         }
 
         return $result;
+    }
+
+    /**
+     * The road between two resolved stops, in minutes — or null when either
+     * end has no pin, which keeps the flat estimate rather than inventing a
+     * leg. A null previous (the day's first stop) also answers null: there is
+     * no leg into the first stop of a day.
+     */
+    private function routedMinutes(?ItineraryStop $from, ?ItineraryStop $to): ?int
+    {
+        return $this->routedLeg($from, $to)?->durationMinutes;
+    }
+
+    /**
+     * The road between two resolved stops, or null when there is no answer.
+     *
+     * Pins are checked before the client is touched, so unpinned stops never
+     * issue a request: a custom entry with an address and no coordinates must
+     * not cost an HTTP call to learn what the catalogue already knows.
+     */
+    private function routedLeg(?ItineraryStop $from, ?ItineraryStop $to): ?RouteLeg
+    {
+        if (! $from || ! $to) {
+            return null;
+        }
+
+        $fromLat = $from->latitude();
+        $fromLng = $from->longitude();
+        $toLat = $to->latitude();
+        $toLng = $to->longitude();
+
+        if ($fromLat === null || $fromLng === null || $toLat === null || $toLng === null) {
+            return null;
+        }
+
+        return $this->routes->leg($fromLat, $fromLng, $toLat, $toLng);
     }
 
     /**
@@ -331,6 +379,7 @@ class ItineraryEditor
     ): void {
         $placed = [];
         $previousEnd = null;
+        $ordered = [];
 
         foreach ($this->entriesForDay($day, $draft) as $position => $entry) {
             $key = (int) $entry['key'];
@@ -400,6 +449,54 @@ class ItineraryEditor
 
                 $previousEnd = ItinerarySchedule::parse($item->end_time);
             }
+
+            if ($item) {
+                $ordered[] = ['item' => $item, 'stop' => $stop];
+            }
+        }
+
+        $this->writeLegs($ordered);
+    }
+
+    /**
+     * Resolve every leg of a written day against the road.
+     *
+     * Runs after the stops because it needs stored rows to write to, and
+     * inside the same transaction as the day so a failed leg lookup cannot
+     * leave times saved with legs missing — a leg lookup never fails loudly
+     * (see `OsrmClient`), but the ordering guarantee is what makes the two
+     * columns describe the same day. Consecutive pairs only: there is no leg
+     * into the first stop of a day, because the day starts wherever the
+     * traveller woke up, not at the previous day's last pin.
+     *
+     * @param  array<int, array{item: ItineraryItem, stop: ?ItineraryStop}>  $ordered
+     */
+    private function writeLegs(array $ordered): void
+    {
+        $previous = null;
+
+        foreach ($ordered as $entry) {
+            $item = $entry['item'];
+            $stop = $entry['stop'];
+            $leg = $this->routedLeg($previous, $stop);
+
+            if ($leg === null) {
+                $item->update([
+                    'route_distance_meters' => null,
+                    'route_duration_minutes' => null,
+                    'route_provider' => null,
+                    'route_status' => ItineraryItem::ROUTE_UNRESOLVED,
+                ]);
+            } else {
+                $item->update([
+                    'route_distance_meters' => $leg->distanceMeters,
+                    'route_duration_minutes' => $leg->durationMinutes,
+                    'route_provider' => $leg->provider,
+                    'route_status' => ItineraryItem::ROUTE_RESOLVED,
+                ]);
+            }
+
+            $previous = $stop;
         }
     }
 

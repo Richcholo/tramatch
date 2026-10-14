@@ -78,6 +78,23 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Route cache
+    |--------------------------------------------------------------------------
+    |
+    | Road distances go stale slowly and the failure mode of a stale leg is a
+    | slightly wrong minute count, not a wrong trip — so legs are cached for a
+    | month, not an hour. The driver is whatever the app runs (database in
+    | production, array under test), which is why routing needs no table: a
+    | dedicated route table would be a second source of truth for data that is
+    | legitimately tossable.
+    |
+    */
+    'routing' => [
+        'cache_days' => (int) env('ROUTING_CACHE_DAYS', 30),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | What the model is allowed to decide
     |--------------------------------------------------------------------------
     |

@@ -73,16 +73,21 @@ class ItinerarySchedule
      *
      * The day starts at DAY_START_MINUTES whatever times the traveller had
      * typed: reflowing means laying the day out again from the durations. Each
-     * stop then begins TRAVEL_MINUTES after the one before it ends, exactly as
-     * the generator spaces them, so a reflowed day and a generated day read the
-     * same.
+     * stop then begins after the one before it ends, exactly as the generator
+     * spaces them, so a reflowed day and a generated day read the same.
+     *
+     * The gap between two stops is a routed leg when one is given and the flat
+     * TRAVEL_MINUTES otherwise. A stop may carry `travel` (minutes, or null
+     * for unroutable), and the editor is what fills it in from the road — the
+     * generator never routes, so generated days keep the flat gap and their
+     * legs stay `unresolved` until the first edit or reflow resolves them.
      *
      * A day can end up running past DAY_END_MINUTES when the traveller allots
      * more time than fits. That is reported rather than refused: the generator
      * refuses impossible destinations because the traveller never chose them,
      * whereas here they typed the durations themselves.
      *
-     * @param  array<int, array{id: int, duration: int}>  $stops
+     * @param  array<int, array{id: int, duration: int, travel?: int|null}>  $stops
      * @return array<int, array{start_time: string, end_time: string, travel_minutes_from_previous: int}>
      */
     public static function reflow(array $stops): array
@@ -93,6 +98,17 @@ class ItinerarySchedule
 
         foreach ($stops as $stop) {
             $duration = max(1, (int) ($stop['duration'] ?? 0));
+
+            // The gap is the leg INTO this stop, not out of the last one: a
+            // 10-minute road after stop 1 starts stop 2 ten minutes later,
+            // not forty-five. Advancing with the current stop's own travel
+            // would charge every leg one stop late, and a day of short roads
+            // would still be laid out on the flat estimate.
+            $travel = $stop['travel'] ?? self::TRAVEL_MINUTES;
+            $travel = is_numeric($travel) && $travel >= 0 ? (int) $travel : self::TRAVEL_MINUTES;
+            $earliest = $previousEnd === null
+                ? self::DAY_START_MINUTES
+                : $previousEnd + $travel;
 
             $start = self::nextStart($earliest, $duration);
             $end = $start + $duration;
@@ -107,7 +123,7 @@ class ItinerarySchedule
             ];
 
             $previousEnd = $end;
-            $earliest = $end + self::TRAVEL_MINUTES;
+            $earliest = $end + $travel;
         }
 
         return $result;

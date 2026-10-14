@@ -1227,6 +1227,49 @@ cannot format a null.
 `ItineraryItem::durationLabel()` is the one rounding rule for the item, the map
 tooltip and the PDF: `45 min`, `1 h`, `1 h 20 min`.
 
+#### Road-derived legs (Days 6-7)
+
+`App\Services\Routing\RouteService` is the one way to ask how far two pins are
+apart by road, fronted by `OsrmClient` and bound in `AppServiceProvider`
+(because scalar constructor args are invisible to the container).
+
+- **OSRM with no key, by decision.** The config names OpenRouteService, but no
+  key exists — and a routing feature that only works after a signup is one the
+  demo cannot show. The client speaks plain OSRM, so `ROUTING_BASE_URL` takes a
+  self-hosted endpoint with no code change, and the provider switch is still
+  there for the day a key exists. The default base URL is the **public demo
+  server**, which is a documented compromise: fine behind a month-long cache
+  for a school project, not production infrastructure. Run your own OSRM
+  before promising these numbers at scale.
+- **Every failure is null.** 500, timeout, empty routes, DNS: all resolve to
+  `unresolved` on the item, never to a guess and never to an exception that
+  fails the save.
+- **Cache first, no table.** Pins barely move, so legs cache for 30 days
+  (`ROUTING_CACHE_DAYS`) on whatever driver the app runs. No migration was
+  added — a route table would be a second source of truth for tossable data —
+  and no geometry column either: `routing.js` already draws the map line in
+  the browser, so storing polylines would pay kilobytes per leg to duplicate
+  it.
+- **Reflow meets the road; the generator does not.** `ItinerarySchedule::reflow()`
+  takes an optional per-stop `travel` and the editor fills it from routed legs,
+  so a reflowed day is laid out on real gaps. The generator keeps the flat gap
+  and `unresolved` legs: routing six legs synchronously inside a generation
+  request is the wrong latency trade, and the first edit or reflow resolves
+  them. Times the traveller typed are never rewritten on save — `route_*`
+  sits alongside, and the read view prefers it.
+- **The gap belongs to the leg INTO the stop.** `reflow()` once advanced with
+  the current stop's travel, charging every leg one stop late so a day of
+  short roads still laid out on the flat estimate. The one-line fix and the
+  comment saying why are both in the method.
+- **The road is never on the test path.** `tests/TestCase.php` stubs the OSRM
+  host with a fixed 8.4 km / 10 min leg, because otherwise every two-stop save
+  in the suite issues live HTTP. A second `Http::fake()` does NOT override the
+  first — the factory honors the first matching stub (`filter()->first()`) —
+  so tests needing another answer use `stubOsrm()`, which swaps the standing
+  stub's responder instead. The old reflow tests stub a 45-minute road on
+  purpose: they prove day-window logic, and a 10-minute stub would move their
+  assertions into testing the stub.
+
 #### The AI plans; Laravel checks
 
 Written into `config/planning.php` as **data**, so the client cannot drift from

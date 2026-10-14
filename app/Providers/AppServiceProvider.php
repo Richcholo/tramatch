@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Services\Routing\OsrmClient;
+use App\Services\Routing\RouteService;
 use Illuminate\Foundation\DevCommands;
 use Illuminate\Support\ServiceProvider;
 
@@ -17,6 +19,15 @@ class AppServiceProvider extends ServiceProvider
             sprintf('queue:listen --tries=1 --timeout=%d', (int) env('QUEUE_WORKER_TIMEOUT', 300)),
             'queue'
         );
+
+        // The routing client carries scalar config (base URL, profile, timeout)
+        // the container cannot infer, so it is built explicitly. Singleton,
+        // because it holds no request state and every leg in a save should
+        // share the one client — and the one cache behind it.
+        $this->app->singleton(OsrmClient::class, fn () => OsrmClient::fromConfig());
+        $this->app->singleton(RouteService::class, fn ($app) => new RouteService(
+            $app->make(OsrmClient::class)
+        ));
     }
 
     public function boot(): void

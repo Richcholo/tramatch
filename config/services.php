@@ -69,9 +69,13 @@ return [
     ],
 
     'routing' => [
+        // OpenRouteService needs a key nobody has issued yet; OSRM answers
+        // the whole country with none. The default is the endpoint that works
+        // today, and ROUTING_PROVIDER + ROUTING_BASE_URL switch it without a
+        // deploy when a key (or a self-hosted OSRM) exists.
         'key' => env('ROUTING_API_KEY'),
-        'base_url' => env('ROUTING_BASE_URL'),
-        'provider' => env('ROUTING_PROVIDER', 'openrouteservice'),
+        'base_url' => env('ROUTING_BASE_URL', 'https://router.project-osrm.org'),
+        'provider' => env('ROUTING_PROVIDER', 'osrm'),
     ],
 
 ];

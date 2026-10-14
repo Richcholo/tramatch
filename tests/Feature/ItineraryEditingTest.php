@@ -704,6 +704,11 @@ class ItineraryEditingTest extends TestCase
 
     public function test_reflowing_a_reordered_day_spaces_the_stops_out_again(): void
     {
+        // A 45-minute road, so this test keeps proving the day-window logic
+        // rather than the routing: reflow must still push Alpha past lunch on
+        // a 45-minute gap. Road behavior itself is pinned in RoutingLegsTest.
+        $this->stubOsrm(fn () => $this->osrmResponse(30000, 2700));
+
         $itinerary = $this->generateItinerary('alpha', 'bravo');
         $items = $itinerary->days->first()->items;
         $dayId = $items[0]->itinerary_day_id;
@@ -1145,6 +1150,10 @@ public function test_the_editor_itself_ignores_a_cost_in_the_draft(): void
 
     public function test_reflow_returns_times_without_writing_them(): void
     {
+        // Same 45-minute road for the same reason: the assertions below are
+        // about the day window, and a 10-minute stub road would move them.
+        $this->stubOsrm(fn () => $this->osrmResponse(30000, 2700));
+
         $itinerary = $this->generateItinerary('alpha', 'bravo');
         $items = $itinerary->days->first()->items;
         $dayId = $items[0]->itinerary_day_id;
@@ -1194,6 +1203,11 @@ public function test_the_editor_itself_ignores_a_cost_in_the_draft(): void
 
     public function test_reflow_keeps_a_stop_out_of_the_lunch_block(): void
     {
+        // The lunch push needs the 45-minute gap this test was written
+        // against; the road is stubbed to it so the block logic is what is
+        // actually exercised.
+        $this->stubOsrm(fn () => $this->osrmResponse(30000, 2700));
+
         $itinerary = $this->generateItinerary('alpha', 'bravo');
         $items = $itinerary->days->first()->items;
         $dayId = $items[0]->itinerary_day_id;
@@ -1229,6 +1243,10 @@ public function test_the_editor_itself_ignores_a_cost_in_the_draft(): void
 
     public function test_reflow_reports_a_day_that_runs_past_the_window(): void
     {
+        // Over-long days are a window question, not a road question: same
+        // 45-minute stub so the finish time matches the day being tested.
+        $this->stubOsrm(fn () => $this->osrmResponse(30000, 2700));
+
         $itinerary = $this->generateItinerary('alpha', 'bravo', 'charlie');
         $items = $itinerary->days->first()->items;
         $dayId = $items[0]->itinerary_day_id;
@@ -1991,12 +2009,13 @@ public function test_the_editor_itself_ignores_a_cost_in_the_draft(): void
         $slots = $response->json('days.'.(string) $day->id);
 
         // Both rows laid out: the attraction on its 120 minutes and the meal
-        // on the place's 60, separated by the travel gap.
+        // on the place's 60, separated by the stubbed 10-minute road rather
+        // than the flat 45 — reflow meets the road here, by design.
         $this->assertCount(2, $slots);
         $this->assertSame('08:00', $slots[$item->id]['start_time']);
         $this->assertSame('10:00', $slots[$item->id]['end_time']);
-        $this->assertSame('10:45', $slots['-1']['start_time']);
-        $this->assertSame('11:45', $slots['-1']['end_time']);
+        $this->assertSame('10:10', $slots['-1']['start_time']);
+        $this->assertSame('11:10', $slots['-1']['end_time']);
     }
 
     public function test_the_add_dialog_offers_food_lodging_and_a_custom_form(): void

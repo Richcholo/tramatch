@@ -450,7 +450,19 @@
                                                 ₱{{ number_format($item->estimated_cost, 2) }}
                                             </span>
 
-                                            @if ($item->travel_minutes_from_previous > 0)
+                                            {{-- The road first, the timetable gap
+                                                 second. routeSummary() is a
+                                                 measured leg; the minutes below
+                                                 it are the space between two
+                                                 typed times. An unresolved leg
+                                                 prints nothing here rather than
+                                                 the flat estimate — that number
+                                                 was the panel's complaint. --}}
+                                            @if ($item->routeSummary())
+                                                <span>
+                                                    {{ $item->routeSummary() }} by road
+                                                </span>
+                                            @elseif ($item->travel_minutes_from_previous > 0)
                                                 <span>
                                                     {{ $item->travel_minutes_from_previous }} min travel
                                                 </span>
