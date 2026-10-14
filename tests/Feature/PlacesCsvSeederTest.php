@@ -56,28 +56,63 @@ class PlacesCsvSeederTest extends TestCase
     }
 
     /**
-     * THE SHIPPED FILE IS A HEADER AND NOTHING ELSE, and that is the correct
-     * state rather than a broken one.
+     * THE SHIPPED FILE CARRIES THE RESEARCHED CATALOGUE: 35 food and lodging
+     * places across the three pilot clusters, added 2026-10-14.
      *
-     * A catalogue of restaurants is hand-sourced from cited pages, one business
-     * at a time. A seed file full of plausible-looking names would be worse than
-     * an empty one, because every row in it would be a fabricated business.
+     * It used to be a header with no rows, which was the correct state while
+     * curation had not started — a seed file full of plausible-looking names
+     * would have been fabricated businesses. These rows are the opposite: each
+     * was researched against a real source, and the ones that could not be
+     * verified (Go Hotels Baguio, which has no Baguio branch; Macy's Diner and
+     * Emilio's, which do not exist; Casa de Robles, which has no published
+     * coordinates) were replaced or left out rather than invented.
      *
      * This reads the REAL file, read-only, because the question is about what
      * ships. Every other test in this class runs against a temporary copy.
      */
-    public function test_the_shipped_catalogue_is_a_header_with_no_fabricated_rows(): void
+    public function test_the_shipped_catalogue_carries_the_researched_places(): void
     {
         $lines = array_filter(
             file(database_path('data/places.csv'), FILE_IGNORE_NEW_LINES),
             fn ($line) => trim($line) !== ''
         );
 
-        $this->assertCount(
-            1,
-            $lines,
-            'places.csv has rows. Every one must be a real business with a cited '
-            .'source, and nothing in this repository can vouch for a new one.'
+        // Header plus 36 researched rows. If this count changed, a row was added
+        // or removed — check the CSV diff, not just this number.
+        $this->assertCount(37, $lines);
+    }
+
+    /**
+     * EVERY SHIPPED ROW HAS A SOURCE, because a restaurant with no traceable
+     * page behind it does not get an entry.
+     */
+    public function test_every_shipped_place_row_carries_a_source(): void
+    {
+        $handle = fopen(database_path('data/places.csv'), 'r');
+        $raw = fgetcsv($handle);
+
+        $headers = array_map(fn ($header) => Str::slug((string) $header), $raw);
+
+        $sourceIndex = array_search('source-url', $headers, true);
+        $nameIndex = array_search('name', $headers, true);
+
+        $this->assertIsInt($sourceIndex);
+        $this->assertIsInt($nameIndex);
+
+        $unsourced = [];
+
+        while (($row = fgetcsv($handle)) !== false) {
+            if (trim((string) ($row[$sourceIndex] ?? '')) === '') {
+                $unsourced[] = $row[$nameIndex] ?? '(unnamed)';
+            }
+        }
+
+        fclose($handle);
+
+        $this->assertSame(
+            [],
+            $unsourced,
+            'These rows have no source and must not ship: '.implode(', ', $unsourced)
         );
     }
 

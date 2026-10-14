@@ -1257,6 +1257,41 @@ exercised by `tests/Feature/PlacesCatalogueTest.php` (31) against SQLite and
 against a throwaway **MySQL** database, because the two disagree about dropping a
 column in a foreign key and about nullability introspection.
 
+#### The places catalogue (36 rows, 2026-10-14)
+
+Researched in three parallel batches, one per cluster: 12 Baguio + 11
+Antipolo/Tanay + 12 Paoay, plus A Hotel Baguio added afterwards for the economy
+lodging gap. Every row carries a real, non-Wikipedia `source_url`, and the
+seeder imports 36 with zero rejected.
+
+**Four candidates were replaced rather than invented**, and the replacements are
+the evidence the process works: Go Hotels Baguio (no Baguio branch exists —
+replaced by Citylight Hotel), Macy's Diner and Emilio's Pagudpud (unverifiable /
+does not exist — replaced by the two Batac empanada stalls and three Pagudpud
+spots), Golden Valley Hotel Antipolo (Cebu only — replaced by Loreland Farm
+Resort), Casa Peregrine (San Mateo, outside the cluster — its replacement Casa
+de Robles has **no published coordinates and was left out entirely**, because a
+row without a pin cannot be routed or mapped and the seeder rejects it anyway).
+
+**Most prices and hours are blank, and that is the honest state.** Only 9 of 36
+carry verified prices (Le Chef buffet, Microtel, Azalea, Manor, Tahanan,
+Luljetta's, La Preciosa buffet, Saud Beach, A Hotel) and 10 carry verified
+hours. Restaurant menus and hotel rates are mostly unpublished or aggregator-only,
+so the catalogue prints "Price not listed" rather than a figure nobody published.
+
+**Coverage per tier after this round** (the seeder prints it on every run):
+Baguio economy 5 food / 2 lodging, Antipolo economy 5 food / **0 lodging**,
+Paoay economy 5 food / 1 lodging. No tier in any cluster meets the 6/3 minimums
+yet. The binding constraint is **economy lodging**: rooms under ₱1,000/night are
+rare with published rates, and the candidates the searches surfaced (Boso-Boso,
+Casa Azul, 3B Rest House) sell day/cottage/group packages rather than per-room
+nights, so they do not fit `per_room_night` without lying about the unit. That
+gap is open curation work, not a schema problem.
+
+**One seeder fix came out of this round:** `normalizeMinutes()` forced every
+blank or zero visit length to 60, which would have scheduled each overnight stay
+as a one-hour attraction. It now takes the place type and keeps 0 for lodging.
+
 #### Days 2-14, in order
 
 | Day | Work | Gate |

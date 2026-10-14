@@ -229,7 +229,8 @@ class PlacesCsvSeeder extends Seeder
                     'price_max' => $priceMax,
                     'price_basis' => $priceBasis,
                     'recommended_minutes' => $this->normalizeMinutes(
-                        $row['recommended-minutes'] ?? null
+                        $row['recommended-minutes'] ?? null,
+                        $type
                     ),
                     'opening_time' => $openingTime,
                     'closing_time' => $closingTime,
@@ -638,9 +639,16 @@ class PlacesCsvSeeder extends Seeder
         return ['open' => $match[1], 'close' => $match[2]];
     }
 
-    private function normalizeMinutes(mixed $value): int
+    private function normalizeMinutes(mixed $value, ?string $type = null): int
     {
         $minutes = (int) round((float) $this->parseNumber($value) ?? 0);
+
+        // A hotel check-in is not a visit and stays 0 for lodging, which is what
+        // the `places` migration documents. Forcing the meal default here would
+        // schedule every overnight stay as a one-hour attraction.
+        if ($type === Place::TYPE_LODGING) {
+            return max(0, min($minutes, 1440));
+        }
 
         if ($minutes <= 0) {
             // A meal is 60 minutes because that is roughly how long one takes,
