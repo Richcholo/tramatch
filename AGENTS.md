@@ -1062,6 +1062,217 @@ how a visitor reaches another place.
 
 `tests/Feature/PlaceNavigationTest.php` (11) pins all of it.
 
+### Complete itineraries: places, meals, lodging, and an AI planner
+
+A panel review said "the locations are too small" and that a traveller adds where
+they will eat and where they will stay, with real distances rather than
+estimates. This section is the two-week revision answering that.
+
+**DAY 1 IS LANDED AND NOTHING ELSE IS.** Schema, models, config and the test
+suite. **There is no HTTP client, no job, no route, no seeder and no view.** No
+code reads `services.gemini.*` or `planning.*` except one test that asserts the
+absence of a planning endpoint, because a client arriving before its test and its
+quota budget is the thing this repo keeps warning about. Days 2-14 are listed at
+the bottom of this section.
+
+#### `places` is a separate table and must stay one
+
+`Destination` is a curated **attraction** catalogue: `budget_level` is an exact
+match against the traveller's profile, `recommended_minutes` is a visit length,
+and `hours_kind` is written for gates and registration desks. A hotel has a room
+rate and a check-in time, not a visit duration. Filing one as a destination makes
+the recommendation score, the swipe deck and the PDF's "EST. TOTAL" describe a
+hotel as an attraction.
+
+It also preserves the crawler's boundary. The crawler may propose fees and hours
+and nothing else; discovering restaurants and hotels needs a different extraction
+and a different approval queue, which is Day 2-3's work.
+
+#### A PRICE IS NULLABLE HERE, AND THAT IS THE POINT
+
+`destinations.estimated_cost` is `decimal(10,2) default 0`, so on that table
+"nobody verified this" and "it costs nothing" are **the same stored value**. That
+is defensible for an attraction whose fee is published. It is not defensible for
+a hotel: a cluster of rooms filed at 0 sums into a trip total as free, and the
+app then asserts the trip fits a budget.
+
+`places.price_min` / `price_max` are **NULLABLE**, `Place::hasVerifiedPrice()` is
+the only way to cost a place, and `Place::costFor()` returns **null** when the
+price or the basis is unknown. An unpriced place prints "Price not listed", which
+is a real answer. `test_a_place_price_can_be_unknown_rather_than_zero` and
+`test_a_room_night_is_not_multiplied_by_the_number_of_travellers` pin both.
+
+**`price_basis` IS NOT DECORATIVE — it is the panel's budget question.** `₱4,500`
+means nothing without "per room per night" beside it. See `Place::PRICE_BASES`.
+A **room rate is never multiplied by group size**: six people in one room is
+still one room, and the traveller decides how many rooms they need. A meal rate
+*is* per head.
+
+#### Coverage is reported PER BUDGET TIER, and never as a total
+
+`RecommendationService`, `SwipeDeckService`, `ItineraryGenerator` and
+`SwipeDiscoveryController` all filter `where('budget_level', $tier)` for
+**equality**. A place filed under the wrong tier is **invisible** to a traveller
+in the other two, not merely ranked lower.
+
+Measured from the CSV: Benguet has **8** destinations, which reads as the
+strongest province in the catalogue, but the split is 5 economy / 3 mid-range. A
+mid-range traveller can see **three** of the eight. A province-wide count
+therefore overstates what any one traveller can plan with.
+
+`Place::clusterCoverage($province)` returns per-tier counts, skips a tier nobody
+declared rather than inventing it into the nearest, ignores archived rows, and
+counts `priced` separately. `Place::clusterReadiness()` returns **the gaps**, not
+a bare false, because the question is always "for which tiers, and what is
+missing". `CLUSTER_MINIMUMS` is 6 food / 3 lodging; lodging is the binding
+constraint, because food can be left unpriced and a cluster with nowhere to sleep
+cannot be planned at all.
+
+#### The three pilot clusters, and why those three
+
+`Place::CLUSTERS` is **baguio** (Benguet), **antipolo** (Rizal), **paoay**
+(Ilocos Norte). Chosen on **density**, because "the locations are too small" is a
+complaint about coverage and coverage is not a count: sixty attractions scattered
+across Luzon raises the number and leaves every trip unable to answer "where do I
+eat?".
+
+- **Baguio** — five of the eight Benguet destinations are inside Baguio City
+  itself (Burnham, Wright Park, Camp John Hay, Mirador, the Botanical Garden), so
+  a two-day trip is short drives rather than four hours of road.
+- **Antipolo** — three inside Antipolo City (Cloud 9, the Pintô, Hinulugang
+  Taktak) plus four in Tanay, which is the same ridge. Metro Manila also has the
+  densest food and lodging coverage in the country, so sourcing is easiest.
+- **Paoay** — Paoay (Sand Dunes, San Agustin Church) and Burgos (Cape
+  Bojeador, Kapurpurawan) are one coastal run. Six is the smallest of the three
+  and it is the best coastal test case.
+
+Deliberately **not** Aurora or Cagayan: five and four destinations but no second
+municipality worth driving to, so a trip there is one day out and one day back.
+
+It is a **curation label, not a filter**. Nothing refuses a place because its
+cluster is unlisted; the constant exists so the coverage report can say whether
+one is ready. `test_the_three_pilot_clusters_point_at_provinces_the_catalogue_
+actually_has` reads the **CSV**, not the database, so it fails if the real
+catalogue loses Baguio rather than checking its own fixtures, and it asserts the
+density premise rather than just the names.
+
+#### Opening hours are SHARED, not copied
+
+`app/Models/Concerns/HasOpeningHours.php` holds all of it — the `HOURS_*`
+constants, `daySlugs()`, `normalisedDailyHours()`, `hoursForDay()`,
+`perDayHoursLabel()`, `formatTime()` and the rest. It was moved out of
+`Destination` **verbatim**: 420 tests passed before and after, which is the only
+evidence that an extraction did not also change behaviour.
+
+`Destination::daySlugs()`, `Destination::formatTime()` and `Destination::HOURS_*`
+are read as **static** calls by the seeder, the crawler, the admin Blade form and
+the tests, and a trait serves all three on the using class exactly as a class
+member does.
+`test_the_hours_api_is_still_reachable_statically_on_destination` pins that
+separately, because the failure would be a fatal in the crawler rather than a
+test failure.
+
+**If a rule here is wrong, change it here once.** A copy-pasted
+`hoursForDay()` on `Place` is the failure this prevents.
+
+#### An itinerary stop has four shapes
+
+`itinerary_items.item_type` is **attraction | meal | lodging | custom**, and it
+**defaults to `attraction`** so the ~435 existing rows need no backfill — the same
+reason `is_featured` defaulted true. The discriminator is the reference, not the
+type string: a `meal` with no `place_id` is malformed.
+
+- **`custom`** is the one that matters most and the one the panel did not ask for:
+  a traveller who already has a hotel booked. No foreign key at all, just the
+  `custom_*` columns.
+- **A custom entry with an address and no pin is legal and stays unroutable.**
+  `custom_latitude` / `custom_longitude` are nullable on purpose and
+  `hasKnownLocation()` requires **both**. Half a position is not a position, and a
+  caller checking only latitude puts a pin at 0 degrees longitude.
+- **A place deleted outright nulls `place_id`; a deleted destination still
+  cascades.** `place_id` is `nullOnDelete` deliberately: a restaurant closes and an
+  admin retires the row, and cascading would silently delete stops out of a
+  traveller's saved trip — the exact loss `ItineraryEditor::removeDay()` refuses to
+  make. The stop survives, keeps its type, and prints "Place no longer in the
+  catalogue" rather than rendering blank.
+- **Read a stop through `placeName()`, `latitude()`, `longitude()`.** A meal has no
+  destination and a straight `$item->destination->name` throws on a perfectly
+  valid row.
+
+#### The route columns are the panel's "distance, not estimates"
+
+`travel_minutes_from_previous` is a **flat `ItinerarySchedule::TRAVEL_MINUTES`
+(45)** for every leg in the app regardless of the actual distance. That is the
+estimate being objected to. `route_distance_meters`, `route_duration_minutes`,
+`route_provider` and `route_status` are where the real answer goes on Day 6-7.
+
+**`route_status` defaults to `unresolved`, and `routeSummary()` returns null.** It
+deliberately does **not** fall back to `travel_minutes_from_previous`: that is the
+lie the panel called out. A leg the provider could not resolve says so. A
+`resolved` row with no numbers reads as unresolved too, so the half-written state
+cannot format a null.
+
+`ItineraryItem::durationLabel()` is the one rounding rule for the item, the map
+tooltip and the PDF: `45 min`, `1 h`, `1 h 20 min`.
+
+#### The AI plans; Laravel checks
+
+Written into `config/planning.php` as **data**, so the client cannot drift from
+the claim the demo makes, and pinned by
+`test_the_model_is_recorded_as_choosing_while_the_server_checks`.
+
+| The model chooses | Laravel decides |
+|---|---|
+| selection, day assignment, order, a reason | coordinates, price, opening hours, duration, distance, travel time, feasibility |
+
+"Only use our sources" in a prompt **is not enforcement**. An unknown candidate id
+and a server-side overwrite are. Prices, hours and coordinates are read from the
+database and never from the model's reply.
+
+- **No grounding claim rests on a key.** A Gemini subscription for the Gemini app
+  is a **separate billing arrangement** and creates no API entitlement. The key
+  comes from AI Studio for the developer API, and free-tier content is used to
+  improve Google's products, so **no traveller name, email, booking reference or
+  private note may be sent.**
+- **The key is server-side only.** It must never reach a `@vite` entry, a `<meta>`
+  tag or a data attribute.
+  `test_the_gemini_key_never_reaches_a_rendered_page` walks a rendered page for it.
+- **One transport mode: DRIVING, and labelled as such.** A driving route is not a
+  jeepney, a bus or a boat journey. Travel time stays an **estimate** even with a
+  provider: traffic, the clock, transfers and road works are not in it.
+- **One request per generation, at most two attempts (proposal + one repair).
+  Never a loop.** Opening, editing and exporting a **saved** itinerary costs
+  nothing.
+- **`config/planning.php` uses HTTP timeouts, not job `$timeout` properties**,
+  because the Hostinger worker's `queue:drain` calls `$job->fire()` directly and
+  does not enforce a job's timeout the way `queue:work` does. Same reason the
+  crawl job's own timeout is not sufficient on this host.
+
+#### What is NOT verified yet
+
+**Nothing here has been clicked in a browser or rendered on a page.** No
+`places` row exists, no admin screen manages one, no picker offers one, and the
+itinerary still renders only attractions. The models and the schema are
+exercised by `tests/Feature/PlacesCatalogueTest.php` (31) against SQLite and
+against a throwaway **MySQL** database, because the two disagree about dropping a
+column in a foreign key and about nullability introspection.
+
+#### Days 2-14, in order
+
+| Day | Work | Gate |
+|---|---|---|
+| 2-3 | `places` seeder from a CSV, admin CRUD, the three clusters curated | a cluster can support a real trip; every row has a source |
+| 4-5 | `item_type` through the editor, overnight base charged once, cost basis, custom entries, PDF | a complete trip can be built **by hand**, Gemini unused |
+| 6-7 | Routing client, cache, `ItinerarySchedule` takes real legs, map geometry | changing a stop updates every downstream leg |
+| 8-9 | Gemini client, structured output, id validation, generation status | an invented id or a failed call cannot save a plan |
+| 10 | Feasibility repair, failures, duplicate submissions, locked stops | two clicks cannot produce two plans |
+| 11 | PDF, map, sources, unknown-cost labels | every surface tells the same story |
+| 12-14 | Tests, Hostinger end-to-end, demo rehearsal | a demonstrable release |
+
+**Defer first if time slips:** conversational revision, automated search
+discovery, and geographic expansion. Keep the manual complete trip, routing,
+grounded generation and validation.
+
 ### Destination-source crawling
 
 `destination_sources` → `destination_source_snapshots` (raw HTML on the `local`
@@ -1638,6 +1849,56 @@ new name as unrecorded. The deploy died on:
 ```
 SQLSTATE[42S21]: Column already exists: 1060 Duplicate column name 'sort_order'
 ```
+
+**THE INVERSE OF THAT TRAP IS WORSE, AND IT WAS ALREADY IN THIS REPO WHEN THE
+ITINERARY EXPANSION STARTED.** `itinerary_items.destination_id` is `NOT NULL` on
+every database in existence, including a fresh clone, and it is supposed to be
+nullable — because a meal stop, a hotel and a traveller's own booking all have no
+destination. The reason is two migrations reading as though the second fixed it:
+
+```php
+// 2026_08_27_034206_create_itinerary_items_table
+$table->foreignId('destination_id')->constrained()->cascadeOnDelete();   // NOT NULL
+
+// 2026_09_05_065400_repair_itinerary_tables
+if (! Schema::hasColumn('itinerary_items', 'destination_id')) {           // guard
+    $table->foreignId('destination_id')->nullable()->constrained()...;   // never runs
+}
+```
+
+The repair's `hasColumn()` guard sees the column the create migration already
+made and skips it, **on every database, forever**. So the file reads as a fix and
+has never done anything. Nothing noticed for a month because
+`ItineraryEditor::writeDay()` already guarded its insert with `elseif
+($destination)` — the code has always tolerated a null, and nothing ever sent
+one. Adding `item_type` was the first request that could.
+
+- **`hasColumn()` inside a repair migration is a guard, not a fix.** A corrective
+  step guarded on *existence* cannot correct anything a previous migration
+  already created. `2026_10_14_092000_allow_itinerary_items_without_a_destination`
+  guards on **nullability**, read out of `Schema::getColumns()`.
+  **Assert the property, not the column's presence.**
+- **The same pattern likely hides other repairs in that file.** Every
+  `if (! Schema::hasColumn(...))` branch inside
+  `2026_09_05_065400_repair_itinerary_tables` is dead on any database that ran
+  the create migrations first, which is all of them. Do not read them as
+  descriptions of the current schema. `itineraries.budget_level` is still
+  `NOT NULL` for the same reason, despite that repair's `->nullable()` — and a
+  test helper that omits it fails on SQLite while working on MySQL.
+- **SQLITE DROPS A COLUMN IN A FOREIGN KEY DIFFERENTLY, AND A MYSQL-ONLY GUARD
+  LOOKS CORRECT UNTIL THE SUITE RUNS.** Laravel answers SQLite's missing
+  `DROP CONSTRAINT` by rebuilding the table, and that rebuild fails when a column
+  being dropped is still named in a foreign key definition:
+
+  ```
+  error in table itinerary_items after drop column:
+  unknown column "place_id" in foreign key definition
+  ```
+
+  So `2026_10_14_091000`'s `down()` calls `dropForeign(['place_id'])` for
+  **every** driver. A `mysql`-conditional guard would have failed on the test
+  database and not on production, which is the worst direction for a guard to
+  break in.
 
 **The guards, not the filename, are the fix.** `up()` checks
 `Schema::hasColumn()` per column, so a fresh database gets both and a server
