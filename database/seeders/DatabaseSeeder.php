@@ -12,6 +12,27 @@ class DatabaseSeeder extends Seeder
             TagSeeder::class,
             LuzonLocationsCsvSeeder::class,
             DestinationSourceSeeder::class,
+
+            /*
+             * PLACES LAST, AND IT DEPENDS ON NOTHING ABOVE.
+             *
+             * `places.csv` ships with a header and no rows, so this is a no-op on
+             * a fresh clone -- which is the correct state, not a missing file. A
+             * catalogue of restaurants and hotels is hand-sourced one cited page
+             * at a time, and inventing rows to fill the table would defeat the
+             * only thing this catalogue is for.
+             *
+             * It is deliberately NOT run between the CSV and the source seeder
+             * the way a future `places_sources` table might want it to be. Places
+             * carry their own `source_url` column rather than a row in
+             * `destination_sources`, because a restaurant is not a destination
+             * and does not have the destination crawler behind it. See AGENTS.md.
+             *
+             * It prints cluster readiness per budget tier when it runs, because
+             * "is this cluster big enough to plan a trip in" is the question the
+             * panel asked and a seeder that only prints a count hides it.
+             */
+            PlacesCsvSeeder::class,
         ]);
 
         /*
