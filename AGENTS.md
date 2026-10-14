@@ -1270,6 +1270,50 @@ apart by road, fronted by `OsrmClient` and bound in `AppServiceProvider`
   purpose: they prove day-window logic, and a 10-minute stub would move their
   assertions into testing the stub.
 
+#### **THE CACHE WAS OUTSIDE THE GUARD, AND IT FAILED EVERY LIVE SAVE**
+
+Shipped in `08af87c`, found on the host within a day. Every itinerary save
+failed with "The itinerary could not be saved" and Reflow filled nothing, and
+the two symptoms had one cause.
+
+**`OsrmClient::route()` guarded its transport, and `RouteService::leg()` guarded
+nothing.** The `Cache::remember()` call sat *outside* any try/catch, so the
+cache store could throw straight out of `leg()`, through
+`ItineraryEditor::routedLeg()`, into `writeLegs()` — which runs **inside the
+save's transaction**, so an unreadable cache took the whole trip down.
+
+**THE ARRAY CACHE DRIVER CANNOT FAIL AND THE DATABASE DRIVER CAN.** The suite
+runs `array`, production runs `database`, and the road layer is the only thing
+that calls the cache on every single leg. So the untested layer was exactly
+the layer that threw: no test could ever have reached it. **A layer the suite
+cannot exercise is the layer that breaks on the host** — the same shape as the
+CA-bundle-per-process trap, one layer down.
+
+The fix is at the layer that owns the promise, not the layer that happened to
+throw: `RouteService::leg()` wraps `Cache::remember()` in its own
+`catch (Throwable)` and returns null. The docblock already promised "every
+failure is null" and did not keep it for its own machinery.
+
+**`test_an_unreadable_route_cache_cannot_fail_a_save` FALSIFIES IT**, by
+registering a cache store that throws for `route:` keys and driving a real
+save. Without the guard: `cache table is not readable`, save failed. With it:
+saved, leg `unresolved`. The failure is scoped to the `route:` prefix on
+purpose — a store that throws for everything also breaks the throttle
+middleware and the session, and the test then fails for reasons that have
+nothing to do with routing.
+
+Two harness lessons from writing it, both the checker being wrong first:
+
+- **`Cache::extend()` registers a creator keyed by DRIVER, and the store needs a
+  `cache.stores.<name>` entry.** Setting only `cache.default` is
+  `Cache store [x] is not defined`.
+- **A custom creator must return a `Repository`, not a bare `Store`.**
+  `CacheManager` wraps built-in stores itself and expects a custom one
+  finished. Returning the store hands a `Store` to every
+  `Repository`-hinted dependency (it surfaced as a fatal in
+  `DestinationCarousel::__construct`) — a failure that looks nothing like the
+  cache being tested.
+
 #### The AI plans; Laravel checks
 
 Written into `config/planning.php` as **data**, so the client cannot drift from

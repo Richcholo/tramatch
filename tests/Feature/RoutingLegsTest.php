@@ -10,8 +10,12 @@ use App\Models\Tag;
 use App\Models\TravelProfile;
 use App\Models\User;
 use App\Services\Routing\OsrmClient;
+use Illuminate\Cache\Repository as CacheRepository;
+use Illuminate\Contracts\Cache\Store;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use RuntimeException;
 use Tests\TestCase;
 
 /**
@@ -74,6 +78,146 @@ class RoutingLegsTest extends TestCase
         $service->leg(14.3, 121.4, 14.6, 121.8);
 
         Http::assertSentCount(1);
+    }
+
+    /**
+     * The failure that shipped to production and failed every save.
+     *
+     * The client guards its own transport errors, but the cache layer sat
+     * OUTSIDE that guard. On the suite the cache driver is `array` and cannot
+     * fail; on the host it is `database` and hits the `cache` table on every
+     * leg, so an unreadable cache threw out of `RouteService::leg()`, through
+     * `ItineraryEditor::routedLeg()`, and took the save down with it. This
+     * reproduces exactly that, against the whole HTTP save rather than the
+     * service in isolation, because the guarantee being tested is that a
+     * routing failure cannot fail a traveller's trip.
+     */
+    public function test_an_unreadable_route_cache_cannot_fail_a_save(): void
+    {
+        $this->breakTheRouteCache();
+
+        [$user, $itinerary, $day] = $this->trip();
+        $first = $this->stop($day, $this->destination(14.30, 121.40), 1);
+        $second = $this->destination(14.60, 121.80);
+        $this->like($user, $second);
+
+        $this->actingAs($user)
+            ->patch(route('itineraries.update', $itinerary), [
+                'items' => [
+                    $first->id => $this->row($day->id, 1, $first->destination_id, '09:00', '10:00'),
+                    '-1' => $this->row($day->id, 2, $second->id, '10:30', '11:30'),
+                ],
+            ])
+            ->assertRedirect(route('itineraries.show', $itinerary))
+            ->assertSessionHasNoErrors();
+
+        $items = $itinerary->fresh()->days->first()->items()->orderBy('sort_order')->get();
+
+        // The stop was still saved, with the honest answer rather than an
+        // exception: the leg is unresolved, and nothing was invented for it.
+        $this->assertCount(2, $items);
+        $this->assertSame('unresolved', $items[1]->route_status);
+        $this->assertNull($items[1]->routeSummary());
+    }
+
+    /**
+     * Make the cache store throw for routing keys only.
+     *
+     * Scoped to the `route:` prefix on purpose: a cache that throws for
+     * everything would also break the throttle middleware and the session,
+     * and the test would then fail for reasons that have nothing to do with
+     * routing. This is the production shape of the fault — a route cache that
+     * cannot be read — and nothing more.
+     */
+    private function breakTheRouteCache(): void
+    {
+        $store = new class implements Store
+        {
+            private function guard($key): void
+            {
+                if (str_contains((string) $key, 'route:')) {
+                    throw new RuntimeException('cache table is not readable');
+                }
+            }
+
+            public function get($key)
+            {
+                $this->guard($key);
+
+                return null;
+            }
+
+            public function many(array $keys)
+            {
+                return [];
+            }
+
+            public function put($key, $value, $seconds)
+            {
+                return false;
+            }
+
+            public function putMany(array $values, $seconds)
+            {
+                return false;
+            }
+
+            public function increment($key, $value = 1)
+            {
+                $this->guard($key);
+
+                return false;
+            }
+
+            public function decrement($key, $value = 1)
+            {
+                $this->guard($key);
+
+                return false;
+            }
+
+            public function forever($key, $value)
+            {
+                return false;
+            }
+
+            public function forget($key)
+            {
+                return false;
+            }
+
+            public function touch($key, $seconds)
+            {
+                return false;
+            }
+
+            public function flush()
+            {
+                return false;
+            }
+
+            public function getPrefix()
+            {
+                return 'unreadable:';
+            }
+        };
+
+        // A custom creator returns a REPOSITORY, not a bare store: CacheManager
+        // wraps the built-in stores itself and expects a custom one to arrive
+        // finished. Handing back the store alone puts a Store where half the
+        // app asks for a Repository — which is the harness being wrong again,
+        // in a way that fails for reasons unrelated to routing.
+        Cache::extend('unreadable', fn () => new CacheRepository($store));
+
+        // extend() registers a CREATOR keyed by driver, and resolve() looks it
+        // up via the store's `driver` key — so the store needs an entry of its
+        // own. Setting only cache.default is "store not defined".
+        config([
+            'cache.stores.unreadable' => ['driver' => 'unreadable', 'prefix' => 'unreadable'],
+            'cache.default' => 'unreadable',
+        ]);
+
+        Cache::forgetDriver('unreadable');
     }
 
     public function test_reflow_spaces_stops_by_the_road(): void
