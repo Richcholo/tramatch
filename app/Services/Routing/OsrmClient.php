@@ -35,6 +35,7 @@ class OsrmClient
         private readonly string $baseUrl,
         private readonly string $profile,
         private readonly int $timeoutSeconds,
+        private readonly string $userAgent,
     ) {
     }
 
@@ -46,6 +47,7 @@ class OsrmClient
             rtrim((string) ($routing['base_url'] ?? 'https://router.project-osrm.org'), '/'),
             (string) config('planning.transport.profile', 'driving'),
             (int) config('planning.timeouts.routing_seconds', 8),
+            (string) ($routing['user_agent'] ?? 'TraMatch/1.0'),
         );
     }
 
@@ -64,12 +66,14 @@ class OsrmClient
         float $toLongitude
     ): ?RouteLeg {
         try {
-            $response = Http::timeout($this->timeoutSeconds)->get(
-                $this->baseUrl.'/route/v1/'.$this->profile.'/'
-                .$fromLongitude.','.$fromLatitude.';'
-                .$toLongitude.','.$toLatitude,
-                ['overview' => 'false']
-            );
+            $response = Http::timeout($this->timeoutSeconds)
+                ->withHeaders(['User-Agent' => $this->userAgent])
+                ->get(
+                    $this->baseUrl.'/route/v1/'.$this->profile.'/'
+                    .$fromLongitude.','.$fromLatitude.';'
+                    .$toLongitude.','.$toLatitude,
+                    ['overview' => 'false']
+                );
         } catch (Throwable $e) {
             // Swallowed, but never silently. A routing failure that leaves no
             // trace is indistinguishable from a routing layer that is not
@@ -87,6 +91,16 @@ class OsrmClient
         }
 
         if (! $response->successful()) {
+            // A 403 is not a provider having a bad day — on the demo server it
+            // means the request was not identifiable, and no amount of retrying
+            // fixes it. Logged separately from the transport failures above
+            // because the remedy is opposite: a header, not a backoff.
+            Log::warning('routing.refused', [
+                'url' => $this->baseUrl,
+                'status' => $response->status(),
+                'user_agent' => $this->userAgent,
+            ]);
+
             return null;
         }
 

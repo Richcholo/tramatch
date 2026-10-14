@@ -13,6 +13,7 @@ use App\Services\Routing\OsrmClient;
 use Illuminate\Cache\Repository as CacheRepository;
 use Illuminate\Contracts\Cache\Store;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -69,6 +70,52 @@ class RoutingLegsTest extends TestCase
 
         $this->stubOsrm(fn () => Http::failedConnection('Could not resolve host'));
         $this->assertNull($route());
+    }
+
+    /**
+     * The header that made routing work at all.
+     *
+     * MEASURED, NOT GUESSED, on 2026-10-15 against the public demo server:
+     * a request carrying NO User-Agent is answered 403, and the same request
+     * with any User-Agent at all is answered 200. Guzzle 7 — which is what
+     * Laravel's Http client is — sets no default one, so without this the
+     * client was refused everywhere and every leg quietly fell back to the
+     * flat estimate. The tests stub the endpoint and therefore never saw it.
+     *
+     * The stub below reproduces the provider's real behaviour rather than
+     * asserting the header's presence: it refuses a UA-less request exactly
+     * as the demo server does. Asserting `$request->hasHeader(...)` alone
+     * would pass while the provider kept refusing us, which is the shape of
+     * the bug this pins.
+     */
+    public function test_a_provider_that_refuses_anonymous_requests_still_routes(): void
+    {
+        Http::fake([
+            // A fake receives Illuminate\Http\Client\Request, NOT the Guzzle PSR-7
+            // message: type-hinting the PSR-7 class here fails the stub for a
+            // reason that has nothing to do with routing.
+            'router.project-osrm.org*' => function (ClientRequest $request) {
+                if (! $request->hasHeader('User-Agent') || $request->header('User-Agent')[0] === '') {
+                    return Http::response('Forbidden', 403);
+                }
+
+                return Http::response([
+                    'code' => 'Ok',
+                    'routes' => [['distance' => 8400, 'duration' => 600]],
+                ], 200);
+            },
+        ]);
+
+        $leg = app(OsrmClient::class)->route(14.3, 121.4, 14.6, 121.8);
+
+        $this->assertNotNull($leg);
+        $this->assertSame(8400, $leg->distanceMeters);
+
+        // And it identifies itself as something a human can answer to.
+        Http::assertSent(fn (ClientRequest $request) => str_contains(
+            (string) $request->header('User-Agent')[0],
+            'mailto:'
+        ));
     }
 
     public function test_a_cached_leg_issues_no_second_request(): void

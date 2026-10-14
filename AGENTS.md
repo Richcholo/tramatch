@@ -1305,6 +1305,57 @@ Reporting a memoised real distance as an estimate would be its own lie.
   problem.** That is exactly what the cache guard in `73715a9` got wrong, and
   why "the save works now and every leg is generic" was indistinguishable
   from "routing is switched off".
+
+#### **GUZZLE 7 SENDS NO USER-AGENT, AND THE DEMO SERVER ANSWERS 403**
+
+The cause of every leg being an estimate, found on 2026-10-15. **Routing had
+never worked on any host.** Every leg was null, so every day was laid out on the
+flat 45 — which is why the panel's complaint survived the feature built to
+answer it.
+
+Measured, one variable at a time, against the public demo server:
+
+| Request | Result |
+|---|---|
+| PHP cURL, **no User-Agent header** | **403** |
+| `GuzzleHttp/7` | 200 |
+| `Laravel Framework` | 200 |
+| `curl/8.14.1` | 200 |
+| `TraMatch/1.0 (+mailto:support@tramatch.site)` | 200 |
+
+**GUZZLE 7 SETS NO DEFAULT USER-AGENT.** `Client::configureDefaults()` has no
+`headers` key at all (Guzzle 6 had `'User-Agent' => default_user_agent()`), so
+Laravel's `Http` client went out anonymous and the demo server refused it. The
+system `curl` binary on the same machine got 200 at the same moment, which is
+what made this look like a CA or network problem for an hour: **the CLI and PHP
+disagreeing about a remote host is a client-header difference until proven
+otherwise.**
+
+**IT WAS NOT THE CA BUNDLE.** `curl.cainfo` and `openssl.cafile` are empty in
+this repo's local `php.ini` too, and PHP's cURL reaches the demo server fine —
+the empty values fall back to the system bundle. Do not chase the CA store
+because the ini values look blank; probe with PHP's cURL directly, not with the
+`curl` binary.
+
+**`test_a_provider_that_refuses_anonymous_requests_still_routes` REPRODUCES THE
+PROVIDER'S BEHAVIOUR** — its stub answers 403 to a request with no
+`User-Agent` and 200 otherwise — rather than asserting the header exists.
+Asserting `$request->hasHeader()` passes while the provider keeps refusing us,
+which is exactly the bug. Falsified by removing the header.
+
+Two traps in writing it:
+
+- **`Http::fake()` hands the stub an `Illuminate\Http\Client\Request`, not the
+  Guzzle PSR-7 message.** A `GuzzleHttp\Psr7\Request` type hint fails the stub
+  for a reason unrelated to routing.
+- **The refusal is not a transport failure and gets its own log line**
+  (`routing.refused`, with the status and the UA sent). A 403 is not the
+  provider having a bad day and no backoff fixes it — the remedy is a header.
+  Folding it into "unresolved" is what made this take a live round-trip.
+
+The default UA names a real mailbox for the same reason `crawling.token` does:
+an anonymous bot on somebody's free demo server is what gets demo servers
+switched off for everyone.
 - **The road is never on the test path.** `tests/TestCase.php` stubs the OSRM
   host with a fixed 8.4 km / 10 min leg, because otherwise every two-stop save
   in the suite issues live HTTP. A second `Http::fake()` does NOT override the

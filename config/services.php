@@ -76,6 +76,18 @@ return [
         'key' => env('ROUTING_API_KEY'),
         'base_url' => env('ROUTING_BASE_URL', 'https://router.project-osrm.org'),
         'provider' => env('ROUTING_PROVIDER', 'osrm'),
+
+        // NOT OPTIONAL, DESPITE BEING INVISIBLE WHEN IT WORKS. The public
+        // demo server answers 403 to a request carrying no User-Agent, and
+        // Guzzle 7 — which is what Laravel's Http client is — sets none by
+        // default. So this one header is the difference between real distances
+        // and a silent fallback to the flat estimate on every host, measured
+        // on 2026-10-15: no UA at all is 403, and any UA at all is 200.
+        //
+        // It names a real mailbox for the same reason the crawler's token
+        // does: an anonymous bot hitting somebody's free demo server is the
+        // behaviour that gets demo servers switched off for everyone.
+        'user_agent' => env('ROUTING_USER_AGENT', 'TraMatch/1.0 (+mailto:support@tramatch.site)'),
     ],
 
 ];
