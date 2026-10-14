@@ -3,6 +3,7 @@
 namespace App\Services\Routing;
 
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
@@ -69,7 +70,19 @@ class OsrmClient
                 .$toLongitude.','.$toLatitude,
                 ['overview' => 'false']
             );
-        } catch (Throwable) {
+        } catch (Throwable $e) {
+            // Swallowed, but never silently. A routing failure that leaves no
+            // trace is indistinguishable from a routing layer that is not
+            // running at all, and the first symptom of this was a user
+            // reporting that reflow "uses generic times" with nothing anywhere
+            // saying why. A certificate failure on a host without a CA bundle
+            // looks exactly like a provider that stopped answering, and the
+            // two need different fixes.
+            Log::warning('routing.transport_failed', [
+                'url' => $this->baseUrl,
+                'error' => $e->getMessage(),
+            ]);
+
             return null;
         }
 

@@ -88,7 +88,7 @@ class ItinerarySchedule
      * whereas here they typed the durations themselves.
      *
      * @param  array<int, array{id: int, duration: int, travel?: int|null}>  $stops
-     * @return array<int, array{start_time: string, end_time: string, travel_minutes_from_previous: int}>
+     * @return array<int, array{start_time: string, end_time: string, travel_minutes_from_previous: int, measured: bool}>
      */
     public static function reflow(array $stops): array
     {
@@ -104,8 +104,19 @@ class ItinerarySchedule
             // not forty-five. Advancing with the current stop's own travel
             // would charge every leg one stop late, and a day of short roads
             // would still be laid out on the flat estimate.
-            $travel = $stop['travel'] ?? self::TRAVEL_MINUTES;
-            $travel = is_numeric($travel) && $travel >= 0 ? (int) $travel : self::TRAVEL_MINUTES;
+            //
+            // AN EXPLICIT `travel: null` MEANS "COULD NOT BE ROUTED", and it
+            // is not the same thing as a caller that supplied nothing. Both
+            // land on TRAVEL_MINUTES so the day is still laid out — a day
+            // cannot be refused because one road is unknown — but only the
+            // first is recorded as `measured => false`. Collapsing the two is
+            // how a dead routing provider passes for a day of real distances:
+            // the numbers are identical and the difference is invisible. This
+            // reflow is the panel's complaint in miniature, so the substitution
+            // is kept AND counted, never kept quietly.
+            $measured = is_numeric($stop['travel'] ?? null) && (int) $stop['travel'] >= 0;
+
+            $travel = $measured ? (int) $stop['travel'] : self::TRAVEL_MINUTES;
             $earliest = $previousEnd === null
                 ? self::DAY_START_MINUTES
                 : $previousEnd + $travel;
@@ -120,6 +131,11 @@ class ItinerarySchedule
                     $previousEnd,
                     $start
                 ),
+                // The first stop of a day has no leg into it at all. It is not
+                // a routing failure — there is nothing to fail — so it counts
+                // as measured. Otherwise every day would report at least one
+                // estimated gap and the notice would cry wolf.
+                'measured' => $previousEnd === null ? true : $measured,
             ];
 
             $previousEnd = $end;
@@ -127,6 +143,26 @@ class ItinerarySchedule
         }
 
         return $result;
+    }
+
+    /**
+     * How many of a reflowed day's gaps are estimates rather than measured
+     * roads.
+     *
+     * The question a traveller actually needs answered is "can I trust these
+     * times", and the answer is per day: a day where every leg is a real
+     * distance is laid out on the road, and a day where none are is laid out
+     * on the flat 45 the panel objected to. Counting beats a boolean for the
+     * same reason `clusterReadiness()` returns gaps rather than false.
+     *
+     * @param  array<int, array<string, mixed>>  $slots
+     */
+    public static function estimatedGapCount(array $slots): int
+    {
+        return count(array_filter(
+            $slots,
+            fn (array $slot) => ($slot['measured'] ?? null) === false
+        ));
     }
 
     /**

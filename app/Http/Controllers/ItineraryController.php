@@ -389,11 +389,18 @@ class ItineraryController extends Controller
     ): JsonResponse {
         $this->ensureOwner($itinerary);
 
+        $preview = $editor->previewReflow(
+            $itinerary,
+            $request->validated()['items'] ?? []
+        );
+
         return response()->json([
-            'days' => $editor->previewReflow(
-                $itinerary,
-                $request->validated()['items'] ?? []
-            ),
+            'days' => $preview['days'],
+            // Gaps the road could not answer for, per day. The browser says so
+            // out loud: a reflow that quietly fell back to the flat estimate
+            // is indistinguishable from one measured on real distances, which
+            // is the complaint the routing work exists to answer.
+            'estimated_gaps' => $preview['estimated_gaps'],
         ]);
     }
 

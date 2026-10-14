@@ -245,15 +245,55 @@ function initItineraryEditor(root) {
                 refreshTravel(list);
                 markDirty();
 
-                say(
-                    latest > 18 * 60
-                        ? `Day ${card.dataset.dayNumber} now runs to ${fromMinutes(latest)}. That is past the ${fromMinutes(18 * 60)} the planner aims for.`
-                        : `Day ${card.dataset.dayNumber} refits into ${fromMinutes(latest)}.`,
-                    latest > 18 * 60 ? 'warn' : 'info'
-                );
+                const estimated = Number(body.estimated_gaps?.[String(dayId)] ?? 0);
+
+                say(reflowNotice(card, latest, estimated), noticeTone(latest, estimated));
             })
             .catch(() => say('Those times could not be recomputed.', 'error'))
             .finally(() => button?.removeAttribute('aria-busy'));
+    }
+
+    /**
+     * What a reflow actually achieved, in one sentence.
+     *
+     * THE ESTIMATE IS THE HONEST PART. The server lays a day out on real road
+     * distances where it has them and falls back to a flat 45-minute estimate
+     * where it does not, and the two produce byte-identical times. Reporting
+     * only the finish time would let a day that never met the road read
+     * exactly like one measured on it — which is the complaint the routing
+     * work was built to answer, reappearing in the notice. So the count comes
+     * from the server rather than being guessed here, and it is stated even
+     * when the rest of the line is good news.
+     */
+    function reflowNotice(card, latest, estimated) {
+        const day = card.dataset.dayNumber;
+        const over = latest > 18 * 60;
+
+        if (estimated > 0) {
+            const gaps = estimated === 1 ? 'gap is' : 'gaps are';
+
+            return `Day ${day} refits into ${fromMinutes(latest)}. ${estimated} ${gaps} an estimate, not a measured drive.`;
+
+        }
+
+        if (over) {
+            return `Day ${day} now runs to ${fromMinutes(latest)}. That is past the ${fromMinutes(18 * 60)} the planner aims for.`;
+        }
+
+        return `Day ${day} refits into ${fromMinutes(latest)}, timed on real driving distances.`;
+    }
+
+    /**
+     * A reflow with estimated gaps is a warning even when the day fits, and an
+     * over-long day outranks it: whichever problem is more likely to ruin the
+     * trip is the one the traveller is told about first.
+     */
+    function noticeTone(latest, estimated) {
+        if (latest > 18 * 60) {
+            return 'warn';
+        }
+
+        return estimated > 0 ? 'warn' : 'info';
     }
 
     /* -------------------------------------------------------------- travel */

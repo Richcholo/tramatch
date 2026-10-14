@@ -1261,6 +1261,50 @@ apart by road, fronted by `OsrmClient` and bound in `AppServiceProvider`
   the current stop's travel, charging every leg one stop late so a day of
   short roads still laid out on the flat estimate. The one-line fix and the
   comment saying why are both in the method.
+
+#### **AN UNRESOLVED LEG IS NOT THE SAME AS NO LEG, AND REFLOW WAS NOT TELLING THEM APART**
+
+Reported live as "Reflow times uses generic rather than actual distance time
+average" — correct, and the most important defect in the routing work, because
+it is the panel's complaint reproduced inside the feature built to answer it.
+
+**A day laid out on estimates and a day measured on real roads produce
+IDENTICAL TIMES.** `reflow()` had to substitute `TRAVEL_MINUTES` where the road
+could not answer (it cannot refuse a schedule because one leg is unknown), and
+it had no way to say so: an explicit `travel: null` and a caller that supplied
+no travel at all took the identical branch. So a reflow that never reached the
+road looked exactly like one that measured every leg, and the only evidence was
+the user's own eye.
+
+`reflow()` now returns `'measured' => bool` per slot, and
+`estimatedGapCount()` counts the unmeasured ones. The endpoint returns
+`estimated_gaps` **per day** — not per itinerary, because one unroutable leg in
+a week does not make the other six days suspect — and `reflowNotice()` in the
+editor states it: "*N* gaps are an estimate, not a measured drive". The
+measured case claims what it is too ("timed on real driving distances"), or
+the two notices would differ only in tone.
+
+**THE FIRST STOP OF A DAY IS NOT AN ESTIMATED GAP.** It has no leg into it,
+which is not a failure. Counting it would report at least one estimated gap on
+*every* day including fully-measured ones, and a warning that is always on is a
+warning nobody reads. `test_a_days_first_stop_is_never_an_estimated_gap` exists
+only for that rule and is falsified by dropping `$previousEnd === null ? true`.
+
+**A CACHED LEG IS STILL A MEASURED LEG.** Pinned deliberately in
+`test_a_reflow_reports_its_estimated_gaps`: with a dead road and a warm cache
+the count stays `0`, and only a `Cache::flush()` turns it into an estimate.
+Reporting a memoised real distance as an estimate would be its own lie.
+
+- **ROUTING FAILURES NOW LOG, AND THAT IS THE POINT.** Both layers swallow by
+  design — that is what makes an unreachable road a stored `unresolved` rather
+  than a failed save — but a swallow with **no log** is how this reached live
+  with nothing anywhere explaining it. `routing.transport_failed` and
+  `routing.cache_unreadable` are the two lines that make the host diagnosable
+  without a code change. **A guard that turns a loud failure into a quiet
+  fallback must replace the noise with a signal, or it has only moved the
+  problem.** That is exactly what the cache guard in `73715a9` got wrong, and
+  why "the save works now and every leg is generic" was indistinguishable
+  from "routing is switched off".
 - **The road is never on the test path.** `tests/TestCase.php` stubs the OSRM
   host with a fixed 8.4 km / 10 min leg, because otherwise every two-stop save
   in the suite issues live HTTP. A second `Http::fake()` does NOT override the

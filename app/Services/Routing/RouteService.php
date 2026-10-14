@@ -3,6 +3,7 @@
 namespace App\Services\Routing;
 
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
@@ -81,11 +82,22 @@ class RouteService
                     $toLongitude
                 )
             );
-        } catch (Throwable) {
+        } catch (Throwable $e) {
             // A cache that cannot be read is not a failed trip. It costs us
             // the memo, nothing else, so the leg resolves as unresolved and
             // the caller stores that — the same honest answer a dead road
             // gets, rather than an exception inside a save transaction.
+            //
+            // Logged, because this is the one failure the guard turned from
+            // loud into silent: the save now succeeds and every leg quietly
+            // falls back to the flat estimate, which is exactly the symptom
+            // that sent us looking for a CA bundle. Without this line the
+            // cause is unfindable from the host.
+            Log::warning('routing.cache_unreadable', [
+                'key' => $key,
+                'error' => $e->getMessage(),
+            ]);
+
             return null;
         }
     }

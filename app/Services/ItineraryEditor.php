@@ -99,7 +99,7 @@ class ItineraryEditor
      * road, and its legs stay unresolved until this runs.
      *
      * @param  array<int|string, array<string, mixed>>  $draft
-     * @return array<string, array<string, array<string, mixed>>> keyed by day id
+     * @return array{days: array<string, array<string, array<string, mixed>>>, estimated_gaps: array<string, int>} keyed by day id
      */
     public function previewReflow(Itinerary $itinerary, array $draft): array
     {
@@ -108,6 +108,7 @@ class ItineraryEditor
         [$destinations, $places] = ItineraryStop::preload($draft);
 
         $result = [];
+        $estimated = [];
 
         foreach ($days as $day) {
             $entries = $this->entriesForDay($day, $draft);
@@ -131,10 +132,17 @@ class ItineraryEditor
                 $previous = $stop;
             }
 
-            $result[(string) $day->id] = ItinerarySchedule::reflow($stops);
+            $slots = ItinerarySchedule::reflow($stops);
+
+            $result[(string) $day->id] = $slots;
+
+            // Per day, not per itinerary: one unroutable leg in a week does
+            // not make the other six days suspect, and the notice names the
+            // day it belongs to.
+            $estimated[(string) $day->id] = ItinerarySchedule::estimatedGapCount($slots);
         }
 
-        return $result;
+        return ['days' => $result, 'estimated_gaps' => $estimated];
     }
 
     /**

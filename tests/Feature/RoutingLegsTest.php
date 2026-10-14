@@ -15,6 +15,7 @@ use Illuminate\Contracts\Cache\Store;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -118,6 +119,138 @@ class RoutingLegsTest extends TestCase
         $this->assertCount(2, $items);
         $this->assertSame('unresolved', $items[1]->route_status);
         $this->assertNull($items[1]->routeSummary());
+    }
+
+    /**
+     * A reflow must say which of its gaps are measurements and which are the
+     * flat estimate.
+     *
+     * THE TWO PRODUCE IDENTICAL TIMES. A leg the road cannot answer for falls
+     * back to TRAVEL_MINUTES, so a day laid out entirely on estimates is
+     * byte-identical to one measured on real distances — and a report of the
+     * finish time alone cannot tell them apart. That is the panel's complaint
+     * reproduced inside the feature built to answer it, and it is why this is
+     * counted per day and returned to the browser rather than logged and
+     * forgotten.
+     */
+    public function test_a_reflow_reports_its_estimated_gaps(): void
+    {
+        [$user, $itinerary, $day] = $this->trip();
+        $first = $this->stop($day, $this->destination(14.30, 121.40), 1);
+        $second = $this->destination(14.60, 121.80);
+        $this->like($user, $second);
+
+        $draft = [
+            $first->id => $this->row($day->id, 1, $first->destination_id),
+            '-1' => $this->row($day->id, 2, $second->id),
+        ];
+
+        // Measured: the stubbed road answers, so nothing is an estimate.
+        $measured = $this->actingAs($user)
+            ->postJson(route('itineraries.schedule', $itinerary), ['items' => $draft])
+            ->assertOk()
+            ->json();
+
+        $this->assertSame(0, $measured['estimated_gaps'][(string) $day->id]);
+
+        $this->stubOsrm(fn () => Http::failedConnection('Could not resolve host'));
+
+        // A dead road does NOT make a cached leg unmeasured. The first call
+        // resolved this pair and the answer is in hand, so reporting it as an
+        // estimate would be its own kind of lie — and it is the reason the
+        // cache is worth having.
+        $stillMeasured = $this->actingAs($user)
+            ->postJson(route('itineraries.schedule', $itinerary), ['items' => $draft])
+            ->assertOk()
+            ->json();
+
+        $this->assertSame(0, $stillMeasured['estimated_gaps'][(string) $day->id]);
+
+        // Drop the memo and ask again: now the road genuinely cannot answer,
+        // so the one leg in this day is an estimate and says so.
+        Cache::flush();
+
+        $unmeasured = $this->actingAs($user)
+            ->postJson(route('itineraries.schedule', $itinerary), ['items' => $draft])
+            ->assertOk()
+            ->json();
+
+        $this->assertSame(1, $unmeasured['estimated_gaps'][(string) $day->id]);
+
+        // And it still lays the day out, on the estimate, rather than refusing
+        // a schedule because one road is unknown.
+        $this->assertSame(
+            ['08:00', '09:45'],
+            array_values(array_column($unmeasured['days'][(string) $day->id], 'start_time'))
+        );
+    }
+
+    /**
+     * The first stop of a day has no leg into it, which is not a failure.
+     *
+     * Pinned on its own because it is the rule that stops the notice crying
+     * wolf: counting the day's first stop would report at least one estimated
+     * gap on EVERY day, including the fully-measured ones, and a warning that
+     * is always on is a warning nobody reads.
+     */
+    public function test_a_days_first_stop_is_never_an_estimated_gap(): void
+    {
+        $this->stubOsrm(fn () => Http::failedConnection('Could not resolve host'));
+
+        [$user, $itinerary, $day] = $this->trip();
+        $only = $this->stop($day, $this->destination(14.30, 121.40), 1);
+
+        $response = $this->actingAs($user)
+            ->postJson(route('itineraries.schedule', $itinerary), [
+                'items' => [
+                    $only->id => $this->row($day->id, 1, $only->destination_id),
+                ],
+            ])
+            ->assertOk();
+
+        $this->assertSame(0, $response->json('estimated_gaps.'.(string) $day->id));
+    }
+
+    /**
+     * The browser has to say it, not just receive it.
+     *
+     * The count is only honest if it reaches the traveller. A reflow that
+     * quietly substituted the estimate is the bug; one that knows and stays
+     * quiet is the same bug with better manners. The wording is asserted
+     * because the failure mode here is a notice that mentions the number but
+     * not that the times are estimates.
+     */
+    public function test_the_editor_names_an_estimate_rather_than_reporting_it_as_a_distance(): void
+    {
+        $source = (string) file_get_contents(resource_path('js/itinerary-editor.js'));
+
+        $this->assertStringContainsString('estimated_gaps', $source);
+        $this->assertStringContainsString('an estimate, not a measured drive', $source);
+
+        // The measured case has to claim what it is too, or the two notices
+        // differ only in tone.
+        $this->assertStringContainsString('timed on real driving distances', $source);
+    }
+
+    /**
+     * A routing failure must leave a trace.
+     *
+     * Both layers swallow their failures by design — that is what makes an
+     * unreachable road a stored `unresolved` rather than a failed save — and
+     * a swallow with no log is how "reflow uses generic times" arrived with
+     * nothing anywhere explaining it. Asserting on the log is what keeps the
+     * diagnosis available on the host instead of requiring a code change.
+     */
+    public function test_a_dead_routing_provider_is_logged(): void
+    {
+        Log::spy();
+
+        $this->stubOsrm(fn () => Http::failedConnection('Could not resolve host'));
+
+        app(OsrmClient::class)->route(14.3, 121.4, 14.6, 121.8);
+
+        Log::shouldHaveReceived('warning')
+            ->with('routing.transport_failed', \Mockery::type('array'));
     }
 
     /**
