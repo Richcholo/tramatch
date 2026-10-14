@@ -9,6 +9,7 @@ use App\Models\DestinationSource;
 use App\Models\DestinationSourceCrawl;
 use App\Models\DestinationUpdateProposal;
 use App\Models\Itinerary;
+use App\Models\Place;
 use App\Models\Tag;
 use App\Models\TravelProfile;
 use App\Models\User;
@@ -652,6 +653,18 @@ class SourceCrawlingTest extends TestCase
 
         // Keyed by viewer, because a page belonging to someone else returns 403
         // and would otherwise be skipped, quietly checking less than before.
+        $place = Place::create([
+            'name' => 'Guarded Cafe',
+            'slug' => 'guarded-cafe',
+            'type' => Place::TYPE_FOOD,
+            'province' => 'Benguet',
+            'municipality' => 'Baguio City',
+            'latitude' => 16.4120,
+            'longitude' => 120.5960,
+            'budget_level' => 'economy',
+            'source_url' => 'https://example.test/guarded-cafe',
+        ]);
+
         $pages = [
             route('admin.sources.index') => $admin,
             route('admin.sources.show', $source) => $admin,
@@ -659,6 +672,9 @@ class SourceCrawlingTest extends TestCase
             route('admin.destinations.index') => $admin,
             route('admin.destinations.create') => $admin,
             route('admin.destinations.edit', $destination) => $admin,
+            route('admin.places.index') => $admin,
+            route('admin.places.create') => $admin,
+            route('admin.places.edit', $place) => $admin,
             route('profile.edit') => $admin,
             route('preferences.edit') => $admin,
             route('itineraries.show', $trip) => $traveller,

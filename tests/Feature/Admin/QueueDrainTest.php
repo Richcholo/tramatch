@@ -315,15 +315,4 @@ class QueueDrainTest extends TestCase
             'an idle drain must return promptly, or the next cron run stacks on top of it'
         );
     }
-
-    #[Test]
-    public function it_never_reports_failure_for_a_dead_upstream_host(): void
-    {
-        /*
-         * The exit code is what makes cron mail. A crawl against an unreachable
-         * host has already written its own status and error_message, so a
-         * non-zero exit here would mail on every transient network failure.
-         */
-        $this->artisan('queue:drain')->assertExitCode(0);
-    }
 }

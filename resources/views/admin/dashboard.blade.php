@@ -63,6 +63,15 @@
                         </a>
                     @endif
 
+                    @if (Route::has('admin.places.index'))
+                        <a
+                            href="{{ route('admin.places.index') }}"
+                            class="inline-flex rounded-full border border-white/30 px-6 py-3 font-bold text-white transition hover:bg-white hover:text-volcanic-teal"
+                        >
+                            Manage places
+                        </a>
+                    @endif
+
                     @if (Route::has('admin.reviews.index'))
                         <a
                             href="{{ route('admin.reviews.index') }}"

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\DestinationController as AdminDestinationController;
+use App\Http\Controllers\Admin\PlaceController as AdminPlaceController;
 use App\Http\Controllers\Admin\ReviewController as AdminReviewController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Admin\ProposalController as AdminProposalController;
@@ -220,6 +221,27 @@ Route::middleware(['auth', 'admin'])
         Route::resource(
             'destinations',
             AdminDestinationController::class
+        )->except(['show']);
+
+        Route::patch(
+            '/places/{place}/archive',
+            [
+                AdminPlaceController::class,
+                'archive',
+            ]
+        )->name('places.archive');
+
+        Route::patch(
+            '/places/{place}/restore',
+            [
+                AdminPlaceController::class,
+                'restore',
+            ]
+        )->name('places.restore');
+
+        Route::resource(
+            'places',
+            AdminPlaceController::class
         )->except(['show']);
 
         Route::get('/reviews', [
