@@ -52,9 +52,17 @@ class ItineraryController extends Controller
                 ->with('status', 'Set your preferences before generating an itinerary.');
         }
 
-        $matches = $recommendations->recommend($user, 1000);
+        // EVERY active destination in the chosen area, not only the liked ones.
+        // ADR 0004: generation used to draw from recommend(), so the province
+        // list and the tick-boxes held only places the traveller had already
+        // swiped -- which capped a trip at ""likes in one province divided by
+        // three"" and made a seven-day trip unreachable in the densest province
+        // in the catalogue. Liked destinations now come first and are marked;
+        // the rest are the traveller's to choose from, in a province they
+        // picked.
+        $candidates = $recommendations->candidates($user);
 
-        $areas = $matches
+        $areas = $candidates
             ->pluck('province')
             ->filter()
             ->unique()
@@ -74,7 +82,7 @@ class ItineraryController extends Controller
             );
         }
 
-        $destinations = $matches
+        $destinations = $candidates
             ->filter(function ($destination) use ($area) {
                 return $area === ''
                     || $destination->province === $area;
@@ -158,12 +166,11 @@ class ItineraryController extends Controller
             ->map(fn ($id) => (int) $id)
             ->values();
 
-        $matches = $recommendations->recommend($user, 1000);
-
-        $allowedIds = $matches
-            ->filter(function ($destination) use ($validated) {
-                return $destination->province === $validated['area'];
-            })
+        // Candidates, not recommendations: a destination the traveller never
+        // swiped is now a legal selection, and validating the POST against the
+        // liked-only set would reject the very thing ADR 0004 just allowed.
+        $allowedIds = $recommendations
+            ->candidates($user, $validated['area'])
             ->pluck('id')
             ->map(fn ($id) => (int) $id);
 

@@ -143,7 +143,13 @@
                             </h2>
 
                             <p class="mt-3 text-sm leading-6 text-benguet-charcoal/65">
-                                These are liked destinations that match your budget and at least one of your interests.
+                                {{-- Was "liked destinations that match your budget and at
+                                     least one of your interests", which is no longer
+                                     true of this list and was quietly load-bearing:
+                                     a traveller who liked five places saw five
+                                     tick-boxes and could not build a week. --}}
+                                Everything in {{ $area }} at your budget, the ones you liked first.
+                                The match score is how closely each one fits your interests.
                             </p>
                         </div>
 
@@ -171,6 +177,17 @@
                                 <span class="min-w-0 flex-1">
                                     <span class="block font-bold text-volcanic-teal">
                                         {{ $destination->name }}
+
+                                        {{-- Liked ones sort to the top, and this
+                                             says why they are there. Without it the
+                                             list looks arbitrary: the traveller
+                                             swiped five places and cannot tell
+                                             which of these twenty they were. --}}
+                                        @if ($destination->is_liked ?? false)
+                                            <span class="ml-1 align-middle text-xs font-semibold uppercase tracking-wide text-boracay-dark">
+                                                Liked
+                                            </span>
+                                        @endif
                                     </span>
 
                                     <span class="mt-1 block text-sm text-benguet-charcoal/60">
@@ -249,7 +266,7 @@
                 </h2>
 
                 <p class="mx-auto mt-4 max-w-xl leading-7 text-benguet-charcoal/65">
-                    Your liked destinations will appear after you choose an area.
+                    Every place we have in that province will appear once you choose an area.
                 </p>
             </section>
         @endif

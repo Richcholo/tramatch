@@ -19,7 +19,13 @@ async function reachAnItinerary(page) {
     await registerWithPreferences(page);
     await likeCards(page, 5);
 
-    return generateItinerary(page, { days: 2 });
+    // Benguet explicitly, not "whatever is first". The province list is now
+    // every province with a candidate rather than the few the traveller liked,
+    // so the default is alphabetical — which is a province with no researched
+    // food or lodging, and the add-a-place tests then SKIP themselves. A skip is
+    // a test that has quietly stopped testing, so the province that actually
+    // has places is requested by name.
+    return generateItinerary(page, { days: 2, province: 'Benguet' });
 }
 
 /**

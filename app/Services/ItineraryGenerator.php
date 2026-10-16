@@ -72,8 +72,15 @@ class ItineraryGenerator
             );
         }
 
+        // Candidates, not recommendations (ADR 0004). This used to be
+        // `recommend()->keyBy('id')`, which meant a destination the traveller
+        // had never swiped had no score here and was dropped by the check
+        // below — the ceiling, enforced in a fourth place nobody was looking
+        // at. Candidates covers every active destination in the area, so this
+        // is now a guard against a row that stopped being available mid-request
+        // rather than a gate.
         $scoreMap = $this->recommendations
-            ->recommend($user, 1000)
+            ->candidates($user, $area)
             ->keyBy('id');
 
         $orderedDestinations = $selectedIds
@@ -94,7 +101,7 @@ class ItineraryGenerator
 
         if ($orderedDestinations->count() !== $selectedIds->count()) {
             throw new RuntimeException(
-                'One or more selected destinations are no longer valid recommendations.'
+                'One or more selected destinations are no longer available.'
             );
         }
 
