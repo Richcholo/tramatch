@@ -1080,12 +1080,17 @@ A panel review said "the locations are too small" and that a traveller adds wher
 they will eat and where they will stay, with real distances rather than
 estimates. This section is the two-week revision answering that.
 
-**DAY 1 IS LANDED AND NOTHING ELSE IS.** Schema, models, config and the test
-suite. **There is no HTTP client, no job, no route, no seeder and no view.** No
-code reads `services.gemini.*` or `planning.*` except one test that asserts the
-absence of a planning endpoint, because a client arriving before its test and its
-quota budget is the thing this repo keeps warning about. Days 2-14 are listed at
-the bottom of this section.
+**DAYS 1-7 ARE LANDED; THE PLANNER IS NOT.** Schema, models, config, the test
+suite, the places catalogue and admin, the four-shaped stop editor, and
+road-derived legs. **`services.gemini.*` is still read by no application code** —
+no client, no job, no route, no view — which is deliberate: a client arriving
+before its test and its quota budget is the thing this repo keeps warning
+about. One test asserts the absence of a planning endpoint. **`planning.*` is a
+different matter since Days 6-7:** `RouteService` reads `planning.transport.profile`
+and `planning.routing.cache_days`, and `OsrmClient` reads
+`planning.timeouts.routing_seconds`. Do not read "no planning code" as "no
+config reads" — the routing layer is a consumer. Days 2-14 are listed at the
+bottom of this section.
 
 #### `places` is a separate table and must stay one
 
