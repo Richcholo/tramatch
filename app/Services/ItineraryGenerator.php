@@ -7,6 +7,7 @@ use App\Models\Itinerary;
 use App\Models\TravelProfile;
 use App\Models\User;
 use Carbon\Carbon;
+use DateTimeInterface;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -19,6 +20,127 @@ class ItineraryGenerator
     public function __construct(
         private RecommendationService $recommendations
     ) {
+    }
+
+    /**
+     * Why nothing could be scheduled, named.
+     *
+     * Names the first few and counts the rest, because a list of twenty is not
+     * an error message. "and 17 more" is honest in a way that silently
+     * truncating is not.
+     *
+     * @param  array<int, array{name: string, reason: string}>  $unscheduled
+     */
+    private function nothingScheduledMessage(array $unscheduled): string
+    {
+        if ($unscheduled === []) {
+            return 'No selected destinations fit the daily schedule.';
+        }
+
+        $headline = 'No selected destinations fit the daily schedule:';
+
+        $named = collect(array_slice($unscheduled, 0, 3))
+            ->map(fn (array $row) => sprintf(
+                '%s (%s)',
+                $row['name'],
+                $row['reason']
+            ))
+            ->implode('; ');
+
+        $remaining = count($unscheduled) - 3;
+
+        if ($remaining > 0) {
+            $named .= sprintf('; and %d more', $remaining);
+        }
+
+        return $headline.' '.$named;
+    }
+
+    /**
+     * When a destination can actually be visited on a given day, in
+     * minutes-since-midnight — or why not.
+     *
+     * THE POINT IS TO STOP SCHEDULING VISITS THE CATALOGUE SAYS ARE IMPOSSIBLE.
+     * The project curates, cites and verifies opening hours for every row, and
+     * until this existed the generator read none of them: a plan would put an
+     * 11:00 visit to somewhere whose own page says 05:00–07:00, which is a
+     * registration cut-off. That is a factual error produced by the feature
+     * that was built to be trustworthy about facts.
+     *
+     * Four rules, each of which is a decision rather than a detail:
+     *
+     * - **An undated trip only gets the base window.** Without a date there is
+     *   no weekday, so a "closed Mondays" row cannot be placed on a Monday and
+     *   pretending otherwise would be inventing a date. The general hours still
+     *   constrain the time of day.
+     * - **An ADVISORY window is not an opening window.** `registration_window`,
+     *   `reservation_required` and `alert_dependent` describe a cut-off, a
+     *   booking rule or a hazard level — never when the gate is open. Enforcing
+     *   them as hours would print "open 05:00–07:00" as a fact, which is the
+     *   precise error this work exists to stop. So they constrain nothing here.
+     * - **An overnight window constrains nothing.** `open > close` means it is
+     *   reachable at any hour of the day, so a plan inside 08:00–18:00 is
+     *   always inside it.
+     * - **A window that cannot contain the visit skips the stop**, with the
+     *   hours in the reason. Silently placing it anyway would be the same lie
+     *   with extra steps.
+     *
+     * @return array{open: int, close: int, label: string}|null null when the
+     *         destination may be visited at any time of day
+     */
+    private function visitWindow(Destination $destination, ?DateTimeInterface $date): ?array
+    {
+        // Advisory kinds are a rule about access, not a clock.
+        if ($destination->hours_kind !== null && $destination->hoursKindIsAdvisory()) {
+            return null;
+        }
+
+        $window = $date !== null
+            ? $destination->hoursForDay($date)
+            : $this->baseWindow($destination);
+
+        if ($window === null) {
+            return null;
+        }
+
+        $open = ItinerarySchedule::parse($window['open']);
+        $close = ItinerarySchedule::parse($window['close']);
+
+        if ($open === null || $close === null) {
+            return null;
+        }
+
+        // Ungated overnight: reachable whenever the traveller happens to be
+        // awake, which a day inside 08:00–18:00 always is.
+        if ($open >= $close) {
+            return null;
+        }
+
+        return [
+            'open' => $open,
+            'close' => $close,
+            'label' => ItinerarySchedule::format($open).'–'.ItinerarySchedule::format($close),
+        ];
+    }
+
+    /**
+     * The general window, for a trip with no start date.
+     *
+     * Separate from `hoursForDay()` because that one needs a date to resolve
+     * per-day windows and closed days, and inventing one here would let the
+     * generator assert "open on a Tuesday" about a trip that does not know what
+     * day it is.
+     */
+    private function baseWindow(Destination $destination): ?array
+    {
+        $open = Destination::formatTime($destination->opening_time);
+        $close = Destination::formatTime($destination->closing_time);
+
+        if ($open === null || $close === null) {
+            return null;
+        }
+
+        return ['open' => $open, 'close' => $close];
     }
 
     public function create(User $user, array $data): Itinerary
@@ -116,6 +238,11 @@ class ItineraryGenerator
             $stops = [];
             $cursor = ItinerarySchedule::DAY_START_MINUTES;
 
+            // The actual calendar date of this day, when the trip has one. Null
+            // for an undated trip, and every weekday rule below keys off that
+            // null rather than guessing a weekday.
+            $dayDate = $startDate?->copy()->addDays($dayNumber - 1);
+
             while (
                 count($stops) < ItinerarySchedule::MAX_STOPS_PER_DAY
                 && $destinationIndex < $orderedDestinations->count()
@@ -156,9 +283,57 @@ class ItineraryGenerator
                     ? 0
                     : ItinerarySchedule::TRAVEL_MINUTES;
 
+                // Closed that weekday: skip it, and say which day closed it.
+                // Without a date we cannot know the weekday at all, so this
+                // only applies to a dated trip.
+                //
+                // `hasAnyHours()` IS NOT REDUNDANT HERE, and omitting it is a
+                // trap worth stating plainly. `hoursForDay()` returns null for
+                // two different things — "closed that weekday" and "we have
+                // never published hours for this row" — and `isClosedOn()`
+                // cannot tell them apart. So without this guard every
+                // destination with blank hours reads as closed on every day of
+                // every dated trip, and generation silently produces nothing.
+                // It did, on the first run of this change.
+                if (
+                    $dayDate !== null
+                    && $destination->hasAnyHours()
+                    && $destination->isClosedOn($dayDate)
+                ) {
+                    $unscheduled[] = [
+                        'name' => $destination->name,
+                        'reason' => 'Closed on '.ucfirst(strtolower($dayDate->format('l'))).'.',
+                    ];
+
+                    $destinationIndex++;
+
+                    continue;
+                }
+
+                $window = $this->visitWindow($destination, $dayDate);
+
+                if (
+                    $window !== null
+                    && $window['close'] - $window['open'] < $visitMinutes
+                ) {
+                    $unscheduled[] = [
+                        'name' => $destination->name,
+                        'reason' => sprintf(
+                            'Open %s, so there is not room for a %d-minute visit.',
+                            $window['label'],
+                            $visitMinutes
+                        ),
+                    ];
+
+                    $destinationIndex++;
+
+                    continue;
+                }
+
                 $start = ItinerarySchedule::nextStart(
                     $cursor + $travelMinutes,
-                    $visitMinutes
+                    $visitMinutes,
+                    $window['open'] ?? null
                 );
 
                 $end = $start + $visitMinutes;
@@ -222,8 +397,18 @@ class ItineraryGenerator
         }
 
         if ($scheduledCount === 0) {
+            // CARRY THE REASONS INTO THE MESSAGE, because they are discarded
+            // here. The controller only flashes `unscheduled_destinations` when
+            // something WAS scheduled, so on this path the traveller gets
+            // whatever this string says and nothing else.
+            //
+            // A generic "no selected destinations fit the daily schedule" made
+            // hours-awareness pointless: the whole value of skipping a stop is
+            // telling the traveller it is closed on the day they picked, or that
+            // its window is too small for the visit — and that explanation was
+            // being thrown away at exactly the moment it was needed most.
             throw new RuntimeException(
-                'No selected destinations fit the daily schedule.'
+                $this->nothingScheduledMessage($unscheduled)
             );
         }
 

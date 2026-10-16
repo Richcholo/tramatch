@@ -197,6 +197,19 @@ trait HasOpeningHours
         return ['open' => $open, 'close' => $close];
     }
 
+    /**
+     * Is this destination closed on a given date?
+     *
+     * CAREFUL: this returns TRUE for a row that has never published hours at
+     * all, because `hoursForDay()` answers null for two different things —
+     * "closed that weekday" and "we have no hours for this row" — and null is
+     * the only way it can say "nothing". A caller that treats it as "closed"
+     * without first checking `hasAnyHours()` will exclude every destination
+     * whose hours are blank.
+     *
+     * That is not hypothetical: the itinerary generator shipped exactly that
+     * guard and silently generated nothing for every dated trip.
+     */
     public function isClosedOn(DateTimeInterface $date): bool
     {
         return $this->hoursForDay($date) === null;

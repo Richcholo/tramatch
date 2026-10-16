@@ -40,10 +40,29 @@ class ItinerarySchedule
 
     /**
      * Nudge a start time past the lunch block when a visit would otherwise run
-     * into it.
+     * into it, and past a gate's opening time when it would arrive before the
+     * place opens.
+     *
+     * `$opensAt` is the destination's opening time in minutes-since-midnight,
+     * or null when there is nothing to enforce — an ungated row, a row with no
+     * hours published, or a row whose window is advisory rather than opening
+     * hours. The caller decides; this method only owns the arithmetic, because
+     * the generator, the editor and reflow all have to agree on where a stop
+     * may begin.
+     *
+     * ORDER MATTERS AND IS NOT INTERCHANGEABLE. The opening floor is applied
+     * BEFORE the lunch nudge, so a gate that opens at 14:00 cannot be pushed
+     * backwards to 13:00 by the lunch block — which is what applying the nudge
+     * first and taking the max afterwards would have done. A visit starting at
+     * 12:30 that runs to 13:30 is moved to 13:00 by lunch; the same visit at a
+     * gate opening 14:00 starts at 14:00.
      */
-    public static function nextStart(int $earliestStart, int $duration): int
+    public static function nextStart(int $earliestStart, int $duration, ?int $opensAt = null): int
     {
+        if ($opensAt !== null && $earliestStart < $opensAt) {
+            $earliestStart = $opensAt;
+        }
+
         if (
             $earliestStart < self::LUNCH_END_MINUTES
             && $earliestStart + $duration > self::LUNCH_START_MINUTES
