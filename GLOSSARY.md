@@ -111,6 +111,12 @@ _Avoid_: Suggestion, draft, patch
 
 ## The traveller
 
+**Travelogue**:
+What TraMatch produces: a plan, a cost breakdown and a citation for every fact
+in it. It is not a reservation, a quote, or a transaction — nothing here books
+anything or takes payment.
+_Avoid_: Booking, itinerary booking, reservation
+
 **Traveller**:
 The person planning a trip. Owns their profile, swipes, trips and reviews.
 _Avoid_: User, customer, account
