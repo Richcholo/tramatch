@@ -511,7 +511,19 @@ class RoutingLegsTest extends TestCase
         $this->assertSame('unresolved', $second->route_status);
     }
 
-    public function test_generation_leaves_legs_unresolved(): void
+    /**
+     * GENERATION ROUTES. This is the behaviour the test that used to sit here
+     * denied.
+     *
+     * The old test asserted generation issued zero requests and left every leg
+     * `unresolved`, on the reasoning that routing is the wrong latency trade
+     * inside a generation request. The trade was real; the consequence was not,
+     * and it was the reason a freshly generated trip showed "45 min travel" in
+     * the same slot a measured leg uses -- a guessed drive time presented as a
+     * fact, which is the panel's complaint reproduced inside the feature built
+     * to answer it.
+     */
+    public function test_generation_resolves_the_road(): void
     {
         $user = User::factory()->create();
 
@@ -534,9 +546,6 @@ class RoutingLegsTest extends TestCase
             $ids[] = $destination->id;
         }
 
-        // Generation is the fast path: it lays out with the flat gap and never
-        // rings the road, so a three-day trip does not cost eighteen HTTP
-        // calls. Legs resolve on the first edit or reflow instead.
         $this->actingAs($user)->post(route('itineraries.store'), [
             'title' => 'Road trip',
             'area' => 'Laguna',
@@ -545,13 +554,133 @@ class RoutingLegsTest extends TestCase
 
         $items = $user->itineraries()->firstOrFail()->days->first()->items;
 
-        $this->assertGreaterThan(0, $items->count());
+        $this->assertGreaterThan(1, $items->count());
+
+        // The first stop of a day has no leg INTO it -- there is no previous
+        // pin -- so it is unresolved by construction, not by failure.
+        $this->assertSame('unresolved', $items->first()->route_status);
+
+        foreach ($items->skip(1) as $item) {
+            $this->assertSame('resolved', $item->route_status);
+            $this->assertNotNull($item->route_distance_meters);
+            $this->assertNotNull($item->route_duration_minutes);
+        }
+
+        // And it actually asked the road, rather than writing numbers it had
+        // invented.
+        Http::assertSentCount($items->count() - 1);
+    }
+
+    /**
+     * A generation that cannot reach the road still produces a trip.
+     *
+     * Routing inside generation must not become a new way for the feature to
+     * fail. Every failure resolves to null, the leg is written `unresolved`, and
+     * the traveller gets their trip -- which is the same promise `RouteService`
+     * makes and the reason the read view has an unresolved branch at all.
+     */
+    public function test_generation_survives_a_dead_routing_provider(): void
+    {
+        // `stubOsrm()` and not a second `Http::fake()`: the factory honours the FIRST
+        // matching stub, so a second fake is ignored and this test would quietly
+        // measure the healthy stub instead of a dead road.
+        $this->stubOsrm(fn () => Http::response('no road today', 500));
+
+        $user = User::factory()->create();
+
+        $profile = TravelProfile::create([
+            'user_id' => $user->id,
+            'budget_level' => 'economy',
+            'group_size' => 2,
+            'trip_duration_days' => 1,
+        ]);
+
+        $tag = Tag::create(['name' => 'Nature', 'slug' => 'nature']);
+        $profile->tags()->attach($tag, ['weight' => 3]);
+
+        $ids = [];
+
+        foreach ([[14.30, 121.40], [14.60, 121.80]] as [$lat, $lng]) {
+            $destination = $this->destination($lat, $lng);
+            $destination->tags()->attach($tag);
+            $this->like($user, $destination);
+            $ids[] = $destination->id;
+        }
+
+        $this->actingAs($user)->post(route('itineraries.store'), [
+            'title' => 'Road trip',
+            'area' => 'Laguna',
+            'destination_ids' => $ids,
+        ])->assertRedirect();
+
+        $items = $user->itineraries()->firstOrFail()->days->first()->items;
+
+        $this->assertGreaterThan(1, $items->count());
 
         foreach ($items as $item) {
             $this->assertSame('unresolved', $item->route_status);
+            $this->assertNull($item->route_distance_meters);
+        }
+    }
+
+    /**
+     * Generation asks the road a bounded number of times.
+     *
+     * A leg costs an HTTP call until the 30-day cache answers, measured at
+     * roughly 300-500 ms. A 30-day trip is 87 legs, which overruns PHP's
+     * execution limit on a cold cache -- and a generation that dies half way
+     * leaves the traveller with nothing at all, which is a far worse outcome
+     * than a trip whose last few legs are honestly unresolved.
+     *
+     * So the tail is left unresolved rather than attempted, and the editor
+     * routes the whole day the moment the traveller opens and saves it.
+     */
+    public function test_generation_bounds_how_many_legs_it_asks_the_road_about(): void
+    {
+        $user = User::factory()->create();
+
+        $profile = TravelProfile::create([
+            'user_id' => $user->id,
+            'budget_level' => 'economy',
+            'group_size' => 2,
+            'trip_duration_days' => 13,
+        ]);
+
+        $tag = Tag::create(['name' => 'Nature', 'slug' => 'nature']);
+        $profile->tags()->attach($tag, ['weight' => 3]);
+
+        $ids = [];
+
+        // Thirteen days at three stops a day is 39 stops and 26 legs, so the
+        // budget bites part way through and the tail is left alone.
+        foreach (range(1, 40) as $index) {
+            $destination = $this->destination(14.0 + ($index / 100), 121.0 + ($index / 100));
+            $destination->tags()->attach($tag);
+            $this->like($user, $destination);
+            $ids[] = $destination->id;
         }
 
-        Http::assertSentCount(0);
+        $this->actingAs($user)->post(route('itineraries.store'), [
+            'title' => 'Long haul',
+            'area' => 'Laguna',
+            'days' => 13,
+            'destination_ids' => $ids,
+        ])->assertRedirect();
+
+        $items = $user->itineraries()->firstOrFail()
+            ->load('days.items')
+            ->days
+            ->flatMap(fn ($day) => $day->items);
+
+        Http::assertSentCount(24);
+
+        $this->assertGreaterThan(24, $items->where('item_type', 'attraction')->count(),
+            'the fixture did not produce enough legs to reach the budget');
+
+        // Each attempted leg marks the stop it arrives at, so exactly the budget
+        // resolved and every leg past it is unresolved rather than guessed.
+        $this->assertSame(24, $items->where('route_status', 'resolved')->count());
+        $this->assertGreaterThan(0, $items->where('route_status', 'unresolved')->count());
     }
 
     public function test_reordering_a_day_recomputes_its_legs(): void
@@ -600,6 +729,62 @@ class RoutingLegsTest extends TestCase
             ->get(route('itineraries.show', $itinerary))
             ->assertOk()
             ->assertSee('8.4 km · 10 min', false);
+    }
+
+    /**
+     * An UNMEASURED leg says so, on the page and in the PDF.
+     *
+     * Both used to print the bare gap — "45 min travel" — in the same slot a
+     * measured leg prints "9.9 km · 28 min by road". Two numbers, one kind of
+     * typography, one of them a guess. That is precisely why a flat reflow and a
+     * measured one were indistinguishable on screen, which is the defect this
+     * whole change is about rather than a cosmetic addition to it.
+     *
+     * The gap is still printed: it is real information, it is the space this
+     * plan leaves between two stops. What it is not is a drive we measured.
+     */
+    public function test_an_unmeasured_leg_is_labelled_on_the_page_and_in_the_pdf(): void
+    {
+        [$user, $itinerary, $day] = $this->trip();
+        $first = $this->stop($day, $this->destination(14.30, 121.40), 1);
+
+        // Both stops have pins and the provider still cannot answer, which is
+        // the ordinary way a leg ends up unmeasured. `stubOsrm()` rather than a
+        // second `Http::fake()`, which the factory ignores.
+        $this->stubOsrm(fn () => Http::response('no road today', 500));
+
+        $second = $this->destination(14.60, 121.80);
+        $this->like($user, $second);
+
+        $this->actingAs($user)
+            ->patch(route('itineraries.update', $itinerary), [
+                'items' => [
+                    $first->id => $this->row($day->id, 1, $first->destination_id, '09:00', '10:00'),
+                    '-1' => $this->row($day->id, 2, $second->id, '10:30', '11:30'),
+                ],
+            ])
+            ->assertRedirect(route('itineraries.show', $itinerary));
+
+        $this->actingAs($user)
+            ->get(route('itineraries.show', $itinerary))
+            ->assertOk()
+            ->assertSee('drive not measured')
+            // The old wording, which asserted a drive nobody measured.
+            ->assertDontSee('min travel');
+
+        $pdf = $this->actingAs($user)
+            ->get(route('itineraries.download', $itinerary))
+            ->assertOk()
+            ->getContent();
+
+        $text = mb_convert_encoding(
+            (string) $pdf,
+            'Windows-1252',
+            'UTF-8'
+        );
+
+        $this->assertStringContainsString('drive not measured', $text);
+        $this->assertStringNotContainsString('min travel', $text);
     }
 
     // -------------------------------------------------------------- helpers

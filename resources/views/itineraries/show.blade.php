@@ -459,21 +459,30 @@
                                                 ₱{{ number_format($item->estimated_cost, 2) }}
                                             </span>
 
-                                            {{-- The road first, the timetable gap
-                                                 second. routeSummary() is a
-                                                 measured leg; the minutes below
-                                                 it are the space between two
-                                                 typed times. An unresolved leg
-                                                 prints nothing here rather than
-                                                 the flat estimate — that number
-                                                 was the panel's complaint. --}}
+                                            {{-- The road first, the timetable gap second.
+                                                 routeSummary() is a MEASURED
+                                                 leg. When there is no measured
+                                                 leg the gap is still worth
+                                                 printing -- it is the space
+                                                 between two times on this plan --
+                                                 but it is labelled, because the
+                                                 number in this slot is the flat
+                                                 45 estimate on a trip that has
+                                                 never been edited, and an
+                                                 unlabelled "45 min travel"
+                                                 beside a measured "9.9 km · 28
+                                                 min by road" reads as the same
+                                                 kind of number. It is not, and
+                                                 that difference was the panel's
+                                                 complaint. --}}
                                             @if ($item->routeSummary())
                                                 <span>
                                                     {{ $item->routeSummary() }} by road
                                                 </span>
                                             @elseif ($item->travel_minutes_from_previous > 0)
                                                 <span>
-                                                    {{ $item->travel_minutes_from_previous }} min travel
+                                                    {{ $item->travel_minutes_from_previous }} min gap
+                                                    &middot; drive not measured
                                                 </span>
                                             @endif
                                         </div>

@@ -10,6 +10,7 @@ use App\Models\ItineraryItem;
 use App\Models\User;
 use App\Services\Routing\RouteLeg;
 use App\Services\Routing\RouteService;
+use App\Services\Routing\WritesLegs;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -33,6 +34,8 @@ use RuntimeException;
  */
 class ItineraryEditor
 {
+    use WritesLegs;
+
     public function __construct(
         private RecommendationService $recommendations,
         private RouteService $routes,
@@ -159,26 +162,15 @@ class ItineraryEditor
     /**
      * The road between two resolved stops, or null when there is no answer.
      *
-     * Pins are checked before the client is touched, so unpinned stops never
-     * issue a request: a custom entry with an address and no coordinates must
-     * not cost an HTTP call to learn what the catalogue already knows.
+     * NOW THE SHARED IMPLEMENTATION. `WritesLegs::routeBetween()` duck-types the
+     * pin readers, so this class no longer keeps its own copy of the pin checks
+     * and the client call -- a second copy is how the editor and the generator
+     * come to disagree about which legs exist, and nothing on a row records
+     * which of the two wrote it.
      */
     private function routedLeg(?ItineraryStop $from, ?ItineraryStop $to): ?RouteLeg
     {
-        if (! $from || ! $to) {
-            return null;
-        }
-
-        $fromLat = $from->latitude();
-        $fromLng = $from->longitude();
-        $toLat = $to->latitude();
-        $toLng = $to->longitude();
-
-        if ($fromLat === null || $fromLng === null || $toLat === null || $toLng === null) {
-            return null;
-        }
-
-        return $this->routes->leg($fromLat, $fromLng, $toLat, $toLng);
+        return $this->routeBetween($from, $to);
     }
 
     /**
@@ -463,49 +455,7 @@ class ItineraryEditor
             }
         }
 
-        $this->writeLegs($ordered);
-    }
-
-    /**
-     * Resolve every leg of a written day against the road.
-     *
-     * Runs after the stops because it needs stored rows to write to, and
-     * inside the same transaction as the day so a failed leg lookup cannot
-     * leave times saved with legs missing — a leg lookup never fails loudly
-     * (see `OsrmClient`), but the ordering guarantee is what makes the two
-     * columns describe the same day. Consecutive pairs only: there is no leg
-     * into the first stop of a day, because the day starts wherever the
-     * traveller woke up, not at the previous day's last pin.
-     *
-     * @param  array<int, array{item: ItineraryItem, stop: ?ItineraryStop}>  $ordered
-     */
-    private function writeLegs(array $ordered): void
-    {
-        $previous = null;
-
-        foreach ($ordered as $entry) {
-            $item = $entry['item'];
-            $stop = $entry['stop'];
-            $leg = $this->routedLeg($previous, $stop);
-
-            if ($leg === null) {
-                $item->update([
-                    'route_distance_meters' => null,
-                    'route_duration_minutes' => null,
-                    'route_provider' => null,
-                    'route_status' => ItineraryItem::ROUTE_UNRESOLVED,
-                ]);
-            } else {
-                $item->update([
-                    'route_distance_meters' => $leg->distanceMeters,
-                    'route_duration_minutes' => $leg->durationMinutes,
-                    'route_provider' => $leg->provider,
-                    'route_status' => ItineraryItem::ROUTE_RESOLVED,
-                ]);
-            }
-
-            $previous = $stop;
-        }
+        $this->writeLegs(array_column($ordered, 'item'));
     }
 
     /**

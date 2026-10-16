@@ -1255,12 +1255,37 @@ apart by road, fronted by `OsrmClient` and bound in `AppServiceProvider`
   and no geometry column either: `routing.js` already draws the map line in
   the browser, so storing polylines would pay kilobytes per leg to duplicate
   it.
-- **Reflow meets the road; the generator does not.** `ItinerarySchedule::reflow()`
-  takes an optional per-stop `travel` and the editor fills it from routed legs,
-  so a reflowed day is laid out on real gaps. The generator keeps the flat gap
-  and `unresolved` legs: routing six legs synchronously inside a generation
-  request is the wrong latency trade, and the first edit or reflow resolves
-  them. Times the traveller typed are never rewritten on save — `route_*`
+- **EVERYTHING MEETS THE ROAD NOW, GENERATION INCLUDED. THIS WAS REVERSED, AND
+  THE REASONING WAS WRONG IN AN INTERESTING WAY.** This bullet used to read
+  "Reflow meets the road; the generator does not", on the grounds that routing
+  six legs synchronously inside a generation request is the wrong latency trade.
+  The trade was real. The conclusion was not, because of *what* an unrouted
+  generation produced: flat 45-minute gaps, `unresolved` legs, and a page that
+  printed that flat number in the same slot a measured leg prints
+  "9.9 km · 28 min by road". So a trip the traveller never edited carried a
+  guessed drive time dressed as a measurement — the panel's complaint reproduced
+  inside the feature built to answer it, and the reason "reflow came back 45/75"
+  was indistinguishable from a reflow that had measured every leg.
+  `ItineraryGenerator::MAX_ROUTED_LEGS` (24) bounds the cost; past it legs are
+  left `unresolved`, which is the truth, and the editor routes the whole day on
+  the first save.
+- **`WritesLegs` IS THE ONE IMPLEMENTATION, USED BY BOTH WRITERS.** The editor
+  always resolved its legs; the generator now does too, and a second copy of
+  "route the pair, write it onto the row" is how two writers come to disagree
+  about which legs exist with nothing on a row recording which one wrote it.
+  `writeLegs()` takes `ItineraryItem`s (which expose their own pins) and
+  `routeBetween()` is typed against the **shape** `latitude()`/`longitude()`
+  rather than a class, because `ItineraryStop` (pins still only in the posted
+  form) and `ItineraryItem` (pins as stored) are neither the other's subclass.
+- **AN UNMEASURED LEG IS NOW LABELLED, ON THE PAGE AND IN THE PDF.** Both
+  printed the bare gap — "45 min travel" — which is the same typography as a
+  measurement. It now reads "45 min gap · drive not measured", and the PDF says
+  the same. The gap is still printed because it is real: it is the space this
+  plan leaves between two stops. What it is not is a drive we measured.
+  `resources/js/itinerary-editor.js` still says "N min travel" in the editor's
+  live gap badge — **known inconsistency**, and the one place the wording still
+  implies a drive that may not have been measured.
+- Times the traveller typed are never rewritten on save — `route_*`
   sits alongside, and the read view prefers it.
 - **The gap belongs to the leg INTO the stop.** `reflow()` once advanced with
   the current stop's travel, charging every leg one stop late so a day of

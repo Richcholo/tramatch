@@ -284,8 +284,18 @@ class ItineraryPdf
             $p->text('F1', 9, $timeX, $y - 40, 'to '.$this->clock($item->end_time), self::MUTED);
         }
 
-        if ($item->travel_minutes_from_previous > 0) {
-            $p->text('F3', 7.5, $timeX, $y - 56, sprintf('+%d min travel', $item->travel_minutes_from_previous), self::MUTED);
+        // The same rule the page follows, and for the same reason. A printed trip
+        // is the one artefact a traveller takes away and trusts, so the gap
+        // between two stops must say whether the drive was measured or is the
+        // plan's spacing. "+45 min travel" on a trip nobody edited is the flat
+        // estimate wearing a measurement's clothes.
+        if ($item->routeSummary()) {
+            $p->text('F3', 7.5, $timeX, $y - 56, $item->routeSummary().' by road', self::MUTED);
+        } elseif ($item->travel_minutes_from_previous > 0) {
+            $p->text('F3', 7.5, $timeX, $y - 56, sprintf(
+                '+%d min gap (drive not measured)',
+                $item->travel_minutes_from_previous
+            ), self::MUTED);
         }
 
         $textX = $x + 74;

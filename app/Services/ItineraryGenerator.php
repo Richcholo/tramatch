@@ -7,6 +7,8 @@ use App\Models\Itinerary;
 use App\Models\Place;
 use App\Models\TravelProfile;
 use App\Models\User;
+use App\Services\Routing\RouteService;
+use App\Services\Routing\WritesLegs;
 use Carbon\Carbon;
 use DateTimeInterface;
 use Illuminate\Support\Facades\DB;
@@ -14,12 +16,36 @@ use RuntimeException;
 
 class ItineraryGenerator
 {
+    use WritesLegs;
+
     private const MAX_DESTINATION_COST = 99999999.99;
 
     private const MAX_MATCH_SCORE = 100.0;
 
+    /**
+     * How many legs one generation will ask the road about.
+     *
+     * Generation now routes, and routing costs an HTTP call per leg until the
+     * 30-day cache answers instead — measured at roughly 300-500 ms each. A
+     * 30-day trip is 87 legs, which is over PHP's default execution limit on a
+     * cold cache, and a generation that dies half way leaves the traveller with
+     * nothing at all.
+     *
+     * 24 covers an eight-day trip at three stops a day in full. Beyond it the
+     * remaining legs are simply left `unresolved`, which is the truth: we do
+     * not have a measured drive for that pair. The traveller who cares about one
+     * of them opens the editor and saves, which routes the whole day.
+     */
+    private const MAX_ROUTED_LEGS = 24;
+
+    /**
+     * Legs still available to this run, spent as days are written.
+     */
+    private int $routingBudget = self::MAX_ROUTED_LEGS;
+
     public function __construct(
-        private RecommendationService $recommendations
+        private RecommendationService $recommendations,
+        private RouteService $routes,
     ) {
     }
 
@@ -626,15 +652,35 @@ class ItineraryGenerator
                 ),
             ]);
 
+            // Every leg the plan implies, resolved against the road as the rows
+            // are written.
+            //
+            // THIS IS THE CHANGE. Generation used to leave every leg
+            // `unresolved` and every gap at the flat 45, on the recorded
+            // reasoning that routing inside a generation request is the wrong
+            // latency trade -- so a trip the traveller never edited carried a
+            // guessed drive time in the same slot a measured one uses. The trip
+            // is already being built stop by stop here, the road is one more
+            // read per gap, and it is cached for a month and bounded below.
+            //
+            // It happens INSIDE the existing transaction, so a leg that cannot
+            // be resolved costs nothing: `RouteService::leg()` answers null for
+            // every failure and the row is written `unresolved`.
+            $this->routingBudget = self::MAX_ROUTED_LEGS;
+
             foreach ($plan as $plannedDay) {
                 $day = $itinerary->days()->create([
                     'day_number' => $plannedDay['day_number'],
                     'date' => $plannedDay['date'],
                 ]);
 
+                $items = [];
+
                 foreach ($plannedDay['stops'] as $stop) {
-                    $day->items()->create($stop);
+                    $items[] = $day->items()->create($stop);
                 }
+
+                $this->routingBudget -= $this->writeLegs($items, $this->routingBudget);
             }
 
             $itinerary->setAttribute(
