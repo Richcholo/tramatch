@@ -142,6 +142,14 @@ quality.
 _Avoid_: Rating, score, confidence
 
 **Candidate**:
-A catalogue row offered to the planner as a permitted choice. Only candidates
-can be chosen — the planner cannot invent a place.
+A catalogue row the planner may choose. Candidates are every active
+destination in the traveller's chosen area and budget, ranked by preference
+score — the ones the traveller liked are marked and ordered first, but liking
+one does not make the others ineligible. Only candidates can be chosen; the
+planner cannot invent a place.
 _Avoid_: Option, suggestion, input
+
+**Shortlist**:
+The destinations a traveller has liked. It ranks the catalogue and never gates
+it — a trip can be planned from places the traveller never swiped.
+_Avoid_: Wishlist, saved, shortlist of undecided places
