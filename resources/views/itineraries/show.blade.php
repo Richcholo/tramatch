@@ -409,9 +409,18 @@
 
                                         <p class="mt-1 text-xs font-bold uppercase tracking-[0.18em] text-boracay-dark/70">
                                             @if ($item->start_time && $item->end_time)
-                                                {{ substr($item->start_time, 0, 5) }}
-                                                –
-                                                {{ substr($item->end_time, 0, 5) }}
+                                                {{-- One instant, not a range. A lodging stop has no visit
+                                                     duration, and printing "16:45 – 16:45"
+                                                     reads as a bug rather than as the
+                                                     truthful statement that there is no
+                                                     duration to print. --}}
+                                                @if (substr($item->start_time, 0, 5) === substr($item->end_time, 0, 5))
+                                                    {{ substr($item->start_time, 0, 5) }}
+                                                @else
+                                                    {{ substr($item->start_time, 0, 5) }}
+                                                    –
+                                                    {{ substr($item->end_time, 0, 5) }}
+                                                @endif
                                             @else
                                                 Flexible time
                                             @endif

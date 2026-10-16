@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Destination;
 use App\Models\Itinerary;
+use App\Models\Place;
 use App\Models\TravelProfile;
 use App\Models\User;
 use Carbon\Carbon;
@@ -54,6 +55,175 @@ class ItineraryGenerator
         }
 
         return $headline.' '.$named;
+    }
+
+    /**
+     * The researched food and lodging available for a trip.
+     *
+     * **SILENTLY EMPTY IS CORRECT AND IS THE POINT.** The catalogue has 36
+     * researched places across three provinces and none anywhere else, so most
+     * trips have no meal to place. That must not block generation and must not
+     * be reported as a failure: a province with nothing researched produces an
+     * attractions-only trip, which is what the app did before and is a true
+     * statement. The coverage report is where that absence is owned.
+     *
+     * `servesMeal('lunch')`, not "is food": a place serving only merienda and
+     * dinner cannot be put in the lunch block, and claiming otherwise is the
+     * same error as reading a registration window as opening hours.
+     *
+     * @return array{meals: array<int, Place>, lodging: Place|null}
+     */
+    private function tripPlaces(string $area, string $tier): array
+    {
+        $places = Place::query()
+            ->where('province', $area)
+            ->where('budget_level', $tier)
+            ->where('is_active', true)
+            ->orderBy('id')
+            ->get();
+
+        return [
+            'meals' => $places
+                ->filter(fn (Place $place) => $place->isFood() && $place->servesMeal('lunch'))
+                ->values()
+                ->all(),
+            'lodging' => $places->first(fn (Place $place) => $place->isLodging()),
+        ];
+    }
+
+    /**
+     * Put one meal into the day's lunch block.
+     *
+     * The block at 12:00–13:00 was already reserved and already pushed visits
+     * out of its way, so this fills a gap the scheduler had been leaving empty
+     * on purpose rather than inventing a new concept.
+     *
+     * INSERTED IN ORDER, NOT APPENDED — after every stop finished by 12:00 and
+     * before any starting at or after 13:00, then renumbered. Appending would
+     * produce a plan that eats lunch at 17:00. A day with no such gap gets no
+     * meal: refusing to place it somewhere wrong beats inventing a time.
+     *
+     * @param  array<int, array<string, mixed>>  $stops
+     * @param  array<string, mixed>  $context
+     * @return array<int, array<string, mixed>>
+     */
+    private function insertLunch(array $stops, array $context): array
+    {
+        if ($stops === []) {
+            return $stops;
+        }
+
+        /** @var Place|null $meal */
+        $meal = $this->tripPlaces($context['area'], $context['tier'])['meals'][$context['day'] - 1] ?? null;
+
+        if ($meal === null) {
+            return $stops;
+        }
+
+        $lunchStart = ItinerarySchedule::LUNCH_START_MINUTES;
+        $lunchEnd = ItinerarySchedule::LUNCH_END_MINUTES;
+
+        $index = 0;
+
+        foreach ($stops as $position => $stop) {
+            $end = ItinerarySchedule::parse((string) $stop['end_time']);
+
+            if ($end !== null && $end <= $lunchStart) {
+                $index = $position + 1;
+            }
+        }
+
+        $next = $stops[$index] ?? null;
+
+        if ($next !== null) {
+            $nextStart = ItinerarySchedule::parse((string) $next['start_time']);
+
+            if ($nextStart !== null && $nextStart < $lunchEnd) {
+                return $stops;
+            }
+        }
+
+        $duration = min(
+            max(1, (int) ceil((float) $meal->recommended_minutes)),
+            $lunchEnd - $lunchStart
+        );
+
+        array_splice($stops, $index, 0, [[
+            'place_id' => $meal->id,
+            'item_type' => 'meal',
+            'sort_order' => 0,
+            'start_time' => ItinerarySchedule::format($lunchStart),
+            'end_time' => ItinerarySchedule::format($lunchStart + $duration),
+            'travel_minutes_from_previous' => 0,
+            // null when the price is unknown, and 0 in the column is this
+            // project's standing convention for "we have no figure". The item's
+            // snapshotCost() is what reads it back, so the editor and the
+            // generator cannot disagree about an unknown.
+            'estimated_cost' => $meal->costFor($context['people']) ?? 0,
+        ]]);
+
+        return $this->renumber($stops);
+    }
+
+    /**
+     * Add the trip's lodging, once, at the end of the first day.
+     *
+     * A hotel is where you sleep, so it goes after the last thing you do rather
+     * than at 08:00 pretending to be a morning errand. Anchoring day one to the
+     * hotel is separate work that decides the arrival side; the same row cannot
+     * sit in two places at once.
+     *
+     * Duration is the place's own visit length, stored as zero for lodging on
+     * purpose. You do not spend ninety minutes at your own hotel, and a
+     * fabricated hour would displace a real visit to claim the space.
+     *
+     * Once per trip because a hotel is charged once: the second night's bill is
+     * the first night's bill, and the editor's `$chargedLodging` exists to stop
+     * exactly that double-charge on its side.
+     *
+     * @param  array<int, array<string, mixed>>  $stops
+     * @param  array<string, mixed>  $context
+     * @return array<int, array<string, mixed>>
+     */
+    private function appendLodging(array $stops, array $context): array
+    {
+        if ($stops === [] || $context['day'] !== 1) {
+            return $stops;
+        }
+
+        /** @var Place|null $lodging */
+        $lodging = $this->tripPlaces($context['area'], $context['tier'])['lodging'];
+
+        if ($lodging === null) {
+            return $stops;
+        }
+
+        $start = ItinerarySchedule::parse((string) end($stops)['end_time']) ?? ItinerarySchedule::DAY_END_MINUTES;
+
+        $stops[] = [
+            'place_id' => $lodging->id,
+            'item_type' => 'lodging',
+            'sort_order' => 0,
+            'start_time' => ItinerarySchedule::format($start),
+            'end_time' => ItinerarySchedule::format($start),
+            'travel_minutes_from_previous' => ItinerarySchedule::TRAVEL_MINUTES,
+            'estimated_cost' => $lodging->costFor($context['people'], 1, 1) ?? 0,
+        ];
+
+        return $this->renumber($stops);
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $stops
+     * @return array<int, array<string, mixed>>
+     */
+    private function renumber(array $stops): array
+    {
+        foreach ($stops as $position => $stop) {
+            $stops[$position]['sort_order'] = $position + 1;
+        }
+
+        return $stops;
     }
 
     /**
@@ -372,6 +542,20 @@ class ItineraryGenerator
                 $scheduledCount++;
                 $destinationIndex++;
             }
+
+            $context = [
+                'area' => $area,
+                'tier' => $profile->budget_level,
+                'day' => $dayNumber,
+                'people' => max(1, (int) ($data['group_size'] ?? $profile->group_size)),
+            ];
+
+            // Attractions first, then the two rows a complete trip needs. Both
+            // are strictly additive: neither consumes a destination, and a
+            // province with nothing researched simply keeps its attractions-only
+            // day.
+            $stops = $this->insertLunch($stops, $context);
+            $stops = $this->appendLodging($stops, $context);
 
             $plan[] = [
                 'day_number' => $dayNumber,

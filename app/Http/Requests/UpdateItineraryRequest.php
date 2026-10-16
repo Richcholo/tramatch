@@ -205,7 +205,16 @@ class UpdateItineraryRequest extends FormRequest
                 continue;
             }
 
-            if (strtotime((string) $end) <= strtotime((string) $start)) {
+            // A stop that ENDS BEFORE it starts is a mistake worth refusing. A stop that
+            // ends at the same minute it starts is not: a lodging stop has no
+            // visit duration at all, because you do not spend ninety minutes at
+            // your own hotel, and the generator writes it with one instant.
+            //
+            // This was `<=`, and it made every generated trip in a researched
+            // province unsaveable — the editor refused to post back a plan the
+            // app itself had produced. Found by the browser suite opening a
+            // generated trip for the first time.
+            if (strtotime((string) $end) < strtotime((string) $start)) {
                 $validator->errors()->add(
                     'items',
                     'A stop cannot finish before it starts.'
