@@ -127,13 +127,16 @@ interests. Saving it deliberately resets the deck.
 _Avoid_: Preferences, profile, account
 
 **Swipe**:
-A yes or no on one destination, recorded so it is never offered again. Liked
-destinations are the only ones that can be recommended or planned.
+A yes, a no, or an undo on one destination. A yes makes it part of the
+traveller's shortlist and keeps it out of the deck; a no takes it out of the
+deck and counts against its tags; either can be undone, because a decision the
+traveller cannot take back is not a decision.
 _Avoid_: Like, vote, rating
 
 **Recommendation**:
-A liked destination, ranked by how strongly the traveller's weighted interests
-match its tags.
+A destination from the traveller's shortlist, ranked by how strongly their
+weighted interests match its tags. Recommendations are always liked; what
+generation considers is a wider set of candidates.
 _Avoid_: Suggestion, match, result
 
 **Match score**:
