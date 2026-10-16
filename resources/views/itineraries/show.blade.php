@@ -813,7 +813,16 @@
                                     type="checkbox"
                                     data-destination="{{ $destination->id }}"
                                     data-name="{{ $destination->name }}"
-                                    data-place="{{ $destination->municipality }}, {{ $destination->province }}"
+                                    {{-- data-location, NOT data-place. A place's
+                                         checkbox uses data-place for its ID, and
+                                         an attraction used to use data-place
+                                         for this location string — so the
+                                         script could not tell the two sets
+                                         apart except by which other
+                                         attributes were present. Same
+                                         attribute name, two incompatible
+                                         meanings, on sibling elements. --}}
+                                    data-location="{{ $destination->municipality }}, {{ $destination->province }}"
                                     data-fee="₱{{ number_format((float) $destination->estimated_cost, 2) }}"
                                     data-url="{{ route('destinations.show', $destination) }}"
                                     class="mt-1 h-5 w-5 shrink-0 accent-boracay"

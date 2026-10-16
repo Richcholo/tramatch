@@ -713,22 +713,36 @@ function initItineraryEditor(root) {
         }
 
         picked.forEach((checkbox) => {
-            if (checkbox.hasAttribute('data-place')) {
+            // BRANCH ON data-destination, NOT ON THE ABSENCE OF data-place.
+            //
+            // This once read `if (checkbox.hasAttribute('data-place'))`, and a
+            // liked attraction carries `data-place` too — it held its
+            // "municipality, province" label. So every attraction ticked in
+            // this dialog took the PLACE branch: item_type became the literal
+            // string "undefined" and place_id became "Banaue, Ifugao", a
+            // location string in a foreign key. Nothing caught it, because
+            // every HTTP test posts its own well-formed payload and this
+            // dialog had never been opened by anyone.
+            //
+            // The two sets of checkboxes are also distinguished by data-kind,
+            // which only a place carries — but the primary key is the one
+            // thing that is unambiguous, so it decides.
+            if (checkbox.hasAttribute('data-destination')) {
+                addStop({
+                    kind: 'destination',
+                    id: checkbox.dataset.destination,
+                    name: checkbox.dataset.name,
+                    place: checkbox.dataset.location,
+                    fee: checkbox.dataset.fee,
+                    url: checkbox.dataset.url,
+                }, dayId);
+            } else {
                 addStop({
                     kind: 'place',
                     id: checkbox.dataset.place,
                     itemType: checkbox.dataset.kind,
                     name: checkbox.dataset.name,
                     place: checkbox.dataset.placeLabel,
-                    fee: checkbox.dataset.fee,
-                    url: checkbox.dataset.url,
-                }, dayId);
-            } else {
-                addStop({
-                    kind: 'destination',
-                    id: checkbox.dataset.destination,
-                    name: checkbox.dataset.name,
-                    place: checkbox.dataset.place,
                     fee: checkbox.dataset.fee,
                     url: checkbox.dataset.url,
                 }, dayId);

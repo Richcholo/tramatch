@@ -84,3 +84,18 @@ Thumbs.db
 # document a contributor should meet before touching code. Move it under /docs
 # if that changes.
 /docs
+
+# Browser-suite artifacts and its throwaway database. The database is deleted
+# and rebuilt by `npm run e2e:setup`, and must never be committed: a committed
+# copy would be a stale snapshot of the catalogue that reads like real data.
+# `playwright-report/` is only written on failure.
+/database/e2e.sqlite
+/test-results
+/playwright-report
+
+# The browser suite's own environment. Copied from .env.e2e.example by
+# 
+pm run e2e:setup and regenerated every run, so it is never the
+# authoritative copy and must never be committed -- a committed .env of any
+# kind is how an API key reaches the repository.
+/.env.e2e

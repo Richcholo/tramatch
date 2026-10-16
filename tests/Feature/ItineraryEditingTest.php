@@ -1486,7 +1486,17 @@ public function test_the_editor_itself_ignores_a_cost_in_the_draft(): void
 
         $this->assertGreaterThan(0, $picker->length, 'the picker offered nothing to assert on');
 
-        foreach (['name', 'place', 'fee', 'url'] as $attribute) {
+        // `place` is `location` here, and the rename is the point rather than a
+        // detail. The dialog's two checkbox sets used to BOTH carry
+        // `data-place`: a place's held its id, an attraction's held a
+        // "municipality, province" label. The script branched on
+        // `hasAttribute('data-place')`, so every attraction added through this
+        // dialog was built as a place — item_type "undefined", place_id
+        // "Banaue, Ifugao". No test caught it, because every HTTP test posts
+        // its own payload; it was found by opening the dialog in a browser for
+        // the first time. One attribute name, two incompatible meanings, on
+        // sibling elements.
+        foreach (['name', 'location', 'fee', 'url'] as $attribute) {
             $filled = 0;
 
             foreach ($picker as $checkbox) {
@@ -1500,6 +1510,35 @@ public function test_the_editor_itself_ignores_a_cost_in_the_draft(): void
                 $filled,
                 'every picker row must carry a non-empty data-'.$attribute
                 .', because addStop copies it onto the stop it creates'
+            );
+        }
+
+        // The two meanings must not have crept back together, in either direction.
+        // This one holds whether or not any place is offered, so it stays
+        // unconditional.
+        $this->assertSame(
+            0,
+            $xpath->query('//*[@data-destination and @data-place]')->length,
+            'an attraction carries data-place again, so the script can no longer tell an '
+            .'attraction from a place and will file it as one'
+        );
+
+        // The place half of the contract, checked only when places are actually
+        // rendered. A province with no researched food or lodging legitimately
+        // offers none, and asserting they exist would be asserting a state of
+        // the catalogue rather than a contract of the markup.
+        foreach ($xpath->query('//*[@data-place]') as $checkbox) {
+            $this->assertSame(
+                '',
+                (string) $checkbox->getAttribute('data-destination'),
+                'a checkbox carries both data-place and data-destination, so the script cannot '
+                .'tell which kind of stop to build'
+            );
+
+            $this->assertContains(
+                $checkbox->getAttribute('data-kind'),
+                ['meal', 'lodging'],
+                'a place checkbox has no usable data-kind, so the stop it creates has none'
             );
         }
     }
