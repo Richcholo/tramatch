@@ -65,3 +65,22 @@ Thumbs.db
 /.agents
 /skills-lock.json
 /DESIGN.md
+
+# Working notes, deliberately not deployed. The ADRs, the glossary, the revision
+# plan and the panel-feedback record are how this project remembers *why* — and
+# none of it is read by the application. deploy.sh pulls the whole repository,
+# so without this they would ship to production and sit next to the code they
+# describe, implying the app reads them.
+#
+# THE DOCS ARE STILL ON DISK. This rule keeps them out of the *deploy*, not out
+# of your working copy: `git check-ignore` only governs untracked files, so the
+# tracked copies were removed with `git rm --cached docs` in the commit that
+# added this rule. Do not re-add them. Note that this makes the decision history
+# local to this machine and to nowhere else — a fresh clone will not have it,
+# which is the accepted cost of not shipping it.
+#
+# GLOSSARY.md is at the repo root rather than in docs/, so this rule does NOT
+# cover it and it still deploys. That is deliberate for now: it is the one
+# document a contributor should meet before touching code. Move it under /docs
+# if that changes.
+/docs

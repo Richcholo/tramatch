@@ -80,6 +80,57 @@ class DeployArtifactsAreIgnoredTest extends TestCase
     }
 
     /**
+     * Working notes must not be deployed.
+     *
+     * The ADRs, glossary-adjacent notes, revision plan and panel-feedback
+     * record are how the project remembers *why*, and the application reads
+     * none of them. deploy.sh pulls the whole repository, so tracked copies
+     * would ship to production and sit beside the code they describe, implying
+     * the app consults them.
+     *
+     * A gitignore rule alone would NOT achieve this, which is the whole trap:
+     * `check-ignore` governs untracked files, so a rule added while the docs
+     * are tracked passes here and the files still deploy. That is why the
+     * tracked copies also had to leave the index. The assertion below is
+     * therefore paired with `docs_is_not_tracked`, which is the half that
+     * actually stops the deploy.
+     */
+    #[Test]
+    public function working_notes_are_ignored(): void
+    {
+        foreach (['docs', 'docs/adr/0001-demo-is-a-new-account.md'] as $path) {
+            $result = $this->git(['check-ignore', '-q', '--', $path]);
+
+            $this->assertSame(
+                0,
+                $result['status'],
+                $path.' is not ignored, so the deploy would carry our working notes to production.'
+            );
+        }
+    }
+
+    /**
+     * The half that gitignore cannot do on its own.
+     *
+     * A path can be ignored and still tracked, in which case it is deployed
+     * like any other file and the ignore rule is doing nothing at all. This
+     * asks the index rather than the ignore file, which is the only question
+     * that matches what deploy.sh actually pulls.
+     */
+    #[Test]
+    public function docs_is_not_tracked(): void
+    {
+        $result = $this->git(['ls-files', '--error-unmatch', 'docs/plan.md']);
+
+        $this->assertSame(
+            1,
+            $result['status'],
+            'docs/plan.md is still tracked in the index, so deploy.sh pulls it to the server '
+            .'even though the path is ignored. Remove it with `git rm --cached`.'
+        );
+    }
+
+    /**
      * The counter-check, so this file cannot pass by everything being ignored.
      */
     #[Test]
