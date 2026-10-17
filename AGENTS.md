@@ -1427,6 +1427,65 @@ purpose — a store that throws for everything also breaks the throttle
 middleware and the session, and the test then fails for reasons that have
 nothing to do with routing.
 
+#### **THE ROUTE CACHE HELD AN OBJECT, AND THE STAGE CACHE'S DOCBLOCK HAD
+ALREADY WARNED ABOUT EXACTLY THIS**
+
+Found on the live host, 2026-10-16, and it is the third routing bug that
+shared one root: **the cache driver is the database, entries are serialised,
+and they survive a deploy.**
+
+Every leg came back `unresolved` on Hostinger, and the log said
+`routing.cache_unreadable` with `Return value must be of type
+?RouteLeg, __PHP_Incomplete_Class returned`. Three separate defects, only
+one of which the label named:
+
+- **THE CACHE STORED A `RouteLeg` OBJECT AND RETURNED IT STRAIGHT THROUGH A
+  STRICT RETURN TYPE.** `DestinationCarousel`'s docblock says, in terms:
+  *"the cache driver is the database, entries are serialised, and they
+  survive a deploy — an object graph would come back as `__PHP_Incomplete_Class`
+  and, behind this method's return type, take the page down instead of costing
+  one rebuild."* The stage was rebuilt around that lesson and stores **arrays
+  of scalars** through `CarouselSlide::fromCache()`. The routing layer never
+  got it, so a payload whose class would not autoload became a `TypeError` on
+  every leg. It now stores `{distance_meters, duration_minutes, provider}`,
+  tolerates a legacy `RouteLeg` object, and treats anything else as a **miss**:
+  forget the key, ask the road once, move on.
+- **THE LOG LINE SAID `cache_unreadable`, WHICH WAS WRONG.** The cache read
+  perfectly well and handed back something stale. A cache that is *readable
+  and wrong* is a different fault from one that cannot be read, and naming them
+  the same sent the diagnosis after the wrong subsystem for a day. The new
+  line is `routing.cache_stale`, and it **names the class that would not
+  load** — `get_debug_type()` on an incomplete class just returns
+  `__PHP_Incomplete_Class`, which is true and useless. The name comes out of
+  an `(array)` cast as `__PHP_Incomplete_Class_Name`, because PHP refuses
+  `->` property access on an incomplete object and throws.
+- **AN UNREADABLE CACHE WAS COSTING THE LEG, NOT THE MEMO.** The old code read
+  the cache first, so a store that threw also skipped the road entirely and
+  the leg was written `unresolved`. Reporting "unmeasured" when the provider
+  was right there and answered is a lie about the road. The guarantee is now
+  split three ways: `cache_unreadable` (cannot read, still ask), `route()`,
+  and `cache_unwritable` (cannot write, keep the leg).
+  `test_an_unreadable_route_cache_cannot_fail_a_save` used to assert
+  `unresolved` here — it was pinning the worse behaviour.
+
+- **WHY THE PAYLOAD WAS THERE IS STILL UNKNOWN, AND THAT IS RECORDED RATHER
+  THAN INVENTED.** `RouteLeg` has never moved in git, `--optimize-autoloader`
+  is not `classmap-authoritative` so PSR-4 still applies, and the guard from
+  `73715a9` is what kept this a degraded log line instead of a 500. The fix
+  makes the cause irrelevant, and the new log line will name the culprit if it
+  ever recurs. **Do not go looking for a class rename that does not exist.**
+
+- **THE "PERMANENT NULL" THEORY WAS WRONG, AND IS RECORDED AS WRONG.**
+  `Cache::remember()` tests `is_null($value)` and therefore treats a stored
+  `null` as a **miss** — a failed lookup was never honoured on a later call
+  anyway. An earlier version of `RouteService` claimed every leg that failed
+  once failed for the full TTL, and offered that as the reason the User-Agent
+  fix had not repaired routing. Reverting only `leg()` falsified it: the test
+  asserting it passed unchanged against the old body. The host's all-`unresolved`
+  state had the `__PHP_Incomplete_Class` as its single cause.
+  `test_a_failed_lookup_leaves_nothing_behind` is kept because a wrong
+  explanation in a docblock outlives a missing one.
+
 Two harness lessons from writing it, both the checker being wrong first:
 
 - **`Cache::extend()` registers a creator keyed by DRIVER, and the store needs a

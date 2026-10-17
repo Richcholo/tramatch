@@ -10,6 +10,8 @@ use App\Models\Tag;
 use App\Models\TravelProfile;
 use App\Models\User;
 use App\Services\Routing\OsrmClient;
+use App\Services\Routing\RouteLeg;
+use App\Services\Routing\RouteService;
 use Illuminate\Cache\Repository as CacheRepository;
 use Illuminate\Contracts\Cache\Store;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -118,6 +120,113 @@ class RoutingLegsTest extends TestCase
         ));
     }
 
+    /**
+     * A cache entry this method did not write is a MISS, not a fatal.
+     *
+     * This is the live host's failure, reproduced. The cache driver is the
+     * database, entries are serialised, and they SURVIVE A DEPLOY -- so a
+     * payload whose class no longer loads comes back as `__PHP_Incomplete_Class`
+     * and, behind a `?RouteLeg` return type, is a `TypeError` rather than one
+     * missed rebuild. Every leg went `unresolved` and the log blamed an
+     * *unreadable* cache, which is a different fault and sent the diagnosis
+     * after the wrong subsystem.
+     *
+     * `DestinationCarousel` was rebuilt around this lesson for the stage's
+     * cache and stores scalars for exactly this reason. The routing layer now
+     * does the same, and still tolerates a legacy object.
+     */
+    public function test_a_stale_cache_entry_is_a_miss_and_not_a_fatal(): void
+    {
+        $service = app(RouteService::class);
+        $key = $service->cacheKey(14.3, 121.4, 14.6, 121.8);
+
+        // What a payload from a class that no longer loads unserialises to. Built
+        // from a real leg and re-badged, rather than hand-written: a hand-typed
+        // `O:31:"..."` string is a length prefix that has to match the class
+        // name exactly, and getting it wrong produces an `unserialize` parse
+        // error that looks like a test bug rather than a missing class.
+        $gone = 'App\Services\Routing\GoneAwayClass';
+
+        $payload = preg_replace(
+            '/^O:\d+:"[^"]+"/',
+            'O:' . strlen($gone) . ':"' . $gone . '"',
+            serialize(new RouteLeg(8400, 10, 'osrm'))
+        );
+
+        $incomplete = unserialize($payload);
+
+        $this->assertInstanceOf('__PHP_Incomplete_Class', $incomplete);
+
+        Cache::put($key, $incomplete, now()->addDay());
+
+        $leg = $service->leg(14.3, 121.4, 14.6, 121.8);
+
+        $this->assertNotNull($leg, 'a stale cache entry took routing down instead of costing a rebuild');
+        $this->assertSame(8400, $leg->distanceMeters);
+
+        // And the bad entry is gone, so the next call is a plain cache hit.
+        $this->assertNotInstanceOf(
+            'PHPUnit\Framework\MockObject\MockObject',
+            Cache::get($key)
+        );
+        $this->assertIsArray(Cache::get($key));
+
+        Http::assertSentCount(1);
+    }
+
+    /**
+     * A failed lookup leaves nothing behind.
+     *
+     * Small, and it does NOT fix anything: Laravel's `remember()` tests
+     * `is_null($value)` and so treats a stored `null` as a miss, meaning a
+     * failure was never honoured on a later call anyway. This test is here
+     * because an earlier version of `RouteService` claimed the opposite --
+     * "every leg that failed once failed forever", offered as the reason the
+     * User-Agent fix did not repair routing. Reverting only `leg()` falsified
+     * it: this test passed unchanged against the old body.
+     *
+     * The claim is recorded because a wrong explanation in a docblock is more
+     * durable than a missing one, and the next person to read the routing cache
+     * would otherwise build on it.
+     */
+    public function test_a_failed_lookup_leaves_nothing_behind(): void
+    {
+        $this->stubOsrm(fn () => Http::response('no road today', 500));
+
+        $service = app(RouteService::class);
+        $key = $service->cacheKey(14.3, 121.4, 14.6, 121.8);
+
+        $this->assertNull($service->leg(14.3, 121.4, 14.6, 121.8));
+
+        // Nothing stored, so the next attempt really is a fresh one.
+        $this->assertNull(Cache::get($key));
+
+        $this->assertNull($service->leg(14.3, 121.4, 14.6, 121.8));
+
+        Http::assertSentCount(2);
+    }
+
+    /**
+     * A leg the road DID answer is remembered, as three scalars.
+     *
+     * The shape is the fix. An object graph in this cache is what came back
+     * from the live host as `__PHP_Incomplete_Class`; three integers and a
+     * string cannot outlive the class that wrote them in any way that matters.
+     */
+    public function test_a_measured_leg_is_cached_as_scalars_not_an_object(): void
+    {
+        $service = app(RouteService::class);
+        $key = $service->cacheKey(14.3, 121.4, 14.6, 121.8);
+
+        $this->assertNotNull($service->leg(14.3, 121.4, 14.6, 121.8));
+
+        $this->assertSame([
+            'distance_meters' => 8400,
+            'duration_minutes' => 10,
+            'provider' => 'osrm',
+        ], Cache::get($key));
+    }
+
     public function test_a_cached_leg_issues_no_second_request(): void
     {
         $service = app(\App\Services\Routing\RouteService::class);
@@ -162,10 +271,18 @@ class RoutingLegsTest extends TestCase
         $items = $itinerary->fresh()->days->first()->items()->orderBy('sort_order')->get();
 
         // The stop was still saved, with the honest answer rather than an
-        // exception: the leg is unresolved, and nothing was invented for it.
+        // exception: nothing was invented for it.
         $this->assertCount(2, $items);
-        $this->assertSame('unresolved', $items[1]->route_status);
-        $this->assertNull($items[1]->routeSummary());
+
+        // AND THE LEG IS STILL MEASURED. This used to assert `unresolved`,
+        // which was pinning the worse behaviour: the old code read the cache
+        // first, so a cache that could not be read also cost the road answer.
+        // What an unreadable cache should cost is the MEMO -- one request per
+        // save instead of one per save per leg, which is a performance problem,
+        // not a correctness one. Reporting "unmeasured" when the provider was
+        // right there and answered is a lie about the road.
+        $this->assertSame('resolved', $items[1]->route_status);
+        $this->assertSame(8400, $items[1]->route_distance_meters);
     }
 
     /**
