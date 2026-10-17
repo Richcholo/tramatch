@@ -500,6 +500,21 @@
                                         </p>
                                     </div>
                                 @endforelse
+
+                                {{-- What is left of the day, in words.
+                                     A sentence, deliberately, and never a
+                                     utilisation bar: the number only means
+                                     something next to a sentence saying what
+                                     it is. `freeTimeSentence()` returns null
+                                     for a full day and for a day with
+                                     nothing planned, so this prints nothing
+                                     in both of those cases rather than
+                                     claiming a day is tight. --}}
+                                @if ($freeTime = $day->freeTimeSentence())
+                                    <p data-free-time class="mt-6 text-sm font-semibold text-boracay-dark">
+                                        {{ $freeTime }}
+                                    </p>
+                                @endif
                             </div>
                         </article>
                     @endforeach

@@ -1192,6 +1192,60 @@ test failure.
 **If a rule here is wrong, change it here once.** A copy-pasted
 `hoursForDay()` on `Place` is the failure this prevents.
 
+#### **A GENERATED TRIP NOW OPENS AT THE HOTEL, AND A LUNCH GUARD WAS WRITTEN,
+PROVED INERT, AND THEN PROVED HARMFUL**
+
+**The lodging row is the FIRST stop of day one, seeded before the attraction
+loop, not appended after it.** It used to go at the end of the day, which is true
+of the drive and produced a plan with no idea where the traveller was standing:
+day one opened with an attraction, and **the first drive of the whole trip had no
+leg in it at all**, because a leg needs a previous pin. Anchoring the hotel makes
+the first drive measurable like every other.
+
+**THREE CONSEQUENCES, ALL OF THEM LOAD-BEARING:**
+
+- **THE HOTEL MUST NOT COUNT TOWARD `MAX_STOPS_PER_DAY`.** Seeding it before the
+  loop is what makes `$stops` non-empty when the first attraction is placed, and
+  the obvious way to do that is to let it count — which silently costs the
+  traveller a stop on day one. Hence a separate `$attractionCount`.
+- **`insertLunch()` COUNTS THE LODGING ROW, AND THAT IS CORRECT.** I changed it to
+  skip the hotel, on the reasoning that "the lunch gap is a gap between things you
+  DO", and documented it as load-bearing. **Both halves of that were wrong, and
+  only measuring found it.** Re-introducing the `continue` alone changed *nothing*
+  on any reachable day, because `nextStart()` already nudges a visit that would
+  cross noon to 13:00 — so the guard was inert everywhere. The harmful half was
+  the `$index = null` that came with it: when the day's **only** attraction opens
+  at 13:00, the traveller stands at their hotel from 08:00 to 13:00 with nothing
+  planned, which is exactly when they want lunch, and the guard threw it away.
+  `test_an_afternoon_only_day_still_gets_its_lunch` pins it and is falsified by
+  `$index = null`.
+  **Do not re-add a "the hotel is not a thing you do" skip. It looks principled
+  and it deletes a meal.**
+- **`tripPlaces()` IS NOW RESOLVED ONCE PER GENERATION.** It was being called
+  from two methods per day — a 7-day trip ran 14 identical queries — while its
+  own docblock claimed it was "resolved once per generation".
+
+#### **FREE TIME IS A SENTENCE, AND THE REJECTED ALTERNATIVE IS THE POINT**
+
+`ItineraryDay::freeTimeSentence()` renders `That leaves 2 h 20 min free.` under
+a day, and nothing at all when there is none worth saying.
+
+**A UTILISATION BAR WAS THE OBVIOUS BUILD AND IT IS WRONG HERE.** A bar asks the
+traveller to decode a fraction before they know whether the number is good, and —
+worse — a *full-looking-empty* bar on a well-packed day reads as a fault when it
+is exactly the outcome they wanted. The sentence needs nothing decoded.
+
+- **`DAY_END_MINUTES - last stop's end`, floored at zero. NOT a budget minus the
+  plan.** Reflow deliberately does not refuse a day that runs past 18:00, so the
+  difference is not academic: one form can produce a negative number and print a
+  day as owing the traveller time.
+- **`null`, never zero,** for an empty day or stops with no times yet. "That
+  leaves 10 h free." under a day nobody planned is a sentence about a day that
+  does not exist, and the empty state already says the true thing.
+- **`ItineraryItem::durationLabel()`,** which is already the shared formatter for
+  the page, the PDF and the map tooltip. A second formatter here is how a
+  duration ends up rounded three ways.
+
 #### An itinerary stop has four shapes
 
 `itinerary_items.item_type` is **attraction | meal | lodging | custom**, and it

@@ -129,6 +129,25 @@ class ItineraryGenerator
      * produce a plan that eats lunch at 17:00. A day with no such gap gets no
      * meal: refusing to place it somewhere wrong beats inventing a time.
      *
+     * **THE LODGING ROW IS COUNTED, AND COUNTING IT IS CORRECT.** The hotel is
+     * seeded before the attraction loop, so it sits at index 0 with one instant
+     * at the start of the day, and it must take part in this scan.
+     *
+     * An earlier version of this method skipped it, on the reasoning that "the
+     * lunch gap is a gap between things you DO". Two things were wrong with
+     * that. It was not load-bearing at all — `nextStart()` already nudges a
+     * visit that would cross noon to 13:00, so the guard changed nothing in any
+     * day the generator can currently build. And in the one case where it *did*
+     * change the outcome it was actively harmful: when the day's only attraction
+     * does not open until 13:00, the traveller stands at their hotel from 08:00
+     * with nothing planned, which is precisely when they want lunch, and the
+     * guard threw the meal away.
+     *
+     * So the hotel counts, and the scan is unchanged from before the hotel was
+     * anchored at all. Both claims above are kept because a guard that looks
+     * principled and silently deletes a meal is the kind of thing that gets
+     * re-added on the next tidy-up.
+     *
      * @param  array<int, array<string, mixed>>  $stops
      * @param  array<string, mixed>  $context
      * @return array<int, array<string, mixed>>
@@ -140,7 +159,7 @@ class ItineraryGenerator
         }
 
         /** @var Place|null $meal */
-        $meal = $this->tripPlaces($context['area'], $context['tier'])['meals'][$context['day'] - 1] ?? null;
+        $meal = $context['meals'][$context['day'] - 1] ?? null;
 
         if ($meal === null) {
             return $stops;
@@ -192,51 +211,50 @@ class ItineraryGenerator
     }
 
     /**
-     * Add the trip's lodging, once, at the end of the first day.
+     * The trip's hotel, as the FIRST thing on day one.
      *
-     * A hotel is where you sleep, so it goes after the last thing you do rather
-     * than at 08:00 pretending to be a morning errand. Anchoring day one to the
-     * hotel is separate work that decides the arrival side; the same row cannot
-     * sit in two places at once.
+     * It used to be appended to the END of the first day, which was the more
+     * defensible of two wrong answers: "you go to your hotel at the end of the
+     * day" is true of the drive, but the plan it produced opened day one with
+     * no idea where the traveller was standing, and the first leg of the whole
+     * trip had no leg in it at all — there was no previous pin, because the
+     * day's first stop was an attraction rather than the place the traveller
+     * slept.
+     *
+     * A real trip starts at the hotel. Anchoring it there means the first drive
+     * of the trip is measured like every other drive, which is the entire point
+     * of the routing work.
      *
      * Duration is the place's own visit length, stored as zero for lodging on
-     * purpose. You do not spend ninety minutes at your own hotel, and a
-     * fabricated hour would displace a real visit to claim the space.
+     * purpose: you do not spend ninety minutes at your own hotel, and a
+     * fabricated hour would displace a real visit to claim the space. So the row
+     * carries one instant, and the read view prints one instant.
      *
-     * Once per trip because a hotel is charged once: the second night's bill is
-     * the first night's bill, and the editor's `$chargedLodging` exists to stop
-     * exactly that double-charge on its side.
+     * ONCE per trip, because a hotel is charged once — the second night's bill
+     * is the first night's bill.
      *
-     * @param  array<int, array<string, mixed>>  $stops
      * @param  array<string, mixed>  $context
      * @return array<int, array<string, mixed>>
      */
-    private function appendLodging(array $stops, array $context): array
+    private function lodgingRow(array $context): array
     {
-        if ($stops === [] || $context['day'] !== 1) {
-            return $stops;
-        }
-
         /** @var Place|null $lodging */
-        $lodging = $this->tripPlaces($context['area'], $context['tier'])['lodging'];
+        $lodging = $context['lodging'];
 
         if ($lodging === null) {
-            return $stops;
+            return [];
         }
 
-        $start = ItinerarySchedule::parse((string) end($stops)['end_time']) ?? ItinerarySchedule::DAY_END_MINUTES;
-
-        $stops[] = [
+        return [[
             'place_id' => $lodging->id,
             'item_type' => 'lodging',
             'sort_order' => 0,
-            'start_time' => ItinerarySchedule::format($start),
-            'end_time' => ItinerarySchedule::format($start),
-            'travel_minutes_from_previous' => ItinerarySchedule::TRAVEL_MINUTES,
+            'start_time' => ItinerarySchedule::format(ItinerarySchedule::DAY_START_MINUTES),
+            'end_time' => ItinerarySchedule::format(ItinerarySchedule::DAY_START_MINUTES),
+            // Nothing precedes the hotel. The traveller woke up there.
+            'travel_minutes_from_previous' => 0,
             'estimated_cost' => $lodging->costFor($context['people'], 1, 1) ?? 0,
-        ];
-
-        return $this->renumber($stops);
+        ]];
     }
 
     /**
@@ -430,8 +448,38 @@ class ItineraryGenerator
         $totalScore = 0.0;
         $scheduledCount = 0;
 
+        // Once for the whole trip, not twice a day. See the note in the loop.
+        $tripPlaces = $this->tripPlaces($area, $profile->budget_level);
+
         for ($dayNumber = 1; $dayNumber <= $duration; $dayNumber++) {
-            $stops = [];
+            // THE HOTEL IS SEEDED BEFORE THE LOOP, NOT APPENDED AFTER IT, and
+            // that ordering is the whole feature. Seeding it here means `$stops`
+            // is already non-empty when the first attraction is placed, so the
+            // first drive of the trip is laid out like every other drive instead
+            // of starting the day and the first stop at the same minute.
+            //
+            // `tripPlaces()` is resolved ONCE here, not per day. It was being
+            // called from two methods per day, so a 7-day trip ran 14 identical
+            // queries, while its own docblock claimed it was "resolved once per
+            // generation".
+            $context = [
+                'area' => $area,
+                'tier' => $profile->budget_level,
+                'day' => $dayNumber,
+                'people' => max(1, (int) ($data['group_size'] ?? $profile->group_size)),
+                'lodging' => $tripPlaces['lodging'],
+                'meals' => $tripPlaces['meals'],
+            ];
+
+            $stops = $dayNumber === 1
+                ? $this->lodgingRow($context)
+                : [];
+
+            // The hotel is NOT an attraction and must not consume one of the
+            // three slots: a day that opens at your own hotel still has room for
+            // three things to see.
+            $attractionCount = 0;
+
             $cursor = ItinerarySchedule::DAY_START_MINUTES;
 
             // The actual calendar date of this day, when the trip has one. Null
@@ -440,7 +488,7 @@ class ItineraryGenerator
             $dayDate = $startDate?->copy()->addDays($dayNumber - 1);
 
             while (
-                count($stops) < ItinerarySchedule::MAX_STOPS_PER_DAY
+                $attractionCount < ItinerarySchedule::MAX_STOPS_PER_DAY
                 && $destinationIndex < $orderedDestinations->count()
             ) {
                 $destination = $orderedDestinations->get(
@@ -566,22 +614,17 @@ class ItineraryGenerator
                 $totalCostCents += $costCents;
                 $totalScore += (float) $destination->match_score;
                 $scheduledCount++;
+                $attractionCount++;
                 $destinationIndex++;
             }
 
-            $context = [
-                'area' => $area,
-                'tier' => $profile->budget_level,
-                'day' => $dayNumber,
-                'people' => max(1, (int) ($data['group_size'] ?? $profile->group_size)),
-            ];
-
-            // Attractions first, then the two rows a complete trip needs. Both
-            // are strictly additive: neither consumes a destination, and a
-            // province with nothing researched simply keeps its attractions-only
-            // day.
+            // Strictly additive: the meal neither consumes a destination nor a
+            // slot in the three-stop cap, and a province with nothing researched
+            // simply keeps its attractions-only day.
+            //
+            // The hotel is NOT added here. It was already seeded before the loop,
+            // which is why `insertLunch()` has to know to ignore it.
             $stops = $this->insertLunch($stops, $context);
-            $stops = $this->appendLodging($stops, $context);
 
             $plan[] = [
                 'day_number' => $dayNumber,

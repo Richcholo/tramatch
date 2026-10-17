@@ -8,6 +8,7 @@ use App\Models\Place;
 use App\Models\Tag;
 use App\Models\TravelProfile;
 use App\Models\User;
+use App\Services\ItinerarySchedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -154,7 +155,7 @@ class ItineraryMealsAndLodgingTest extends TestCase
 
     // ------------------------------------------------------ the lodging
 
-    public function test_a_trip_gets_lodging_once_at_the_end_of_the_first_day(): void
+    public function test_a_trip_gets_lodging_once_on_the_first_day(): void
     {
         $this->place('Citylight Hotel', Place::TYPE_LODGING, [], 0, 1800, Place::PRICE_PER_ROOM_NIGHT);
 
@@ -163,7 +164,6 @@ class ItineraryMealsAndLodgingTest extends TestCase
         $this->assertCount(1, $lodging, 'lodging must be charged once per trip, not once a night');
 
         $item = $lodging->first();
-
 
         $this->assertSame('Citylight Hotel', $item->place->name);
         $this->assertSame(
@@ -178,6 +178,136 @@ class ItineraryMealsAndLodgingTest extends TestCase
             substr((string) $item->start_time, 0, 5),
             substr((string) $item->end_time, 0, 5)
         );
+    }
+
+    /**
+     * THE HOTEL IS WHERE THE DAY STARTS.
+     *
+     * It used to be appended to the end of day one, on the reasoning that you go
+     * back to your hotel after your last stop. True of the drive, and it produced
+     * a plan with no idea where the traveller was standing: day one opened with
+     * an attraction, and the first drive of the whole trip had no leg in it at
+     * all, because there was no previous pin to measure from.
+     */
+    public function test_the_hotel_is_the_first_thing_on_day_one(): void
+    {
+        $this->place('Citylight Hotel', Place::TYPE_LODGING, [], 0, 1800, Place::PRICE_PER_ROOM_NIGHT);
+
+        $dayOne = $this->generate()
+            ->filter(fn ($item) => $item->day->day_number === 1)
+            ->sortBy('sort_order');
+
+        $this->assertSame(
+            'lodging',
+            $dayOne->first()->item_type,
+            'the day does not open at the hotel'
+        );
+
+        // ...at the start of the day window.
+        $this->assertSame('08:00', substr((string) $dayOne->first()->start_time, 0, 5));
+    }
+
+    /**
+     * The hotel is NOT an attraction and must not eat one of the three slots.
+     *
+     * Seeding it before the loop is what makes the first drive measurable, and
+     * the obvious way to do that is to let it count towards MAX_STOPS_PER_DAY --
+     * which silently costs the traveller a stop on day one and was the reason
+     * the cap needed its own counter.
+     */
+    public function test_the_hotel_does_not_consume_one_of_the_three_attraction_slots(): void
+    {
+        $this->place('Citylight Hotel', Place::TYPE_LODGING, [], 0, 1800, Place::PRICE_PER_ROOM_NIGHT);
+
+        $dayOne = $this->generate()->filter(fn ($item) => $item->day->day_number === 1);
+
+        $this->assertSame(
+            ItinerarySchedule::MAX_STOPS_PER_DAY,
+            $dayOne->where('item_type', 'attraction')->count(),
+            'the hotel displaced a real visit'
+        );
+    }
+
+    /**
+    /**
+     * THE HOTEL DOES NOT COST THE DAY ITS LUNCH, AND THE HARD CASE IS AN
+     * AFTERNOON-ONLY ATTRACTION.
+     *
+     * The easy case is uninteresting: attractions fill the morning and the meal
+     * lands in the gap before one that `nextStart()` pushed to 13:00. The case
+     * that matters is a day whose ONLY attraction does not open until 13:00 --
+     * the traveller then stands at their hotel from 08:00 to 13:00 with nothing
+     * planned, which is exactly when they want lunch.
+     *
+     * This test exists because a guard was written for it and was wrong. The
+     * lunch scan was changed to skip the lodging row, on the reasoning that "the
+     * gap is between things you DO", and it deleted the meal here. It also
+     * changed nothing on any other day, because `nextStart()` already moves a
+     * visit that would cross noon to 13:00 -- so it was a guard that was inert
+     * everywhere else and destructive on the one day it could reach.
+     */
+    public function test_an_afternoon_only_day_still_gets_its_lunch(): void
+    {
+        $this->place('Eden Kitchen', Place::TYPE_FOOD, ['lunch'], 60, 400);
+
+        // Opens at 13:00, so nothing in this trip can start before then.
+        $destination = Destination::create([
+            'name' => 'Afternoon Only',
+            'slug' => 'afternoon-only',
+            'description' => 'A place.',
+            'province' => 'Benguet',
+            'latitude' => 16.4,
+            'longitude' => 120.6,
+            'budget_level' => 'economy',
+            'estimated_cost' => 100,
+            'recommended_minutes' => 60,
+            'opening_time' => '13:00',
+            'closing_time' => '17:00',
+        ]);
+
+        $destination->tags()->attach(Tag::where('slug', 'nature')->firstOrFail());
+        DestinationSwipe::create([
+            'user_id' => $this->user->id,
+            'destination_id' => $destination->id,
+            'action' => 'liked',
+        ]);
+
+        $items = $this->generate(days: 1, only: [$destination->id]);
+
+        $meal = $items->firstWhere('item_type', 'meal');
+
+        $this->assertNotNull($meal, 'five idle hours at the hotel, and no lunch');
+        $this->assertSame('12:00', substr((string) $meal->start_time, 0, 5));
+
+        // And it goes BEFORE the attraction, not after it.
+        $this->assertLessThan(
+            (int) $items->firstWhere('item_type', 'attraction')->sort_order,
+            (int) $meal->sort_order
+        );
+    }
+
+    /**
+     * The first drive of the trip is a real leg, like every other.
+     *
+     * Only true once the hotel leads the day: a leg needs a previous pin, and an
+     * attraction-first day had none.
+     */
+    public function test_the_first_drive_of_the_trip_is_measured_from_the_hotel(): void
+    {
+        $this->place('Citylight Hotel', Place::TYPE_LODGING, [], 0, 1800, Place::PRICE_PER_ROOM_NIGHT);
+
+        $firstAttraction = $this->generate()
+            ->filter(fn ($item) => $item->day->day_number === 1 && $item->item_type === 'attraction')
+            ->sortBy('sort_order')
+            ->first();
+
+        $this->assertNotNull($firstAttraction);
+        $this->assertSame(
+            'resolved',
+            $firstAttraction->route_status,
+            'the drive from the hotel to the first stop was never measured'
+        );
+        $this->assertNotNull($firstAttraction->route_distance_meters);
     }
 
     public function test_a_three_day_trip_still_pays_for_one_nights_lodging(): void
@@ -237,14 +367,14 @@ class ItineraryMealsAndLodgingTest extends TestCase
 
     // ---------------------------------------------------------- helpers
 
-    private function generate(int $days = 2)
+    private function generate(int $days = 2, ?array $only = null)
     {
         $this->actingAs($this->user)
             ->post(route('itineraries.store'), [
                 'title' => 'A complete trip',
                 'area' => 'Benguet',
                 'days' => $days,
-                'destination_ids' => Destination::pluck('id')->all(),
+                'destination_ids' => $only ?? Destination::pluck('id')->all(),
             ])
             ->assertRedirect();
 
