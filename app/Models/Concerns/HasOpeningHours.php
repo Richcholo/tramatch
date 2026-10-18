@@ -215,6 +215,32 @@ trait HasOpeningHours
         return $this->hoursForDay($date) === null;
     }
 
+    /**
+     * Is this weekday one the place says it is CLOSED on? The precise question.
+     *
+     * `isClosedOn()` cannot answer it, because it really asks "is there no window
+     * on this day" and that is null for a row which has never published hours at
+     * all. Callers that guard it with `hasAnyHours()` are still wrong in one
+     * shape: `hasAnyHours()` counts `closed_days` as hours data, so a place that
+     * publishes **"closed Mondays" and nothing else** passes the guard and then
+     * reads as closed on *every* day.
+     *
+     * That is not a theoretical row — it is what a catalogue entry looks like
+     * when somebody knows the gate is shut on Mondays and has not published a
+     * clock time. It shipped because the generator dropped a destination the
+     * first time it was refused and never asked again, so "closed" and "closed
+     * forever" were indistinguishable from the outside. Asking this question
+     * directly cannot confuse them.
+     */
+    public function isClosedOnWeekday(DateTimeInterface $date): bool
+    {
+        return in_array(
+            strtolower($date->format('l')),
+            $this->closedDayList(),
+            true
+        );
+    }
+
     public function closedDaysLabel(): ?string
     {
         $days = $this->closedDayList();

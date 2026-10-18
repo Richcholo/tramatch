@@ -258,6 +258,143 @@ class ItineraryGenerator
     }
 
     /**
+     * Great-circle distance between two pins, in kilometres.
+     *
+     * Used to decide WHICH destination a day visits next, never to tell the
+     * traveller how far the drive is — that is `RouteService`'s job and it is
+     * measured. This only decides the order.
+     *
+     * **STRAIGHT LINES, NOT THE ROAD, AND THAT IS THE POINT.** The plan called for
+     * nearest-neighbour "over the OSRM legs already cached", which is wrong in a
+     * way that only shows up in production: the cached legs are the legs the
+     * *previous* run happened to walk. Ordering by them would make the same
+     * request produce a different trip depending on whether the cache was warm,
+     * and a generator that is not deterministic cannot be reasoned about or
+     * tested. A haversine is free, always available, and identical every time.
+     *
+     * Within a province it is also a good proxy for road distance, which is the
+     * premise the three pilot clusters were chosen on.
+     */
+    private static function distanceFromPin(
+        ?float $fromLat,
+        ?float $fromLng,
+        $toLat,
+        $toLng
+    ): float {
+        // A missing pin is not "infinitely far", it is "no preference". Treating
+        // it as far would put every unpinned place at the bottom of the ranking
+        // for a reason that has nothing to do with where it is, and treating it
+        // as near would promote them all. Zero keeps the catalogue's own order
+        // for those rows, which is the old behaviour and a defensible one.
+        if ($fromLat === null || $fromLng === null || $toLat === null || $toLng === null) {
+            return 0.0;
+        }
+
+        $earthRadiusKm = 6371.0;
+
+        $lat1 = deg2rad((float) $fromLat);
+        $lat2 = deg2rad((float) $toLat);
+        $deltaLat = $lat2 - $lat1;
+        $deltaLon = deg2rad((float) $toLng - (float) $fromLng);
+
+        $a = sin($deltaLat / 2) ** 2
+            + cos($lat1) * cos($lat2) * sin($deltaLon / 2) ** 2;
+
+        return $earthRadiusKm * 2 * atan2(sqrt($a), sqrt(1 - $a));
+    }
+
+    /**
+     * The coordinates of a pin, for the distance comparison above.
+     *
+     * Stops already placed on a day are plain arrays; the hotel is a `Place`.
+     * Both expose a latitude and a longitude in different ways, so this is the
+     * one place that knows it.
+     *
+     * @return array{0: float|null, 1: float|null}
+     */
+    private static function pinFromPlace(?Place $place): array
+    {
+        return [$place?->latitude, $place?->longitude];
+    }
+
+    /**
+     * Why a destination cannot be scheduled, if it cannot.
+     *
+     * `permanent` reasons are properties of the row and will never change on any
+     * day, so a caller may drop the destination for good. `day` reasons are about
+     * one weekday and are worth retrying on another.
+     *
+     * **THE TWO ARE SEPARATED BECAUSE THE OLD CODE CONFLATED THEM.** Every
+     * rejection advanced one global cursor, so a destination closed on Monday was
+     * removed from the trip entirely and never given a chance on Tuesday — the
+     * traveller was told "Closed on Monday" and never learned it was open the
+     * rest of the week. That is the same class of error as reading a registration
+     * window as opening hours: a fact about one day presented as a fact about the
+     * place.
+     *
+     * @return array{kind: string, reason: string}|null null when it can be scheduled
+     */
+    private function eligibility(Destination $destination, ?Carbon $dayDate): ?array
+    {
+        $visitMinutes = (int) ceil((float) $destination->recommended_minutes);
+
+        if (
+            $visitMinutes <= 0
+            || $visitMinutes > ItinerarySchedule::longestVisitMinutes()
+            || !is_numeric($destination->estimated_cost)
+            || !is_finite((float) $destination->estimated_cost)
+            || (float) $destination->estimated_cost < 0
+            || (float) $destination->estimated_cost > self::MAX_DESTINATION_COST
+            || !is_numeric($destination->match_score)
+            || !is_finite((float) $destination->match_score)
+            || (float) $destination->match_score < 0
+            || (float) $destination->match_score > self::MAX_MATCH_SCORE
+        ) {
+            return [
+                'kind' => 'permanent',
+                'reason' => 'This destination cannot fit the itinerary rules.',
+            ];
+        }
+
+        $window = $this->visitWindow($destination, $dayDate);
+
+        // The window is too small for the visit. A permanent property of the row,
+        // not of the day.
+        if ($window !== null && $window['close'] - $window['open'] < $visitMinutes) {
+            return [
+                'kind' => 'permanent',
+                'reason' => sprintf(
+                    'Open %s, so there is not room for a %d-minute visit.',
+                    $window['label'],
+                    $visitMinutes
+                ),
+            ];
+        }
+
+        // Closed that weekday. About THIS day only.
+        //
+        // `isClosedOnWeekday()`, NOT `hasAnyHours() && isClosedOn()`. The old
+        // guard was added to stop blank-hours rows reading as shut all week, and
+        // it worked — until a row that publishes `closed_days` and no clock time,
+        // which `hasAnyHours()` counts as having hours and `isClosedOn()` then
+        // called shut on every day of the week. A place that says "closed Mondays"
+        // was unavailable to the traveller for the whole trip.
+        //
+        // It shipped because the generator dropped a destination the first time it
+        // was refused and never asked again, so "closed today" and "closed
+        // forever" looked identical from outside. Retrying on another day is what
+        // made it visible, and this question is what it needed all along.
+        if ($dayDate !== null && $destination->isClosedOnWeekday($dayDate)) {
+            return [
+                'kind' => 'day',
+                'reason' => 'Closed on '.ucfirst(strtolower($dayDate->format('l'))).'.',
+            ];
+        }
+
+        return null;
+    }
+
+    /**
      * @param  array<int, array<string, mixed>>  $stops
      * @return array<int, array<string, mixed>>
      */
@@ -443,7 +580,9 @@ class ItineraryGenerator
 
         $plan = [];
         $unscheduled = [];
-        $destinationIndex = 0;
+        // Consumed in place. NOT a cursor: a destination rejected because it
+        // was closed today must still be available tomorrow.
+        $remaining = $orderedDestinations;
         $totalCostCents = 0;
         $totalScore = 0.0;
         $scheduledCount = 0;
@@ -487,119 +626,102 @@ class ItineraryGenerator
             // null rather than guessing a weekday.
             $dayDate = $startDate?->copy()->addDays($dayNumber - 1);
 
-            while (
-                $attractionCount < ItinerarySchedule::MAX_STOPS_PER_DAY
-                && $destinationIndex < $orderedDestinations->count()
-            ) {
-                $destination = $orderedDestinations->get(
-                    $destinationIndex
-                );
+// NEAREST FIRST, NOT HIGHEST-SCORING FIRST.
+            //
+            // The loop used to walk one global cursor through the match-score order
+            // and take whatever it pointed at. That produces geographically
+            // scattered days: three places at the top of the ranking can be an
+            // hour apart, and the traveller is driven between them for no reason
+            // anyone chose.
+            //
+            // So each slot takes the NEAREST destination that can actually be
+            // scheduled there — and "can actually be scheduled" still means every
+            // check below, so ordering cannot talk the scheduler into breaking a
+            // cited opening window. Geography chooses between candidates that
+            // were always going to be legal.
+            //
+            // EVERY DAY DEPARTS FROM THE HOTEL, because that is where the traveller
+            // slept the night before. A province with no researched lodging has no
+            // origin, and then every distance is zero and the match-score order
+            // stands — the same plan as before, for the provinces with no hotel to
+            // leave from.
+            [$originLat, $originLng] = self::pinFromPlace($context['lodging']);
 
-                $visitMinutes = (int) ceil(
-                    (float) $destination->recommended_minutes
-                );
+            while ($attractionCount < ItinerarySchedule::MAX_STOPS_PER_DAY) {
+                $chosenIndex = null;
+                $chosenDistance = null;
+                $chosenStart = null;
 
-                $longestVisitWindow = ItinerarySchedule::longestVisitMinutes();
+                foreach ($remaining as $index => $candidate) {
+                    // A permanent rejection is settled once and never retried.
+                    // A weekday closure means "not TODAY" and says nothing else,
+                    // so the candidate simply stays in the pool for another day
+                    // and is not reported here at all.
+                    //
+                    // It must be skipped rather than chosen-then-refused: choosing
+                    // first would consume it from the pool before the refusal,
+                    // which is precisely the bug this whole split exists to fix.
+                    $block = $this->eligibility($candidate, $dayDate);
 
-                if (
-                    $visitMinutes <= 0
-                    || $visitMinutes > $longestVisitWindow
-                    || !is_numeric($destination->estimated_cost)
-                    || !is_finite((float) $destination->estimated_cost)
-                    || (float) $destination->estimated_cost < 0
-                    || (float) $destination->estimated_cost > self::MAX_DESTINATION_COST
-                    || !is_numeric($destination->match_score)
-                    || !is_finite((float) $destination->match_score)
-                    || (float) $destination->match_score < 0
-                    || (float) $destination->match_score > self::MAX_MATCH_SCORE
-                ) {
-                    $unscheduled[] = [
-                        'name' => $destination->name,
-                        'reason' => 'This destination cannot fit the itinerary rules.',
-                    ];
+                    if ($block !== null) {
+                        if ($block['kind'] === 'permanent') {
+                            $unscheduled[] = [
+                                'name' => $candidate->name,
+                                'reason' => $block['reason'],
+                            ];
 
-                    $destinationIndex++;
+                            $remaining->forget($index);
+                        }
 
-                    continue;
-                }
-
-                $travelMinutes = empty($stops)
-                    ? 0
-                    : ItinerarySchedule::TRAVEL_MINUTES;
-
-                // Closed that weekday: skip it, and say which day closed it.
-                // Without a date we cannot know the weekday at all, so this
-                // only applies to a dated trip.
-                //
-                // `hasAnyHours()` IS NOT REDUNDANT HERE, and omitting it is a
-                // trap worth stating plainly. `hoursForDay()` returns null for
-                // two different things — "closed that weekday" and "we have
-                // never published hours for this row" — and `isClosedOn()`
-                // cannot tell them apart. So without this guard every
-                // destination with blank hours reads as closed on every day of
-                // every dated trip, and generation silently produces nothing.
-                // It did, on the first run of this change.
-                if (
-                    $dayDate !== null
-                    && $destination->hasAnyHours()
-                    && $destination->isClosedOn($dayDate)
-                ) {
-                    $unscheduled[] = [
-                        'name' => $destination->name,
-                        'reason' => 'Closed on '.ucfirst(strtolower($dayDate->format('l'))).'.',
-                    ];
-
-                    $destinationIndex++;
-
-                    continue;
-                }
-
-                $window = $this->visitWindow($destination, $dayDate);
-
-                if (
-                    $window !== null
-                    && $window['close'] - $window['open'] < $visitMinutes
-                ) {
-                    $unscheduled[] = [
-                        'name' => $destination->name,
-                        'reason' => sprintf(
-                            'Open %s, so there is not room for a %d-minute visit.',
-                            $window['label'],
-                            $visitMinutes
-                        ),
-                    ];
-
-                    $destinationIndex++;
-
-                    continue;
-                }
-
-                $start = ItinerarySchedule::nextStart(
-                    $cursor + $travelMinutes,
-                    $visitMinutes,
-                    $window['open'] ?? null
-                );
-
-                $end = $start + $visitMinutes;
-
-                if ($end > ItinerarySchedule::DAY_END_MINUTES) {
-                    if (!empty($stops)) {
-                        break;
+                        continue;
                     }
 
-                    $unscheduled[] = [
-                        'name' => $destination->name,
-                        'reason' => 'This destination does not fit within the daily schedule.',
-                    ];
+                    $visitMinutes = (int) ceil((float) $candidate->recommended_minutes);
+                    $window = $this->visitWindow($candidate, $dayDate);
 
-                    $destinationIndex++;
+                    $start = ItinerarySchedule::nextStart(
+                        $cursor + (empty($stops) ? 0 : ItinerarySchedule::TRAVEL_MINUTES),
+                        $visitMinutes,
+                        $window['open'] ?? null
+                    );
 
-                    continue;
+                    // Would run past the end of the day. Not this candidate's
+                    // problem to report: another one may well fit, which is the
+                    // whole point of choosing rather than taking the first refusal.
+                    if ($start + $visitMinutes > ItinerarySchedule::DAY_END_MINUTES) {
+                        continue;
+                    }
+
+                    $distance = self::distanceFromPin(
+                        $originLat,
+                        $originLng,
+                        $candidate->latitude,
+                        $candidate->longitude
+                    );
+
+                    // Strictly less than, so a tie keeps the earlier candidate and
+                    // the result depends only on the catalogue — never on the order
+                    // a collection happens to iterate in.
+                    if ($chosenDistance === null || $distance < $chosenDistance) {
+                        $chosenIndex = $index;
+                        $chosenDistance = $distance;
+                        $chosenStart = $start;
+                    }
                 }
 
-                $costCents = (int) round(
-                    (float) $destination->estimated_cost * 100
-                );
+                if ($chosenIndex === null) {
+                    break;
+                }
+
+                $destination = $remaining->get($chosenIndex);
+                $remaining->forget($chosenIndex);
+
+                $visitMinutes = (int) ceil((float) $destination->recommended_minutes);
+                $travelMinutes = empty($stops) ? 0 : ItinerarySchedule::TRAVEL_MINUTES;
+                $start = $chosenStart;
+                $end = $start + $visitMinutes;
+
+                $costCents = (int) round((float) $destination->estimated_cost * 100);
 
                 $stops[] = [
                     'destination_id' => $destination->id,
@@ -615,9 +737,7 @@ class ItineraryGenerator
                 $totalScore += (float) $destination->match_score;
                 $scheduledCount++;
                 $attractionCount++;
-                $destinationIndex++;
             }
-
             // Strictly additive: the meal neither consumes a destination nor a
             // slot in the three-stop cap, and a province with nothing researched
             // simply keeps its attractions-only day.
@@ -638,15 +758,17 @@ class ItineraryGenerator
             ];
         }
 
-        while ($destinationIndex < $orderedDestinations->count()) {
-            $destination = $orderedDestinations->get($destinationIndex);
+// Whatever is left never fitted anywhere. Prefer the most specific reason still
+        // available, because "no remaining capacity" on a place that was closed on
+        // Tuesday tells the traveller nothing they can act on.
+        foreach ($remaining as $destination) {
+            $block = $this->eligibility($destination, $dayDate);
 
             $unscheduled[] = [
                 'name' => $destination->name,
-                'reason' => 'No remaining schedule capacity was available.',
+                'reason' => $block['reason']
+                    ?? 'No remaining schedule capacity was available.',
             ];
-
-            $destinationIndex++;
         }
 
         if ($scheduledCount === 0) {

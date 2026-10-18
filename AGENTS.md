@@ -1246,6 +1246,74 @@ is exactly the outcome they wanted. The sentence needs nothing decoded.
   the page, the PDF and the map tooltip. A second formatter here is how a
   duration ends up rounded three ways.
 
+#### **A DAY VISITS WHAT IS NEAR, AND EVERY DAY LEAVES FROM THE HOTEL**
+
+Generation no longer walks a cursor through the traveller's ticked order and
+takes whatever it points at. Each slot takes the **nearest destination that can
+actually be scheduled there**, and "can actually be scheduled" still means every
+hours, duration and cost check it always did — **geography chooses between
+candidates that were always going to be legal**, so ordering cannot talk the
+scheduler into breaking a cited window. `test_a_closed_destination_is_never_chosen_for_being_nearest`
+exists solely to pin that.
+
+- **STRAIGHT LINES, NOT THE ROAD — AND THE PLAN WAS WRONG ABOUT WHY.** It called
+  for nearest-neighbour "over the OSRM legs already cached", which is wrong in a
+  way that only shows up in production: the cached legs are the legs the
+  *previous* run walked, so the same request would produce a different trip
+  depending on whether the cache was warm, and a generator that is not
+  deterministic cannot be reasoned about or tested.
+  `distanceFromPin()` is a haversine — free, always available, identical every
+  time. Within a province it is also a good proxy for road distance, which is the
+  premise the three pilot clusters were chosen on.
+  **It decides the ORDER only.** Every displayed distance is still OSRM's.
+- **EVERY DAY DEPARTS FROM THE HOTEL, NOT ONLY THE FIRST.** The obvious
+  implementation anchors day one and lets later days carry on from where the last
+  one finished, which is wrong because the traveller sleeps at the hotel every
+  night. With no researched lodging there is no origin, every distance is zero,
+  and the traveller's own order stands — two of the three researched provinces
+  are exactly that case, and inventing an origin would order a trip by a fiction.
+- **A MISSING PIN IS NOT INFINITELY FAR.** `distanceFromPin()` returns zero, so an
+  unpinned row keeps the catalogue's order. (`destinations.latitude` and
+  `places.latitude` are both NOT NULL, so this only ever arises in principle.)
+- **TIES GO TO THE EARLIER CANDIDATE** — the comparison is strict `<`, so the
+  result depends on the catalogue and never on collection iteration order.
+
+#### **THE CURSOR WAS ALSO A BUG, AND FIXING IT EXPOSED A REAL ONE IN THE HOURS LAYER**
+
+Every rejection used to advance one global cursor, so **a destination closed on
+Monday was dropped from the trip entirely** and never given a chance on Tuesday.
+The traveller was told "Closed on Monday" and never learned it was open the rest
+of the week. That is the same shape of error as reading a registration window as
+opening hours: a fact about one day presented as a fact about the place.
+
+`eligibility()` therefore splits rejections in two — `permanent` (bad cost,
+absurd visit length, a window too small for the visit) which are settled once,
+and `day` (a weekday closure) which leaves the candidate in the pool for another
+day. **A day-blocked candidate must be SKIPPED during selection, not chosen and
+then refused**: choosing first consumes it from the pool before the refusal,
+which is the same bug wearing a different hat.
+
+**AND THE FIRST VERSION OF THAT FIX FAILED, BECAUSE OF A BUG THAT WAS ALREADY
+IN THE HOURS TRAIT.** The guard was `hasAnyHours() && isClosedOn(...)`.
+`hasAnyHours()` counts `closed_days` as hours data, so a place that publishes
+**"closed Mondays" and no clock time** passes the guard — and `isClosedOn()`
+really asks "is there a window on this day", which is null on *every* day when
+there is no clock time either. **Burnham Park with `closed_days = monday` and no
+hours read as shut for the entire week.**
+
+This shipped because the old cursor dropped the destination on first refusal and
+never asked again, so "closed today" and "closed forever" were indistinguishable
+from outside. **Retrying on another day is what made it visible.**
+
+**`Destination::isClosedOnWeekday()` IS THE FIX, AND IT ASKS THE QUESTION
+DIRECTLY** — membership of `closedDayList()` — so it cannot confuse "shut today"
+with "we have never published hours". `isClosedOn()` is left exactly as it was:
+its "true for unknown" contract is documented and pinned by
+`test_a_destination_with_no_published_hours_is_not_treated_as_closed`, and only
+the generator ever called it.
+`test_closed_days_alone_are_not_read_as_closed_all_week` is in `ItineraryHoursTest`
+because the bug lives in the trait, not in the generator.
+
 #### An itinerary stop has four shapes
 
 `itinerary_items.item_type` is **attraction | meal | lodging | custom**, and it

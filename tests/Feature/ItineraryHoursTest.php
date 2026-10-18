@@ -7,6 +7,7 @@ use App\Models\DestinationSwipe;
 use App\Models\Tag;
 use App\Models\TravelProfile;
 use App\Models\User;
+use Carbon\Carbon;
 use App\Models\Concerns\HasOpeningHours;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -47,7 +48,36 @@ class ItineraryHoursTest extends TestCase
         $profile->tags()->attach($tag, ['weight' => 3]);
     }
 
-    // ------------------------------------------------ the trap, first
+    /**
+ * A PLACE THAT PUBLISHES "CLOSED MONDAYS" AND NO CLOCK TIME IS CLOSED ON
+ * MONDAYS, AND ONLY ON MONDAYS.
+ *
+ * **THE `hasAnyHours()` GUARD WAS NOT ENOUGH, AND THIS IS THE ROW THAT PROVES
+ * IT.** `hasAnyHours()` counts `closed_days` as hours data, so a row that knows
+ * the gate is shut on Mondays passes the guard — and then `isClosedOn()`, which
+ * really asks "is there a window on this day", answers null for every day because
+ * there is no clock time either. The place read as shut all week.
+ *
+ * It shipped because the generator dropped a destination the first time it was
+ * refused and never asked again, so "closed today" and "closed forever" were
+ * indistinguishable from outside. The generator now retries on another day, which
+ * is what made this visible, and it asks `isClosedOnWeekday()` — the question it
+ * was actually trying to ask.
+ */
+public function test_closed_days_alone_are_not_read_as_closed_all_week(): void
+{
+    $destination = $this->destination('Closed Mondays', ['closed_days' => 'monday']);
+
+    // It does count as having hours data, which is exactly why the old guard let
+    // it through.
+    $this->assertTrue($destination->hasAnyHours());
+
+    $this->assertTrue($destination->isClosedOnWeekday(Carbon::parse('2026-10-19')));  // a Monday
+    $this->assertFalse($destination->isClosedOnWeekday(Carbon::parse('2026-10-20'))); // a Tuesday
+    $this->assertFalse($destination->isClosedOnWeekday(Carbon::parse('2026-10-21'))); // a Wednesday
+}
+
+// ------------------------------------------------ the trap, first
 
     public function test_a_destination_with_no_published_hours_is_not_treated_as_closed(): void
     {
