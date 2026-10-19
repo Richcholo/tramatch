@@ -1023,6 +1023,52 @@ Contracts worth knowing:
 behind-every-word `z-index: -1`, the fly-off swipe, and the
 opaque card).
 
+#### One card that is not like your picks, and three of anything
+
+Ranking by score alone answers "what matches you?" and gets it right: five
+museums all score 100 when the traveller rates museums highest. It is a
+useless answer to the question the traveller is asking, which is "what is
+there?". `SwipeDeckService` now deals on two rules.
+
+- **THE CAP REORDERS, IT NEVER FILTERS.** `MAX_PER_TAG = 3` admits a
+  destination while none of its matched tags is at the cap; a second pass
+  appends everything the first deferred, in ranked order. **A cap that
+  filtered would silently shorten the deck** and nobody could say why, so
+  the deferred rows are pushed down, never dropped.
+  `test_a_deferred_place_is_pushed_down_the_deck_not_removed` pins that with
+  a fixture of four identical places and an exact expected order.
+- **THE STRETCH CARD IS LAST, AND IT SAYS SO.** One card is chosen for
+  sharing **none** of the traveller's interests and labelled "Outside your
+  interests" in **both** the photograph branch and the plate branch.
+  First position would put an unranked place in front of someone who just
+  opened the deck and let it read as a match. `is_novelty` is set in exactly
+  one place — `noveltyCard()` — and left `false` by the scorer, so a badge
+  can only appear on the card that was actually picked for it.
+- **AND ONLY WHEN THE POOL HAS MATCHES.** `if ($matches->isEmpty()) return
+  collect();` runs *before* the novelty pick. A traveller whose interests
+  match nothing gets the honest empty state with its two ways out — filling
+  the deck with places chosen for sharing nothing is the same lie
+  `DeckEmptyStatesTest` exists to refuse, wearing a different hat.
+- **"0% match" IS HONEST ARITHMETIC AND USELESS COPY.** It reads as a place
+  that failed, when the honest fact is that this one was picked *because* it
+  is unlike everything else. `test_a_stretched_card_is_never_marked_a_match`
+  asserts badge **COUNTS** (one `% match`, one "Outside your interests"),
+  not substrings: `"0% match"` is a substring of `"100% match"`, so the
+  obvious `NotContainsString` fails on the card behaving perfectly.
+- **THE QUERY NOW ORDERS EXPLICITLY, `sort_order, name`.** The deck is dealt
+  from a plain query, and "whichever order the database returned" is not an
+  order two requests in the same page load can agree on. It is also what
+  makes "the first unmatched place in catalogue order" a fact rather than
+  whatever the driver felt like returning.
+- **A FALSIFICATION THAT PASSED BECAUSE OF THE PREVIOUS ONE.** F2 (cap
+  filters instead of reordering) initially "failed to bite" because F1's
+  patch was still applied — the cap was already out of reach, so there was
+  nothing left to defer. **Restore between falsification cases**, not only at
+  the end: an accumulating harness makes case N test case N−1's code.
+
+`tests/Feature/DeckDiversityTest.php` pins all of it (8 tests, seven
+falsifications across five cases).
+
 #### Three decisions, and a take-back
 
 The deck has **three** actions, not two: Liked, Pass, **Decide later**

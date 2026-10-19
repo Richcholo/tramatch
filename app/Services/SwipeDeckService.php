@@ -9,6 +9,40 @@ use Illuminate\Support\Collection;
 
 class SwipeDeckService
 {
+    /**
+     * HOW MANY CARDS OF ONE TAG MAY APPEAR IN A DEALT DECK.
+     *
+     * Ranking by score alone makes a traveller who rates "Museums" highly deal
+     * five museums before anything else, because five museums all score
+     * 100. That is the correct answer to the question the deck asks — "what
+     * matches you?" — and a useless answer to the one the traveller is
+     * actually asking, which is "what is there?".
+     *
+     * Three of any tag in a twenty-card deck. High enough that a traveller
+     * who genuinely loves museums is never deprived of them, low enough that
+     * the deck cannot open with four of the same thing. It is a PREFERENCE,
+     * never a filter: a row the cap defers is pushed down the deck, not
+     * dropped, so the cap can never quietly shrink what the traveller is
+     * offered.
+     */
+    private const MAX_PER_TAG = 3;
+
+    /**
+     * THE ONE CARD THAT MATCHES NONE OF YOUR INTERESTS.
+     *
+     * Placed LAST, deliberately. First position would put an unranked place
+     * in front of someone who has just opened the deck and let it read as a
+     * match; last means it is met after the traveller has seen what they
+     * actually asked for, which is the only order in which "here is something
+     * unlike everything you picked" is a gift rather than a glitch.
+     *
+     * ONE, AND ONLY WHEN THE POOL HAS MATCHES. A traveller whose interests
+     * match nothing gets the honest empty state with its two ways out, not a
+     * wall of cards chosen for sharing nothing — that is the same lie
+     * `emptyState()` was written to refuse, wearing a different hat.
+     */
+    private const NOVELTY_SLOTS = 1;
+
     public function cards(User $user, int $limit = 20): Collection
     {
         $resolved = $this->penalisedWeights($user);
@@ -27,6 +61,14 @@ class SwipeDeckService
             $user->id
         )->pluck('destination_id');
 
+        /*
+         * THE CATALOGUE'S OWN ORDER, EXPLICITLY. The deck is dealt from a
+         * plain query, and "whichever order the database returned" is not an
+         * order two requests in the same page load can agree on — the same
+         * lesson the place strip and the stage payload learned. `sort_order,
+         * name` is the catalogue's total order, and everything below is a
+         * pure function of it plus the swipes.
+         */
         $destinations = Destination::query()
             ->with('tags')
             ->where('is_active', true)
@@ -41,9 +83,11 @@ class SwipeDeckService
                         ->orWhere('municipality', 'like', "%{$region}%");
                 });
             })
+            ->orderBy('sort_order')
+            ->orderBy('name')
             ->get();
 
-        return $destinations
+        $scored = $destinations
             ->map(function (Destination $destination) use (
                 $weights,
                 $totalWeight
@@ -62,15 +106,101 @@ class SwipeDeckService
 
                 $destination->matched_tags = $matchedTags->values();
 
+                // Nothing in the deck is novelty until `cards()` says so. The
+                // flag is set on exactly one row, below, so a view cannot
+                // mistake "scored 0" for "chosen to stretch you".
+                $destination->is_novelty = false;
+
                 return $destination;
-            })
+            });
+
+        $matches = $scored
             ->filter(function (Destination $destination) {
                 return $destination->matched_tags->isNotEmpty()
                     && $destination->preference_score > 0;
             })
             ->sortByDesc('preference_score')
-            ->values()
-            ->take($limit);
+            ->values();
+
+        if ($matches->isEmpty()) {
+            // No interest match means no deck, and the honest empty state
+            // says which filter emptied it. A novelty slot here would replace
+            // that explanation with twenty unrelated places.
+            return collect();
+        }
+
+        $room = max(1, $limit - self::NOVELTY_SLOTS);
+        $deck = $this->diversify($matches)->take($room)->values();
+
+        $novelty = $this->noveltyCard($scored, $deck);
+
+        return $novelty ? $deck->push($novelty) : $deck;
+    }
+
+    /**
+     * THE PER-TAG CAP, AS A REORDERING RATHER THAN A FILTER.
+     *
+     * Two passes over the ranked list: one that admits a destination while
+     * none of its matched tags is at the cap, and one that appends
+     * everything the first pass deferred, in the order it was ranked. Nothing
+     * is dropped, so the cap decides the order and never the contents — a
+     * filter would silently shorten the deck and nobody would be able to say
+     * why.
+     */
+    private function diversify(Collection $matches): Collection
+    {
+        $counts = [];
+        $admitted = collect();
+        $deferred = collect();
+
+        foreach ($matches as $destination) {
+            $tagIds = $destination->matched_tags
+                ->map(fn ($tag) => (int) $tag->id)
+                ->all();
+
+            $withinCap = collect($tagIds)->every(
+                fn (int $tagId) => ($counts[$tagId] ?? 0) < self::MAX_PER_TAG
+            );
+
+            if ($withinCap) {
+                $admitted->push($destination);
+
+                foreach ($tagIds as $tagId) {
+                    $counts[$tagId] = ($counts[$tagId] ?? 0) + 1;
+                }
+
+                continue;
+            }
+
+            $deferred->push($destination);
+        }
+
+        return $admitted->concat($deferred);
+    }
+
+    /**
+     * THE STRETCH CARD, OR NOTHING.
+     *
+     * The first place in catalogue order that shares none of the traveller's
+     * interests and is not already on the deck. `sort_order, name` from the
+     * query is what makes "first" a fact rather than whatever the database
+     * felt like returning; a random or insertion-ordered pick would make the
+     * same traveller get a different stretch card on every page load.
+     */
+    private function noveltyCard(Collection $scored, Collection $deck): ?Destination
+    {
+        return $scored
+            ->reject(fn (Destination $destination) => $destination->matched_tags->isNotEmpty())
+            ->reject(fn (Destination $destination) => $deck->contains('id', $destination->id))
+            ->first(function (Destination $destination) {
+                // The flag the view keys its badge on, set HERE and nowhere
+                // else. Left false everywhere else, so a card cannot be
+                // labelled "outside your interests" by anything except being
+                // the one this method picked.
+                $destination->is_novelty = true;
+
+                return true;
+            });
     }
 
     /**

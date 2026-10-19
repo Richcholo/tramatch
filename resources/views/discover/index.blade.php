@@ -303,9 +303,25 @@
                                 <p class="absolute bottom-4 left-5 max-w-[70%] text-sm font-medium text-white drop-shadow sm:left-7">
                                     {{ $destination->municipality }}, {{ $destination->province }}
                                 </p>
-                                <span class="tm-gold-badge tm-gold-badge--dark absolute right-5 top-5 sm:right-7">
-                                    {{ $destination->preference_score }}% match
-                                </span>
+                                {{-- THE STRETCH CARD SAYS SO. One card in the
+                                     deck is chosen for sharing NONE of the
+                                     traveller's interests, and it is labelled
+                                     "outside your interests" in BOTH the
+                                     photograph and the plate. A "0% match" badge
+                                     would be honest arithmetic and useless
+                                     copy: it reads as a place that failed,
+                                     where the honest fact is that this one was
+                                     picked precisely because it is unlike
+                                     everything else. --}}
+                                @if ($destination->is_novelty ?? false)
+                                    <span class="tm-gold-badge tm-gold-badge--dark absolute right-5 top-5 sm:right-7">
+                                        Outside your interests
+                                    </span>
+                                @else
+                                    <span class="tm-gold-badge tm-gold-badge--dark absolute right-5 top-5 sm:right-7">
+                                        {{ $destination->preference_score }}% match
+                                    </span>
+                                @endif
                             </div>
                         @else
                             {{--
@@ -317,9 +333,15 @@
                                 type on the card's own ground instead.
                             --}}
                             <div class="tm-swipe-plate relative flex h-64 shrink-0 flex-col items-start justify-end overflow-hidden p-5 sm:h-[18rem] sm:p-7">
-                                <span class="tm-gold-badge tm-gold-badge--dark absolute right-5 top-5 sm:right-7">
-                                    {{ $destination->preference_score }}% match
-                                </span>
+                                @if ($destination->is_novelty ?? false)
+                                    <span class="tm-gold-badge tm-gold-badge--dark absolute right-5 top-5 sm:right-7">
+                                        Outside your interests
+                                    </span>
+                                @else
+                                    <span class="tm-gold-badge tm-gold-badge--dark absolute right-5 top-5 sm:right-7">
+                                        {{ $destination->preference_score }}% match
+                                    </span>
+                                @endif
                                 <p class="font-display text-3xl font-semibold leading-tight text-island-white sm:text-4xl">
                                     {{ $destination->province }}
                                 </p>
