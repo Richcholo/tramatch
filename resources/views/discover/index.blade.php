@@ -130,24 +130,133 @@
 
         <div class="mx-auto max-w-6xl px-5 sm:px-8 lg:px-12">
         @if ($cards->isEmpty())
+            {{--
+                THE EMPTY DECK, AND EVERY BRANCH IS TRUE.
+
+                The single "You are all caught up." was the one sentence for
+                four different outcomes, including for a traveller who had
+                swiped NOTHING — a headline reading as an achievement about a
+                state they had never entered. The reasons come from
+                `SwipeDeckService::emptyState()`, which names the FIRST filter
+                that emptied the pool, in the order the deck applies them.
+
+                NO FALLBACK CARDS. The honest answer under every branch is
+                "why it is empty" plus TWO ways out — never a synthetic card
+                pretending the deck still has work in it.
+            --}}
             <section data-swipe-empty class="tm-panel mx-auto max-w-3xl px-6 py-14 text-center sm:px-12 sm:py-20">
                 <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-philippine-gold/15 text-2xl font-semibold text-philippine-gold" aria-hidden="true">
                     &#10022;
                 </div>
-                <p class="mt-6 text-xs font-bold uppercase tracking-[0.22em] text-philippine-gold">
-                    That is a wrap
-                </p>
-                <h2 class="mt-3 font-display text-3xl font-semibold text-island-white sm:text-4xl">
-                    You are all caught up.
-                </h2>
-                <p class="mx-auto mt-3 max-w-md text-sm leading-6 text-island-white/65">
-                    Your deck is clear. Reset it to take another look at these places.
-                </p>
-                @if (Route::has('recommendations.index'))
-                    <a href="{{ route('recommendations.index') }}" class="tm-primary-button mt-7">
-                        View liked places
-                    </a>
-                @endif
+
+                @switch($emptyState['reason'])
+                    @case('no_interests')
+                        <p class="mt-6 text-xs font-bold uppercase tracking-[0.22em] text-philippine-gold">
+                            Nothing matched
+                        </p>
+                        <h2 class="mt-3 font-display text-3xl font-semibold text-island-white sm:text-4xl">
+                            No {{ ucfirst($emptyState['tier']) }} place shares your interests.
+                        </h2>
+                        @if (($emptyState['elsewhere'] ?? 0) > 0)
+                            <p class="mx-auto mt-3 max-w-md text-sm leading-6 text-island-white/65">
+                                {{ $emptyState['elsewhere'] }} place(s) DO carry your interests — at another budget level.
+                            </p>
+                        @else
+                            <p class="mx-auto mt-3 max-w-md text-sm leading-6 text-island-white/65">
+                                The interests you picked match nothing in this catalogue yet.
+                            </p>
+                        @endif
+                        <div class="mt-7 flex flex-wrap items-center justify-center gap-3">
+                            <a href="{{ route('preferences.edit') }}" class="tm-primary-button">
+                                Change my interests
+                            </a>
+                            <a href="{{ route('destinations.index') }}" class="inline-flex min-h-11 items-center rounded-full border border-white/30 px-5 py-3 text-sm font-semibold text-island-white transition hover:border-island-white hover:bg-white/10">
+                                Browse every place
+                            </a>
+                        </div>
+                    
+                    @break
+
+                    @case('region_nothing')
+                        <p class="mt-6 text-xs font-bold uppercase tracking-[0.22em] text-philippine-gold">
+                            Region empty
+                        </p>
+                        <h2 class="mt-3 font-display text-3xl font-semibold text-island-white sm:text-4xl">
+                            {{ $emptyState['region'] }} has no {{ $emptyState['tier'] }} places.
+                        </h2>
+                        <p class="mx-auto mt-3 max-w-md text-sm leading-6 text-island-white/65">
+                            There ARE {{ $emptyState['tier'] }} places in the catalogue — {{ $emptyState['tier_count'] }} of them. Your region excludes every one.
+                        </p>
+                        <div class="mt-7 flex flex-wrap items-center justify-center gap-3">
+                            <a href="{{ route('preferences.edit') }}" class="tm-primary-button">
+                                Widen my region
+                            </a>
+                            <a href="{{ route('destinations.index') }}" class="inline-flex min-h-11 items-center rounded-full border border-white/30 px-5 py-3 text-sm font-semibold text-island-white transition hover:border-island-white hover:bg-white/10">
+                                Browse every place
+                            </a>
+                        </div>
+                    
+                    @break
+
+                    @case('tier_nothing')
+                        <p class="mt-6 text-xs font-bold uppercase tracking-[0.22em] text-philippine-gold">
+                            Not here yet
+                        </p>
+                        <h2 class="mt-3 font-display text-3xl font-semibold text-island-white sm:text-4xl">
+                            Nothing is curated for {{ ucfirst($emptyState['tier']) }} yet.
+                        </h2>
+                        <p class="mx-auto mt-3 max-w-md text-sm leading-6 text-island-white/65">
+                            Coverage is owned per budget level. This tier is empty while the catalogue grows.
+                        </p>
+                        <div class="mt-7 flex flex-wrap items-center justify-center gap-3">
+                            <a href="{{ route('preferences.edit') }}" class="tm-primary-button">
+                                Try another budget
+                            </a>
+                            <a href="{{ route('destinations.index') }}" class="inline-flex min-h-11 items-center rounded-full border border-white/30 px-5 py-3 text-sm font-semibold text-island-white transition hover:border-island-white hover:bg-white/10">
+                                Browse every place
+                            </a>
+                        </div>
+                    
+                    @break
+
+                    @case('all_swiped')
+                        <p class="mt-6 text-xs font-bold uppercase tracking-[0.22em] text-philippine-gold">
+                            You have been through {{ $emptyState['matched'] }}
+                        </p>
+                        <h2 class="mt-3 font-display text-3xl font-semibold text-island-white sm:text-4xl">
+                            You have swiped every place that matched.
+                        </h2>
+                        <p class="mx-auto mt-3 max-w-md text-sm leading-6 text-island-white/65">
+                            Everything your interests and budget pointed at has been decided. Resetting shows the passed places again — your likes stay liked.
+                        </p>
+                        <div class="mt-7 flex flex-wrap items-center justify-center gap-3">
+                            {{-- NOT behind its dialog here: reaching the end of the
+                                 whole deck through ONE card after another is the
+                                 arrival the reset dialog was confirming the way to. --}}
+                            <form method="POST" action="{{ route('discover.reset') }}">
+                                @csrf
+                                <button type="submit" class="tm-primary-button">
+                                    Show me the passed places again
+                                </button>
+                            </form>
+                            @if (Route::has('recommendations.index'))
+                                <a href="{{ route('recommendations.index') }}" class="inline-flex min-h-11 items-center rounded-full border border-white/30 px-5 py-3 text-sm font-semibold text-island-white transition hover:border-island-white hover:bg-white/10">
+                                    View my liked places
+                                </a>
+                            @endif
+                        </div>
+                    
+                    @break
+
+                    @default
+                        {{-- 'cards' can only appear up here if the deck emptied
+                             between the logo and the render -- a state we do not
+                             think is reachable. Honest wording for it: say what
+                             happened, offer nothing invented. --}}
+                        <p class="mt-6 text-sm text-island-white/65">
+                            Refresh the page — the deck could not decide why it is empty.
+                        </p>
+                    @endswitch
             </section>
         @else
             {{--

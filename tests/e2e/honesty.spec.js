@@ -17,20 +17,15 @@ import { registerWithPreferences } from './support/journey.js';
  * catalogue CSV on 2026-10-16: 75 economy rows, none of them tagged Romantic.
  * A traveller who ticks it is not doing anything wrong.
  *
- * MARKED AS EXPECTED TO FAIL, because the defect is real and unfixed: the page
- * tells that traveller "You are all caught up" having swiped nothing at all,
- * and offers Reset, which cannot fix a tag mismatch. It was found by walking
- * this path rather than by any test.
- *
- * `test.fail()` is the honest way to hold that. Deleting the assertion, or
- * relaxing it to something the current copy happens to satisfy, would take a
- * known lie out of the record and leave nothing to notice when it is fixed.
- * Playwright inverts this the day the copy becomes honest: the test starts
- * failing because it was *supposed* to fail and now passes, which is the
- * signal to delete the marker.
+ * This carried a `test.fail()` marker while the page told that traveller
+ * "You are all caught up" having swiped nothing at all, and offered Reset,
+ * which cannot fix a tag mismatch. The empty state now attributes the gap to
+ * the interests layer ("No Economy place shares your interests"), reports the
+ * places that DO carry those interests at another budget level, and offers
+ * two ways out. The marker was deleted exactly as its own comment asks: the
+ * copy became honest, the test now runs as a real expectation.
  */
 test('a traveller whose interests match nothing is told the truth about it', async ({ page }) => {
-    test.fail(true, 'empty deck still claims the traveller is "all caught up" — Phase 1 fix');
     await registerWithPreferences(page, { interests: ['Romantic'] });
 
     await expect(page.locator('[data-swipe-empty]')).toBeVisible();

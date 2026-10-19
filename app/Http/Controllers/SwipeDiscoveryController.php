@@ -24,6 +24,7 @@ class SwipeDiscoveryController extends Controller
 
         return view('discover.index', [
             'cards' => $deck->cards($user),
+            'emptyState' => $deck->emptyState($user),
         ]);
     }
 

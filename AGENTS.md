@@ -1023,6 +1023,42 @@ Contracts worth knowing:
 behind-every-word `z-index: -1`, the fly-off swipe, and the
 opaque card).
 
+### The honest empty deck
+
+**`"You are all caught up."` WAS THE ONE SENTENCE FOR FOUR DIFFERENT
+OUTCOMES, AND IT HANDED IT TO A TRAVELLER WHO HAD SWIPED NOTHING.** A
+headline about an achievement they had never entered. The deck filters four
+times — budget tier, region, shared interests, already swiped — and
+`SwipeDeckService::emptyState()` now attributes the message to the FIRST
+filter that emptied the pool, in the order `cards()` applies them:
+`tier_nothing` → `region_nothing` (named, with the tier count it excluded) →
+`no_interests` → `all_swiped`. A matched-but-not-swiped pool returns
+`'cards'` as an honest guard on a state the view never renders.
+
+- **NO FALLBACK CARDS.** The answer under every branch is *why it is empty*
+  plus TWO ways out — never a synthetic card pretending there is still work.
+- **THE INTERESTS BRANCH COUNTS ACROSS TIERS.** Budget is an exact match
+  (ADR 0002), so "nothing shares your interests" alone implies the catalogue
+  has nothing — when Romantic places exist at other budgets. It prints the
+  number that DO carry the interests elsewhere. Recovered by the browser
+  honesty spec, which had a `test.fail()` marker held since 2026-10-16
+  against exactly this lie; the marker was deleted when the copy became
+  honest, per its own instruction.
+- **THE ALL-SWIPED RESET IS NOT BEHIND ITS DIALOG.** Reaching the end of the
+  deck *is* the thing the dialog was confirming a way to; the empty state's
+  button POSTs `discover.reset` directly and promises what it does: "Show me
+  the passed places again", and the likes stay liked.
+- **PIN THE CONTROL, NOT THE HTTP SHAPE.** The two-ways-out test asserts the
+  button LABEL, and a bare `method="POST"` assertion PASSED against the
+  reset removed — the layout's logout dialog carries a POST form on every
+  page. Same layout-pollution trap `ItineraryShareTest` navigates; the share
+  page pins `_token` at exactly 1 (that logout form) for the same reason.
+- **A BLADE `@switch` WITHOUT `@break` FALLS THROUGH.** The first version
+  shipped matched-case markup running the NEXT case body, and no test
+  noticed until the next case read an undefined array key ("matched",
+  "region"). Every case in `discover/index` ends with `@break`; adding a
+  case without one re-breaks it.
+
 ### The public read-only share link
 
 **`/itineraries/{itinerary}/shared/{token}` is outside the auth group, and
