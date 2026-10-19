@@ -1214,6 +1214,71 @@ exists but your code is wrong" is a fact nobody should learn.
   that structural rather than incidental — deleting it would not change the
   page, so keep it in the suite.
 
+### Bulk edit in admin, and why it is page-scoped and javaless
+
+`Admin\DestinationController::bulkUpdate()` (POST
+`admin/destinations/bulk`, declared **before** the resource route — the
+`admin/sources/status` trap) edits **only the four fields that gate what a
+traveller is ever shown**: `budget_level`, `is_featured`, `is_active`, and
+tags. Everything else is curated in the CSV and re-seeded over, so this
+action cannot reach curated data even by accident.
+
+- **EVERY FIELD IS OPTIONAL AND UNSET MEANS LEAVE ALONE.** An admin ticking
+  twelve rows to archive them must not have to remember their budget levels.
+  A bulk edit with nothing to change is REFUSED, not a successful no-op.
+- **THE SUMMARY COUNTS CHANGES, NOT ROWS VISITED.** "12 destinations
+  updated" is a claim about the click; applying the same edit twice has to be
+  able to say *"Nothing changed. All 12 selected destination(s) already had
+  those values."* An admin who cannot tell a no-op from a success learns to
+  stop reading the message.
+- **TAGS ARE ATTACHED AND DETACHED, NEVER `sync()`-ed.** A `sync()` would
+  REPLACE the tag set with whatever was posted, so a bulk "add Museums" would
+  silently strip Beaches from every row it touched. `F1` in the harness is
+  that swap, and `test_bulk_adding_a_tag_keeps_the_tags_already_there` is what
+  catches it.
+- **A TAG CANNOT BE ADDED AND REMOVED IN ONE PASS** — refused *by name*,
+  because the order it would be applied in would decide the answer.
+- **THE TIER VOCABULARY IS `array_keys(Destination::BUDGET_TIERS)`**, never a
+  copied list; a bulk edit is the worst place to find a drifted copy.
+- **`array_filter` PASSES THE VALUE ONLY, NEVER THE KEY.** The dirty-check
+  is an explicit loop. A two-argument callback there is an
+  `ArgumentCountError` on **every** bulk edit — the 500 masked five passing
+  tests at once.
+
+**NO CROSS-PAGE SELECTION BANNER, AND THAT IS A DECISION.**
+`admin/sources/index` has one: a page checkbox, a session-backed cross-page
+selection and ~120 lines of script whose hidden inputs carry deliberately
+different names (`filter_search`) so they cannot be confused with the GET
+filter. A first version of this action was about to paste it. That would be a
+second implementation of one behaviour — the failure this repo keeps paying
+for — so selection here is scoped to the page, and **the cost of that choice
+is stated rather than hidden**: fixing a tier split across 100 destinations
+means applying the change page by page. If cross-page selection is wanted
+here, **extract the sources script into a shared partial first**.
+
+**THE WRAPPER FORM HOLDS THE TABLE, SO NOTHING ELSE MAY BE A FORM INSIDE IT.**
+The per-row archive/restore forms and every delete dialog moved *below* the
+wrapper, with their buttons bound by `form="..."` — the mechanism
+`admin/sources/index` and the day's remove-button form already use. Two traps
+worth keeping:
+
+- **A NESTED FORM IS NOT A NESTED FORM — IT IS NOT A FORM.** The parser
+  discards the inner start tag, so a DOM-nesting assertion finds nothing to
+  count: `F5` (deleting the wrapper's `</form>`) left a page whose archive
+  buttons had **silently lost their forms** while the nesting check passed.
+  `test_no_admin_form_is_nested_inside_the_bulk_form` therefore also asserts
+  the **position** of the wrapper's `</form>` in the raw markup, before the
+  first per-row form.
+- **MOVING FORMS OUT IS ONLY SAFE IF EACH BUTTON'S TARGET STILL EXISTS.**
+  `test_every_row_button_points_at_a_form_that_exists` pins the binding both
+  ways, because a rename on one side is a dead control and nothing else in
+  the suite would notice.
+
+`tests/Feature/AdminBulkDestinationsTest.php` (16 tests, seven
+falsifications). **No browser automation exists for admin pages**, so the
+bulk bar itself is unclicked; the markup contracts and the server behaviour
+are what the suite holds.
+
 ### The trip in a calendar, and a link to the drive
 
 `App\Services\ItineraryCalendar` writes the `.ics`; `ItineraryItem::directionsUrl()`

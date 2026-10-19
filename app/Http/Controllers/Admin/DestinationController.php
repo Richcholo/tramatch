@@ -47,6 +47,11 @@ class DestinationController extends Controller
             ->sort()
             ->values();
 
+        // The bulk bar's two tag selects need the whole vocabulary, not the
+        // tags on the visible page: an admin adding "Museums" to twelve rows
+        // should not have to find a row that already carries it first.
+        $tags = Tag::orderBy('name')->get();
+
         $destinations = Destination::with('tags')
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($query) use ($search) {
@@ -60,7 +65,7 @@ class DestinationController extends Controller
             ->paginate(15)
             ->withQueryString();
 
-        return view('admin.destinations.index', compact('destinations', 'locations', 'search'));
+        return view('admin.destinations.index', compact('destinations', 'locations', 'search', 'tags'));
     }
 
     public function create(): View
@@ -238,6 +243,163 @@ class DestinationController extends Controller
         return Storage::disk('public')->url($path);
     }
 
+
+    /**
+     * BULK EDIT, SCOPED TO THE FOUR FIELDS THAT GATE VISIBILITY.
+     *
+     * `budget_level`, `is_featured`, `is_active` and the destination's tags
+     * decide what a traveller is ever shown; everything else this app knows
+     * about a destination is curated in the CSV and re-seeded over. That is
+     * why this action can be small and still be the cheapest way to fix a
+     * tier split that has drifted — it cannot damage curated data, because it
+     * cannot reach it.
+     *
+     * **EVERY FIELD IS OPTIONAL AND "UNSET MEANS LEAVE ALONE".** A select
+     * whose default is empty is the honest control here: an admin who ticks
+     * twelve rows to archive them must not also have to remember what their
+     * budget levels were.
+     *
+     * **THE OUTCOME IS COUNTED, NOT ASSUMED.** "12 destinations updated"
+     * would be a claim about rows visited; the message counts rows whose
+     * stored values actually moved, so re-applying the same bulk edit twice
+     * says "no changes" rather than claiming twelve successes.
+     *
+     * **A TAG CANNOT BE BOTH ADDED AND REMOVED** in one pass. That request is
+     * contradictory rather than clever, and the order it would be applied in
+     * would decide the answer; it is refused instead.
+     */
+    public function bulkUpdate(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'ids' => ['required', 'array', 'min:1'],
+            'ids.*' => ['integer', 'exists:destinations,id'],
+            // From the model constant rather than a copied list: the tier
+            // vocabulary is one fact, and a bulk edit is the worst place to
+            // find a second copy of it that has drifted.
+            'budget_level' => ['nullable', Rule::in(array_keys(Destination::BUDGET_TIERS))],
+            'is_featured' => ['nullable', Rule::in(['yes', 'no'])],
+            'is_active' => ['nullable', Rule::in(['yes', 'no'])],
+            'add_tags' => ['nullable', 'array'],
+            'add_tags.*' => ['integer', 'exists:tags,id'],
+            'remove_tags' => ['nullable', 'array'],
+            'remove_tags.*' => ['integer', 'exists:tags,id'],
+        ]);
+
+        $ids = array_map('intval', $validated['ids']);
+        $addTags = array_map('intval', $validated['add_tags'] ?? []);
+        $removeTags = array_map('intval', $validated['remove_tags'] ?? []);
+
+        $contradiction = array_intersect($addTags, $removeTags);
+
+        if ($contradiction !== []) {
+            $names = Tag::whereIn('id', $contradiction)->pluck('name')->all();
+
+            return back()->withErrors([
+                'bulk' => 'A tag cannot be added and removed at once: '.implode(', ', $names).'.',
+            ]);
+        }
+
+        $attributes = [];
+
+        if (! empty($validated['budget_level'])) {
+            $attributes['budget_level'] = $validated['budget_level'];
+        }
+
+        foreach (['is_featured', 'is_active'] as $flag) {
+            if (! empty($validated[$flag])) {
+                $attributes[$flag] = $validated[$flag] === 'yes';
+            }
+        }
+
+        if ($attributes === [] && $addTags === [] && $removeTags === []) {
+            return back()->withErrors([
+                'bulk' => 'Choose at least one change before applying it.',
+            ]);
+        }
+
+        $changed = DB::transaction(function () use ($ids, $attributes, $addTags, $removeTags) {
+            $destinations = Destination::with('tags')->whereIn('id', $ids)->get();
+            $moved = 0;
+            $tagged = 0;
+
+            foreach ($destinations as $destination) {
+                // Not array_filter: it passes the VALUE only, never the key,
+                // so a two-argument callback here is an ArgumentCountError on
+                // every bulk edit rather than a wrong answer.
+                $dirty = [];
+
+                foreach ($attributes as $key => $value) {
+                    if ($destination->{$key} != $value) {
+                        $dirty[$key] = $value;
+                    }
+                }
+
+                if ($dirty !== []) {
+                    $destination->fill($dirty)->save();
+                    $moved++;
+                }
+
+                if ($addTags !== [] || $removeTags !== []) {
+                    // sync() is not used here: it would REPLACE the tag set
+                    // with whatever was posted, so a bulk "add Museums" would
+                    // strip Beaches from every row it touched. attach and
+                    // detach move exactly the tags named.
+                    $tagsBefore = $destination->tags->pluck('id')->all();
+
+                    if ($addTags !== []) {
+                        $destination->tags()->attach(array_diff($addTags, $tagsBefore));
+                    }
+
+                    if ($removeTags !== []) {
+                        $destination->tags()->detach(array_intersect($removeTags, $tagsBefore));
+                    }
+
+                    if ($destination->tags()->pluck('id')->all() !== $tagsBefore) {
+                        $tagged++;
+                    }
+                }
+            }
+
+            return ['destinations' => $destinations->count(), 'moved' => $moved, 'tagged' => $tagged];
+        });
+
+        return back()->with(
+            'status',
+            $this->bulkSummary($changed)
+        );
+    }
+
+    /**
+     * WHAT ACTUALLY HAPPENED, IN ONE SENTENCE.
+     *
+     * "12 destinations updated" counts rows visited, which is a claim about
+     * the click rather than about the catalogue. Applying the same edit twice
+     * must be able to say "nothing changed" — otherwise an admin who cannot
+     * tell a no-op from a success learns to distrust the message and stops
+     * reading it.
+     */
+    private function bulkSummary(array $changed): string
+    {
+        $selected = $changed['destinations'];
+        $moved = $changed['moved'];
+        $tagged = $changed['tagged'];
+
+        if ($moved === 0 && $tagged === 0) {
+            return "Nothing changed. All {$selected} selected destination(s) already had those values.";
+        }
+
+        $parts = [];
+
+        if ($moved > 0) {
+            $parts[] = "{$moved} destination(s) updated";
+        }
+
+        if ($tagged > 0) {
+            $parts[] = "{$tagged} destination(s) had their tags changed";
+        }
+
+        return implode(', and ', $parts).'.';
+    }
 
     public function archive(Destination $destination): RedirectResponse
     {

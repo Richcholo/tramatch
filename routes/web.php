@@ -284,6 +284,17 @@ Route::middleware(['auth', 'admin'])
             ]
         )->name('destinations.restore');
 
+        /*
+         * BULK EDIT. Declared BEFORE the resource, so `POST
+         * /admin/destinations/bulk` is never read as a resource route — the
+         * `admin/sources/status` trap, which is one extra segment on the same
+         * method and cost a real bug.
+         */
+        Route::post('/destinations/bulk', [
+            AdminDestinationController::class,
+            'bulkUpdate',
+        ])->name('destinations.bulk');
+
         Route::resource(
             'destinations',
             AdminDestinationController::class
