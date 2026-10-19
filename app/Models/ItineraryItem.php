@@ -88,7 +88,6 @@ class ItineraryItem extends Model
         'route_duration_minutes',
         'route_provider',
         'route_status',
-        'is_locked',
     ];
 
     protected function casts(): array
@@ -107,7 +106,6 @@ class ItineraryItem extends Model
             'custom_longitude' => 'float',
             'route_distance_meters' => 'integer',
             'route_duration_minutes' => 'integer',
-            'is_locked' => 'boolean',
         ];
     }
 

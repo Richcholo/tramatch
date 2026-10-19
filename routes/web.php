@@ -123,6 +123,11 @@ Route::middleware('auth')->group(function () {
         'reset',
     ])->name('discover.reset');
 
+    Route::post('/discover/assist', [
+        SwipeDiscoveryController::class,
+        'assist',
+    ])->name('discover.assist');
+
     Route::post('/destinations/{destination:slug}/reviews', [
         ReviewController::class,
         'store',

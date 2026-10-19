@@ -665,6 +665,20 @@ class SourceCrawlingTest extends TestCase
             'source_url' => 'https://example.test/guarded-cafe',
         ]);
 
+        // The discover page posts the discovery-assist form, so it joins this
+        // list the moment a form landed there. Its viewer needs a travel
+        // profile, because without one the page redirects to preferences —
+        // and a skipped 200 here is exactly the silent check-less state this
+        // test exists to refuse.
+        $deckTraveller = User::factory()->create();
+
+        TravelProfile::create([
+            'user_id' => $deckTraveller->id,
+            'budget_level' => 'economy',
+            'group_size' => 2,
+            'trip_duration_days' => 2,
+        ]);
+
         $pages = [
             route('admin.sources.index') => $admin,
             route('admin.sources.show', $source) => $admin,
@@ -678,7 +692,10 @@ class SourceCrawlingTest extends TestCase
             route('profile.edit') => $admin,
             route('preferences.edit') => $admin,
             route('itineraries.show', $trip) => $traveller,
+            route('discover.index') => $deckTraveller,
         ];
+
+        $expectedPages = count($pages);
 
         $router = app('router');
         $checked = 0;
@@ -747,11 +764,28 @@ class SourceCrawlingTest extends TestCase
         );
 
         // The skip above is silent, so a page that stops rendering would drop
-        // out of the guard without anyone noticing.
+        // out of the guard without anyone noticing. Each entry in the list
+        // must have rendered — one assertion fails away from fewer checks
+        // than before is the rule this test already lives by.
         $this->assertContains(
             route('itineraries.show', $trip),
             $visited,
             'the itinerary editor did not render, so its PATCH form went unchecked'
+        );
+
+        $this->assertContains(
+            route('discover.index'),
+            $visited,
+            'the discover deck did not render, so its assist POST form went unchecked'
+        );
+
+        $this->assertCount(
+            $expectedPages,
+            $visited,
+            'a page on this list did not render 200, so it was silently skipped: '.implode(', ', array_diff(
+                array_keys($pages),
+                $visited
+            ))
         );
     }
 

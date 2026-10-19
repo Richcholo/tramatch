@@ -44,6 +44,25 @@ class ItineraryGeographyTest extends TestCase
     /** A long way up the Cordillera, still Benguet so it passes the area filter. */
     private const FAR = [16.9000, 120.9000];
 
+    /**
+     * THE CLOSED-MONDAY TESTS NEED A MONDAY, AND A HARDCODED ONE ROTS.
+     *
+     * These two tests pinned `2026-10-19` and passed for exactly as long as
+     * that date was today: the store request validates `after_or_equal:today`,
+     * so the moment the calendar moved on, the POST failed validation, no
+     * itinerary was created, and the two tests failed with "No query results
+     * for model [Itinerary]" — a message that names nothing about dates.
+     *
+     * So the start date is COMPUTED: always the next Monday, which is what
+     * "shut on the trip's first day and open on the second" needs the start
+     * date to be, in every week, forever. If today is a Monday the Monday
+     * after next is used and the assertion still reads the same.
+     */
+    private function nextMonday(): string
+    {
+        return now()->next('Monday')->toDateString();
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -100,7 +119,7 @@ class ItineraryGeographyTest extends TestCase
 
         $this->hotel();
 
-        $day = $this->generate([$near->id, $far->id], startDate: '2026-10-19')
+        $day = $this->generate([$near->id, $far->id], startDate: $this->nextMonday())
             ->days->first();
 
         $names = $day->items
@@ -132,7 +151,7 @@ class ItineraryGeographyTest extends TestCase
 
         $ids = [$near->id, ...$others->pluck('id')->all()];
 
-        $days = $this->generate($ids, days: 2, startDate: '2026-10-19')
+        $days = $this->generate($ids, days: 2, startDate: $this->nextMonday())
             ->days
             ->keyBy('day_number');
 

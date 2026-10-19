@@ -876,29 +876,32 @@ class PlacesCatalogueTest extends TestCase
 
     /**
      * ------------------------------------------------------------------
-     * Nothing is callable yet
+     * Nothing is callable that is not testable and budgeted
      * ------------------------------------------------------------------
      */
 
     /**
-     * NO ENDPOINT CALLS EITHER API ON DAY 1. The keys exist in config so the
-     * credential shape is settled; a client, a job or a route that read them
-     * would be Day 6-9's work arriving early, untested and unbudgeted.
-     *
-     * This is a deliberate scope guard, and it is falsified by adding the client.
+     * THE DAY-1 GUARD HAS DONE ITS JOB. It used to refuse a planning API on
+     * the grounds that no client, no test and no quota budget existed; the
+     * discovery assist has since shipped all three (client, suite, cooldown),
+     * so the guard is rewritten rather than deleted: vendor names no longer
+     * belong in route URIs at all, and the one endpoint that does exist must
+     * be there under the name that says what it does.
      */
-    public function test_no_route_talks_to_a_planning_api_yet(): void
+    public function test_the_assist_is_the_only_planning_endpoint_and_everything_is_named(): void
     {
-        $planning = collect(Route::getRoutes()->getRoutes())
+        $vendorNamed = collect(Route::getRoutes()->getRoutes())
             ->filter(fn ($route) => str_contains($route->uri(), 'ai-plan')
                 || str_contains($route->uri(), 'gemini')
                 || str_contains($route->uri(), 'generate-with-ai'));
 
         $this->assertTrue(
-            $planning->isEmpty(),
-            'A planning endpoint exists before there is a client, a test for it or a '
-            .'quota budget: '.$planning->implode(', ')
+            $vendorNamed->isEmpty(),
+            'The client and the cooldown exist, so any NEW endpoint should be named '
+            .'for what it does, not for the vendor: '.$vendorNamed->implode(', ')
         );
+
+        $this->assertNotNull(Route::getRoutes()->getByName('discover.assist'));
     }
 
     /**
@@ -923,15 +926,22 @@ class PlacesCatalogueTest extends TestCase
      * Config/planning.php states the split between the model and the server. This
      * pins it as data, because the claim is made in a demo and the client is the
      * code that could quietly break it.
+     *
+     * WRITTEN FOR DISCOVERY. The earlier version pinned `day_assignment` and
+     * `order` and a two-attempt proposal/repair cap — all of it the drafting
+     * model that was abandoned when the assist became a discovery role. Today
+     * the model chooses selection and nothing else, the server owns
+     * membership of the catalogue, and the only budget is ONE request behind a
+     * cooldown — no repair loop anywhere to cap.
      */
     public function test_the_model_is_recorded_as_choosing_while_the_server_checks(): void
     {
         $this->assertSame(
-            ['selection', 'day_assignment', 'order', 'reason'],
+            ['selection', 'explanation'],
             config('planning.authority.model_decides')
         );
 
-        foreach (['coordinates', 'price', 'opening_hours', 'distance', 'feasibility'] as $field) {
+        foreach (['membership', 'coordinates', 'price', 'opening_hours', 'distance'] as $field) {
             $this->assertContains(
                 $field,
                 config('planning.authority.server_decides'),
@@ -940,10 +950,20 @@ class PlacesCatalogueTest extends TestCase
         }
 
         $this->assertSame('driving', config('planning.transport.profile'));
-        $this->assertLessThanOrEqual(
-            2,
-            config('planning.limits.max_plan_attempts'),
-            'A repair loop is unbounded by construction. Cap the attempts.'
+
+        // One click, one wire, and then a wait: the budget for a free tier.
+        // The HTTP-level assist test reads this same key as its expected
+        // request count, which is what makes the claim load-bearing rather
+        // than prose.
+        $this->assertSame(
+            1,
+            (int) config('planning.limits.assist_attempts'),
+            'There is no repair machinery to cap. One request per assist is the budget.'
+        );
+        $this->assertGreaterThanOrEqual(
+            30,
+            (int) config('planning.limits.assist_cooldown'),
+            'The cool-down must be wide enough to respect a free tier measured in requests per minute.'
         );
     }
 

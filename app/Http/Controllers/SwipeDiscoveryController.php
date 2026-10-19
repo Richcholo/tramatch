@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Destination;
 use App\Models\DestinationSwipe;
+use App\Services\Planning\DiscoveryAssist;
 use App\Services\SwipeDeckService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -30,6 +31,11 @@ class SwipeDiscoveryController extends Controller
             // pass through here; the deck itself derives its state. This
             // counts rows the traveller owns, never another user's.
             'swipedCount' => DestinationSwipe::where('user_id', $user->id)->count(),
+            // A presence CHECK, not the key itself — the view never prints
+            // config, so the button can be offered only when a suggestion can
+            // actually be asked for. A control that cannot work should not be
+            // rendered.
+            'assistAvailable' => trim((string) config('services.gemini.key')) !== '',
         ]);
     }
 
@@ -128,5 +134,58 @@ class SwipeDiscoveryController extends Controller
 
         return redirect()->route('discover.index')
             ->with('toast_message', 'Your discovery deck was reset.');
+    }
+
+    /**
+     * THE NUDGE. One request to Gemini over the deck's own candidate list,
+     * every returned id validated against the catalogue and the tier, and the
+     * result rendered on the page a form POST lands back on — JavaScript off
+     * by default here, the same as every other reset-and-redirect affordance
+     * on this page.
+     *
+     * A result is CONTENT, so it does not ride `toast_message`, which the
+     * layout renders as a full-bleed light banner on this deliberately bare
+     * route (see reset() for that history). It rides its own session key,
+     * which the view turns into the suggestion panel. Failure is CONFIRMATION
+     * about a click, not page state, so it uses the toast and leaves the deck
+     * untouched — exactly the rule reset() already follows.
+     */
+    public function assist(DiscoveryAssist $assist): RedirectResponse
+    {
+        if (! Auth::user()->travelProfile) {
+            return redirect()->route('preferences.edit')
+                ->with('status', 'Complete your travel profile before discovering destinations.');
+        }
+
+        $result = $assist->suggest(Auth::user());
+
+        if (($result['status'] ?? '') === 'ok') {
+            return redirect()->route('discover.index')
+                ->with('assist_result', $result);
+        }
+
+        return redirect()->route('discover.index')
+            ->with('toast_message', $this->assistMessage($result));
+    }
+
+    /**
+     * THE FAILURE COPY, ONE SENTENCE PER HONEST STATE. Named by status so a
+     * test can pin the words a traveller actually reads; none of them quotes
+     * internals like model identifiers or quota numbers nobody can act on.
+     */
+    private function assistMessage(array $result): string
+    {
+        return match ($result['status'] ?? '') {
+            'unconfigured' => 'Suggestions are not set up on this deployment yet.',
+            'cooldown' => 'You just asked for a suggestion — try again in '
+                .$result['retry_after'].' seconds.',
+            'throttled' => 'The suggestion model is out of free requests right now — try again in a minute.',
+            'upstream', 'unreachable' => 'The suggestion service is not answering right now. Try again shortly.',
+            'throttled' => 'The suggestion model is out of free requests right now — try again in a minute.',
+            'upstream', 'unreachable' => 'The suggestion service is not answering right now. Try again shortly.',
+            'unparseable' => 'The suggestion did not come back in the shape we asked for. Try again.',
+            'no_picks' => 'It did not name any place from the catalogue. Try again.',
+            default => 'There are no places left to choose a suggestion from.',
+        };
     }
 }

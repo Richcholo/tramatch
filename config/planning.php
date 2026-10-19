@@ -43,6 +43,12 @@ return [
         // are HTTP-level bounds and not a job property.
         'planning_seconds' => (int) env('PLANNING_TIMEOUT', 90),
 
+        // THE ASSIST RUNS INSIDE A WEB REQUEST, not a queue job, so its HTTP
+        // timeout is the traveller's patience and not a worker's budget. A
+        // hang of 90s in a POST the traveller actively clicked is a frozen
+        // page; 20s is already the outer edge of "still there".
+        'assist_seconds' => (int) env('PLANNING_ASSIST_TIMEOUT', 20),
+
         // A generation job that has already spent this long on its own retries
         // gives up and records a failure rather than sitting in the queue.
         'job_budget_seconds' => (int) env('PLANNING_JOB_BUDGET', 240),
@@ -54,26 +60,37 @@ return [
     |--------------------------------------------------------------------------
     |
     | The guard against a demo that works on Tuesday and 429s in front of the
-    | panel. ONE request per itinerary generation, with no unbounded repair loop:
-    | a proposal that fails validation is either repaired from the candidate list
-    | deterministically in PHP or reported, and in both cases the request count is
-    | 1 or 2.
+    | panel. ONE request per assist, no repair loop and no retry -- a reply
+    | that fails validation is reported, not re-asked.
     |
-    | Read these as caps, not targets. A trip the traveller opens, edits, reorders
-    | and exports costs NOTHING in calls: routes are cached and the generated plan
-    | is saved. Only "generate" and "generate this day again" cost.
+    | Read these as caps, not targets. A trip the traveller opens, edits,
+    | reorders and exports costs NOTHING in calls: routes are cached and the
+    | generated plan is saved. Only the discovery assist's nudge costs one.
     |
     */
     'limits' => [
+        // The candidate list sent to the model in one request. Candidates are
+        // drawn from the deck the traveller is already being dealt, so this
+        // cap bounds the prompt, not the pool.
         'max_candidates_per_request' => (int) env('PLANNING_MAX_CANDIDATES', 40),
 
-        // One proposal, then at most one repair. Never a loop.
-        'max_plan_attempts' => (int) env('PLANNING_MAX_ATTEMPTS', 2),
+        // How many picks the model is ASKED for. The reply is capped to this
+        // again after parsing -- a model that returns nine is trusted for
+        // nothing.
+        'assist_choices' => (int) env('PLANNING_ASSIST_CHOICES', 3),
 
-        // Seconds a traveller must wait before a second click is refused rather
-        // than queued twice. A duplicate generation is the same class of bug as a
-        // duplicate crawl: two plans, two sets of proposals, no error anywhere.
-        'regeneration_cooldown' => (int) env('PLANNING_COOLDOWN', 15),
+        // ONE request per assist, written as data so the claim the demo makes
+        // is the same claim the HTTP-level test enforces: it reads this value
+        // as the expected request count and fails if the client ever makes
+        // more than it. There is no repair machinery left to cap -- a reply
+        // that fails validation is reported, not re-asked.
+        'assist_attempts' => (int) env('PLANNING_ASSIST_ATTEMPTS', 1),
+
+        // Seconds after one assist before the next is accepted. The free tier
+        // is a handful of requests a MINUTE; a double click must not become a
+        // second call, and this is the honest "you just asked" state rather
+        // than a silent queue-twice.
+        'assist_cooldown' => (int) env('PLANNING_ASSIST_COOLDOWN', 45),
     ],
 
     /*
@@ -101,32 +118,30 @@ return [
     | The split the whole feature rests on, written down as data so the client
     | cannot drift from the claim the demo makes.
     |
-    | THE MODEL CHOOSES AND EXPLAINS. It picks from the candidate ids it was
-    | given, assigns them to days, orders them, and says why.
+    | THE MODEL CHOOSES AND EXPLAINS. Its whole job in this build is discovery:
+    | given a candidate list that has already been filtered to the traveller's
+    | tier, it selects the places most worth looking at next and says why.
     |
-    | LARAVEL DECIDES AND CHECKS. Coordinates, prices, opening hours, durations,
-    | distances and times come from the database or the routing provider and are
-    | never read out of the model's reply. Every id it returns is verified to
-    | exist; a proposal whose schedule cannot be laid out is repaired here or
-    | reported.
-    |
-    | Concretely: an unknown candidate id, a price Gemini invented, a leg with no
-    | route, and a day that runs past 18:00 are all decided on this side of the
-    | wire. "Only use our sources" in a prompt is not enforcement -- an id check
-    | and a server-side overwrite are.
+    | LARAVEL DECIDES AND CHECKS. Membership of the catalogue, the tier, the
+    | region and the already-swiped set are all decided BEFORE the prompt, and
+    | every id the model returns is verified against that list again after the
+    | reply -- an invented id is dropped by the server, never saved or shown.
+    | Prices, coordinates, hours, distances and times are read back out of the
+    | database when anything is finally displayed. "Only use our sources" in a
+    | prompt is not enforcement -- the id check and the server-side readback
+    | are.
     |
     */
     'authority' => [
-        'model_decides' => ['selection', 'day_assignment', 'order', 'reason'],
+        'model_decides' => ['selection', 'explanation'],
 
         'server_decides' => [
+            'membership',
             'coordinates',
             'price',
             'opening_hours',
-            'duration',
             'distance',
             'travel_time',
-            'feasibility',
         ],
     ],
 

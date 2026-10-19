@@ -1526,17 +1526,20 @@ A panel review said "the locations are too small" and that a traveller adds wher
 they will eat and where they will stay, with real distances rather than
 estimates. This section is the two-week revision answering that.
 
-**DAYS 1-7 ARE LANDED; THE PLANNER IS NOT.** Schema, models, config, the test
-suite, the places catalogue and admin, the four-shaped stop editor, and
-road-derived legs. **`services.gemini.*` is still read by no application code** —
-no client, no job, no route, no view — which is deliberate: a client arriving
-before its test and its quota budget is the thing this repo keeps warning
-about. One test asserts the absence of a planning endpoint. **`planning.*` is a
-different matter since Days 6-7:** `RouteService` reads `planning.transport.profile`
-and `planning.routing.cache_days`, and `OsrmClient` reads
-`planning.timeouts.routing_seconds`. Do not read "no planning code" as "no
-config reads" — the routing layer is a consumer. Days 2-14 are listed at the
-bottom of this section.
+**DAYS 1-7 ARE LANDED; DAY 8-9'S GEMINI ARRIVED AS A DISCOVERY ASSIST, NOT AS
+THE AI PLANNER.** Schema, models, config, the test suite, the places catalogue
+and admin, the four-shaped stop editor, and road-derived legs — and since the
+Phase 3 assist, `services.gemini.*` IS read by exactly one code path:
+`App\Services\Planning` (`GeminiClient` transport + `DiscoveryAssist`
+orchestration), behind the `POST discover.assist` route and a per-traveller
+cooldown. There is no generation endpoint, and none is planned: the drafting
+model in the panel plan (day assignment, order, the model laying out a trip)
+was abandoned in favour of discovery — see "The AI plans; Laravel checks"
+below. **`planning.*` is a config consumer at three layers:** `RouteService`
+reads `planning.transport.profile` and `planning.routing.cache_days`,
+`OsrmClient` reads `planning.timeouts.routing_seconds`, and `DiscoveryAssist`
+reads `planning.limits.*` and `planning.timeouts.assist_seconds`. Days 2-14
+are listed at the bottom of this section.
 
 #### `places` is a separate table and must stay one
 
@@ -2109,34 +2112,101 @@ Two harness lessons from writing it, both the checker being wrong first:
 
 Written into `config/planning.php` as **data**, so the client cannot drift from
 the claim the demo makes, and pinned by
-`test_the_model_is_recorded_as_choosing_while_the_server_checks`.
+`test_the_model_is_recorded_as_choosing_while_the_server_checks`. The pinned
+table is the DISCOVERY one since Phase 3; the earlier table (`day_assignment`,
+`order`, a two-attempt repair cap) described the abandoned drafting model and
+was rewritten with it. The `PlacesCatalogueTest` day-1 guard
+(`test_no_route_talks_to_a_planning_api_yet`) was rewritten rather than
+deleted, for the same reason: its premise — no client, no test, no quota
+budget — is no longer true, so
+`test_the_assist_is_the_only_planning_endpoint_and_everything_is_named` now
+refuses vendor names in route URIs at all and requires exactly the
+`discover.assist` endpoint to exist. Do not resurrect the old guard as-is.
 
 | The model chooses | Laravel decides |
 |---|---|
-| selection, day assignment, order, a reason | coordinates, price, opening hours, duration, distance, travel time, feasibility |
+| selection (which catalogue rows to look at next, ranked) and one sentence explaining each pick | membership (id exists, active, in the tier, not already decided — all BEFORE the prompt and again after the reply), price, coordinates, opening hours, distance, travel time |
 
-"Only use our sources" in a prompt **is not enforcement**. An unknown candidate id
-and a server-side overwrite are. Prices, hours and coordinates are read from the
-database and never from the model's reply.
-
-- **No grounding claim rests on a key.** A Gemini subscription for the Gemini app
-  is a **separate billing arrangement** and creates no API entitlement. The key
-  comes from AI Studio for the developer API, and free-tier content is used to
-  improve Google's products, so **no traveller name, email, booking reference or
-  private note may be sent.**
-- **The key is server-side only.** It must never reach a `@vite` entry, a `<meta>`
-  tag or a data attribute.
-  `test_the_gemini_key_never_reaches_a_rendered_page` walks a rendered page for it.
-- **One transport mode: DRIVING, and labelled as such.** A driving route is not a
-  jeepney, a bus or a boat journey. Travel time stays an **estimate** even with a
-  provider: traffic, the clock, transfers and road works are not in it.
-- **One request per generation, at most two attempts (proposal + one repair).
-  Never a loop.** Opening, editing and exporting a **saved** itinerary costs
-  nothing.
+- **The assist is a nudge over the deck's own deal.** Candidates are
+  `SwipeDeckService::cards()` — tier-filtered, region-filtered, swipes
+  excluded — capped at `planning.limits.max_candidates_per_request` (40) in the
+  deck's own scored order. The model picks from THEM; every returned id is
+  checked against the candidate map and then re-read from the DB (active + tier
+  + existence), so an invented id is counted as "named but held back" on the
+  panel and never displayed. The rejected arithmetic is `named - shown` over
+  the raw reply, because "3 suggestions" that came from a 5-pick reply is a lie
+  unless the page says so.
+- **The prompt is the honesty surface.** Interest weights, tier, region
+  preference, and candidate rows (name, area, tag names, fee note — a published
+  display string verbatim, `estimated_cost` prefixed "curated estimate", and
+  nothing when nothing is published). NO traveller name, email or account
+  field: free-tier content improves Google's products.
+  `DiscoveryAssistTest::the_prompt_carries_the_catalogue_and_no_personal_data`
+  pins both directions, and a region preference thins the candidates BEFORE the
+  prompt — a server rule beats a model instruction.
+- **The model's sentence is the ONLY thing it contributes.** It is
+  sanitised to one line (280 cap, no newlines) and rendered as a quote labelled
+  "the model's own words, unchecked". All facts on the panel are re-read from
+  the catalogue.
+- **No grounding claim rests on a key.** A Gemini subscription for the Gemini
+  app is a **separate billing arrangement** and creates no API entitlement. The
+  key comes from AI Studio for the developer API, and free-tier content is used
+  to improve Google's products, so **no traveller name, email, booking reference
+  or private note may be sent.**
+- **The key is server-side only, and its PRESENCE is the only thing a view may
+  read.** The button renders only when a non-empty key exists
+  (`$assistAvailable` — a presence check, never the key itself), because a
+  control that cannot work should not be offered.
+  `test_the_gemini_key_never_reaches_a_rendered_page` walks a rendered page for
+  it, and `DiscoveryAssistTest::the_gemini_key_never_reaches_the_discover_page`
+  covers the deck page the assist itself renders on.
+- **One request per assist, never a loop.**
+  `planning.limits.assist_attempts` is 1 **as data**, and the HTTP-level test
+  reads it as the expected request count — even on a 500 — which is what keeps
+  the claim load-bearing rather than prose. There is no repair machinery to
+  cap: an unparseable reply or a reply of only invented ids is REPORTED
+  ("did not come back in the shape we asked" / "did not name any place from
+  the catalogue"), not re-asked. The route URI never names the vendor, and a
+  new model is an `.env` change (`GEMINI_MODEL`, default `gemini-2.5-flash`).
+- **A free tier is a budget, and the spend is recorded on failure too.** The
+  cooldown (`planning.limits.assist_cooldown`, 45 s default, keyed per
+  traveller in the cache) is recorded in a `finally` — a 429 means the tier is
+  out of breath right now, and an immediate second click doubles the pressure.
+  A key-less or empty-pool ask never reaches the wire and records nothing. The
+  failure states are TOASTS (cooldown, throttled, upstream, unparseable,
+  no-picks, no-pool), each one sentence the traveller can act on; the RESULT is
+  a `session('assist_result')` PANEL above the deck, because it is content and
+  the layout's flash banner is full-bleed on this deliberately bare route —
+  read the reset-toast history in the frontend section before touching either.
+- **A reply that is not the JSON shape is its own kind** (`unparseable` vs
+  `no_picks`): transport, throttle, shape and empty-pool are different truths
+  about the world and get different messages.
+- **The transport sends exactly one POST.** `GeminiClient::ask()` has no retry
+  (the falsification harness adds a fake 3-attempt loop against the budget
+  test to prove that rule bites). One request per assist, at most the
+  traveller's own patience before a named failure — see replacing the drafting
+  model note: "the model chooses and explains, the server decides and checks"
+  applies on every route where Gemini appears.
 - **`config/planning.php` uses HTTP timeouts, not job `$timeout` properties**,
   because the Hostinger worker's `queue:drain` calls `$job->fire()` directly and
   does not enforce a job's timeout the way `queue:work` does. Same reason the
-  crawl job's own timeout is not sufficient on this host.
+  crawl job's own timeout is not sufficient on this host. The assist's
+  `assist_seconds` (default 20) is deliberately SHORTER than
+  `planning_seconds` (default 90), because the assist runs inside a web
+  request the traveller is actively waiting on and 90 s of hang is a frozen
+  page. NOTE this timeout is currently read but never mitigates the real UX —
+  a slow model means a 20 s button press. Watch it in the click-through.
+- **`is_locked` is DORMANT, deliberately.** The itinerary expansion left
+  `itinerary_items.is_locked` (created guarded in
+  `2026_10_14_091000_extend_itinerary_items_for_places.php`) as machinery for
+  an automated editor that never arrived: under a discovery role nothing
+  automated edits a day, so no stop is lock-worthy. The model surface
+  (`$fillable`, casts) and the config's `max_plan_attempts`/
+  `regeneration_cooldown` keys were removed in the Phase 3 commit; the COLUMN
+  stays (a drop-column inside a foreign-keyed table buys nothing and the
+  SQLite/MySQL divergence on dropping columns is a recorded trap), and nothing
+  in the app reads it. If a lock feature ever lands, it starts from scratch
+  with its own tests.
 
 #### What is NOT verified yet
 
@@ -2190,13 +2260,13 @@ as a one-hour attraction. It now takes the place type and keeps 0 for lodging.
 
 | Day | Work | Gate |
 |---|---|---|
-| 2-3 | `places` seeder from a CSV, admin CRUD, the three clusters curated | a cluster can support a real trip; every row has a source |
-| 4-5 | `item_type` through the editor, overnight base charged once, cost basis, custom entries, PDF | a complete trip can be built **by hand**, Gemini unused |
-| 6-7 | Routing client, cache, `ItinerarySchedule` takes real legs, map geometry | changing a stop updates every downstream leg |
-| 8-9 | Gemini client, structured output, id validation, generation status | an invented id or a failed call cannot save a plan |
-| 10 | Feasibility repair, failures, duplicate submissions, locked stops | two clicks cannot produce two plans |
-| 11 | PDF, map, sources, unknown-cost labels | every surface tells the same story |
-| 12-14 | Tests, Hostinger end-to-end, demo rehearsal | a demonstrable release |
+| 2-3 | **LANDED.** `places` seeder from a CSV, admin CRUD, the three clusters curated | a cluster can support a real trip; every row has a source |
+| 4-5 | **LANDED.** `item_type` through the editor, overnight base charged once, cost basis, custom entries, PDF | a complete trip can be built **by hand**, Gemini unused |
+| 6-7 | **LANDED.** Routing client, cache, `ItinerarySchedule` takes real legs, map geometry | changing a stop updates every downstream leg |
+| 8-9 | **LANDED AS THE DISCOVERY ASSIST, NOT DRAFTING.** Gemini client, structured output, id validation, honest failure states instead of a generation status | an invented id is never displayed; a failed call is a named state, not an error page |
+| 10 | **MOOT for AI generation** (there is no generation to repair or duplicate) but landed in other forms: duplicate submits are stopped by the assist cooldown (Day 8-9 work), crawl double-dispatch by `hasCrawlInFlight()` | two clicks cannot produce two plans |
+| 11 | **LANDED.** PDF, map, sources, unknown-cost labels | every surface tells the same story |
+| 12-14 | Hostinger end-to-end, demo rehearsal — in progress | a demonstrable release |
 
 **Defer first if time slips:** conversational revision, automated search
 discovery, and geographic expansion. Keep the manual complete trip, routing,

@@ -98,6 +98,21 @@
                         Undo last
                     </button>
                 @endif
+                {{--
+                    THE ASSIST. Rendered only when a Gemini key is
+                    configured, because a control that cannot work should
+                    not be offered. It is a plain POST form like every
+                    other redirect affordance here — no JavaScript — and
+                    the reply comes back as the suggestion panel below.
+                --}}
+                @if ($assistAvailable)
+                    <form method="POST" action="{{ route('discover.assist') }}">
+                        @csrf
+                        <button type="submit" class="min-h-10 rounded-md px-3 py-2 text-sm font-semibold text-philippine-gold ring-1 ring-philippine-gold/40 transition hover:bg-philippine-gold/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-philippine-gold active:scale-[0.98] active:duration-75">
+                            Stuck? Ask for a nudge
+                        </button>
+                    </form>
+                @endif
                 <button type="button" onclick="document.getElementById('reset-discovery-confirmation').showModal()" class="min-h-10 rounded-md px-3 py-2 text-sm font-semibold text-island-white ring-1 ring-white/25 transition hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-philippine-gold">
                     Reset deck
                 </button>
@@ -142,6 +157,70 @@
         </dialog>
 
         <div class="mx-auto max-w-6xl px-5 sm:px-8 lg:px-12">
+        @php $assistResult = session('assist_result'); @endphp
+        @if (($assistResult['status'] ?? '') === 'ok')
+            {{--
+                THE SUGGESTION PANEL, one POST round-trip later.
+
+                Everything factual on it is FROM THE CATALOGUE: the
+                destinations were re-read from the database by the
+                service, so the name, the area and the fee are this
+                app's data and never the model's arithmetic. The one
+                thing that arrives from the model is the sentence, and
+                it is labelled as the model's own reason.
+
+                The rejected count is printed when it is not zero: an
+                id the model invented was dropped server-side, and a
+                traveller deserves to be able to see that it happened
+                rather than wonder why only two of three picks arrived.
+            --}}
+            <section data-assist-panel class="tm-panel mb-10 px-6 py-8 sm:px-10">
+                <div class="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                        <p class="text-xs font-bold uppercase tracking-[0.22em] text-philippine-gold">
+                            Gemini's read
+                        </p>
+                        <h2 class="mt-3 font-display text-2xl font-semibold text-island-white sm:text-3xl">
+                            Worth a look next.
+                        </h2>
+                        <p class="mt-2 max-w-2xl text-sm leading-6 text-island-white/65">
+                            Chosen from the {{ $assistResult['asked_over'] }} places your deck is dealing,
+                            then checked against the catalogue and your budget tier before anything
+                            was shown.
+                        </p>
+                    </div>
+                    <span class="rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-island-white ring-1 ring-white/10">
+                        One request · up to 3 picks
+                    </span>
+                </div>
+
+                <ul class="mt-6 divide-y divide-white/10">
+                    @foreach ($assistResult['suggestions'] as $suggestion)
+                        <li class="py-4 first:pt-1 last:pb-1">
+                            <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                                <a href="{{ route('destinations.show', $suggestion['destination']->slug) }}" class="font-display text-lg font-semibold text-island-white transition hover:text-boracay-light">
+                                    {{ $suggestion['destination']->name }}
+                                </a>
+                                <span class="text-sm text-island-white/55">
+                                    {{ $suggestion['destination']->municipality }}, {{ $suggestion['destination']->province }}
+                                </span>
+                            </div>
+                            <p class="mt-1.5 max-w-2xl text-sm leading-6 text-island-white/75">
+                                &ldquo;{{ $suggestion['why'] }}&rdquo;
+                                <span class="text-island-white/45">— the model's own words, unchecked.</span>
+                            </p>
+                        </li>
+                    @endforeach
+                </ul>
+
+                @if (($assistResult['rejected'] ?? 0) > 0)
+                    <p class="mt-5 border-t border-white/10 pt-4 text-sm text-island-white/50">
+                        {{ $assistResult['rejected'] }} of the picks it named {{ $assistResult['rejected'] === 1 ? 'was' : 'were' }} held back —
+                        invented ids and repeat mentions are not displayed.
+                    </p>
+                @endif
+            </section>
+        @endif
         @if ($cards->isEmpty())
             {{--
                 THE EMPTY DECK, AND EVERY BRANCH IS TRUE.
