@@ -1023,6 +1023,57 @@ Contracts worth knowing:
 behind-every-word `z-index: -1`, the fly-off swipe, and the
 opaque card).
 
+### The public read-only share link
+
+**`/itineraries/{itinerary}/shared/{token}` is outside the auth group, and
+that is a placement with a reason, not an accident.** The recipient needs no
+account and no session. The access control was never somewhere else until it
+was not in the route at all: the GET on the itinerary's row must be accepted
+explicitly, so the check is `abort_unless($itinerary->hasShareToken() &&
+$itinerary->share_token === $token, 404)` — an itinerary whose column is null
+is unshared on every URL shape, and 404 (not 403) was chosen because "trip
+exists but your code is wrong" is a fact nobody should learn.
+
+- `itineraries.share_token` is the column, 40 chars of `Str::random(40)`,
+  minted ONLY in `Itinerary::sharedToken()` and only by the POST on
+  `/itineraries/{itinerary}/share`. Visiting the share page mints nothing —
+  a page view is not a decision to create a capability.
+- **ROTATION IS THE REVOCATION.** `rotateShareToken()` replaces the secret;
+  every link already handed out stops working, which is exactly what the
+  owner asked for. The POST requires a `confirm` checkbox, because rotation
+  is destructive and silent rotation would lose shared trips to a stray
+  click. `test_rotation_kills_the_old_token_and_mints_a_new_one` holds the
+  OLD token across the rotation — the failure to look for is an old link
+  that still opens, not a new one that opens.
+- **THE HERO IS SHARED, SO ITS OWNER BUTTONS ARE `@auth`-GUARDED IN THE
+  PARTIAL.** The hero lives in `itineraries/partials/trip.blade.php`,
+  rendered by BOTH the owner's editor page and the guest share page; its
+  Mark-completed/Delete block must be guarded there or every stranger gets
+  buttons. The Share *entry point* is on the owner's editor header for the
+  same reason — never in the shared hero, which would render a minting
+  button to a guest.
+- **The share page contributes ZERO forms; the layout's logout dialog
+  contributes ONE on every guest page.** What the test limits is the trip
+  content, not the whole document: `name="_token"` must appear exactly once
+  and that once must be `route('logout')`.
+- THE READ SURFACE IS TWO PARTIALS, AND NEITHER VIEW OWNS MARKUP THE OTHER
+  ALSO RENDERS. `partials/trip.blade.php` (hero, unpriced-total notice,
+  warnings block, map) and `partials/days.blade.php` (the `[data-editor-read]`
+  grid) are includes of both views, which is how a fix to a total or a label
+  cannot miss the shared page. The extraction used a line-anchored script
+  with asserted boundaries, so what was preserved is proven by the suite
+  rather than read into the diff: deleting the `@auth` guard on the trip
+  partial's buttons fails the no-writes test, and minting on page-view fails
+  the visit test.
+- The days grid carries `data-editor-read` on the guest page, where it is
+  inert — that is fine. What would NOT be fine is a `.hidden` class there,
+  because this repo's editor toggles the hidden ATTRIBUTE (see the frontend
+  section) and a class would make it permanent.
+- THE PAGE IS READ-ONLY BECAUSE IT IS BUILT READ-ONLY: no form fields, no
+  editor entry, no `_token` of its own. The zero-forms test is what makes
+  that structural rather than incidental — deleting it would not change the
+  page, so keep it in the suite.
+
 ### Moving between places
 
 The destination page has no chevrons of its own — the stage's own chevrons move

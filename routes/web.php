@@ -165,6 +165,24 @@ Route::middleware('auth')->group(function () {
         'download',
     ])->name('itineraries.download');
 
+    /*
+     * WHERE THE TRAVELLER GETS THE SHARE LINK.
+     *
+     * Authenticated like everything else in this group: the page acts ON
+     * someone's itinerary, so ownership runs through ensureOwner() as it does
+     * on the PDF. The link it mints is public; the ability to mint one
+     * never is.
+     */
+    Route::get('/itineraries/{itinerary}/share', [
+        ItineraryController::class,
+        'shareLink',
+    ])->name('itineraries.share');
+
+    Route::post('/itineraries/{itinerary}/share', [
+        ItineraryController::class,
+        'regenerateShareLink',
+    ])->name('itineraries.share.regenerate');
+
     Route::delete('/itineraries/{itinerary}/days/{day}', [
         ItineraryController::class,
         'removeDay',
@@ -180,6 +198,23 @@ Route::middleware('auth')->group(function () {
         'complete',
     ])->name('itineraries.complete');
 });
+
+/*
+ * THE PUBLIC LINK ITSELF, and it is deliberately OUTSIDE the auth group:
+ * the whole point is that a recipient needs no account and no session.
+ *
+ * The access control is not in this line at all. It is that
+ * `Itinerary::sharedPreview()` only accepts a token the table actually
+ * carries, so an itinerary nobody issued a share for 404s on a lookup no
+ * token can ever satisfy. The token shape is constrained to exactly what
+ * Str::random(40) produces
+ * — [A-Za-z0-9]{40} — so a malformed token refuses on the constraint rather
+ * than reaching the database.
+ */
+Route::get('/itineraries/{itinerary}/shared/{token}', [
+    ItineraryController::class,
+    'sharedPreview',
+])->name('itineraries.shared')->where('token', '[A-Za-z0-9]{40}');
 
 Route::middleware(['auth', 'admin'])
     ->prefix('admin')

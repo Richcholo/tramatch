@@ -239,6 +239,89 @@ class ItineraryController extends Controller
     }
 
     /**
+     * THE TRIP AS A LINK SOMEBODY CAN HOLD WITHOUT AN ACCOUNT.
+     *
+     * The token is minted lazily — `sharedToken()` writes the column only
+     * when the page is opened — because a share the traveller never sends
+     * should not create a capability: an afterEach everything-scheduled
+     * background minter is how one of the columns on this table becomes a
+     * leak nobody remembers making.
+     *
+     * The VIEW stays honest while the link does: it prints whether a link is
+     * live, never "your itinerary is public" when the column is still null.
+     */
+    public function shareLink(Itinerary $itinerary): View
+    {
+        $this->ensureOwner($itinerary);
+
+        $itinerary->load('days.items.destination', 'days.items.place');
+
+        return view('itineraries.share', [
+            'itinerary' => $itinerary,
+            'shareUrl' => $itinerary->hasShareToken()
+                ? route('itineraries.shared', [
+                    'itinerary' => $itinerary,
+                    'token' => $itinerary->share_token,
+                ])
+                : null,
+        ]);
+    }
+
+    /**
+     * ROTATION IS THE REVOCATION. See Itinerary::rotateShareToken().
+     *
+     * The `confirm` checkbox is the destructive-action boundary: rotation
+     * fails nothing in the database and repairs nothing in the world — every
+     * link handed out so far stops working, and an accidental click must not
+     * be able to do that. The failure mode without the confirmation is losing
+     * shared trips to a fat-fingered form submission.
+     */
+    public function regenerateShareLink(Request $request, Itinerary $itinerary): RedirectResponse
+    {
+        $this->ensureOwner($itinerary);
+
+        if (! $request->boolean('confirm')) {
+            return back()->withErrors([
+                'share' => 'Tick the confirmation box — replacing the link stops every link already shared from working.',
+            ]);
+        }
+
+        $wasLive = $itinerary->hasShareToken();
+        $itinerary->rotateShareToken();
+
+        return back()
+            ->with('status', 'A new share link was created'.($wasLive ? '. The previous link no longer works.' : '.'));
+    }
+
+    /**
+     * THE PUBLIC READ-ONLY VIEW. No auth, by design.
+     *
+     * THE TOKEN IS THE ACCESS CONTROL, and it is the itinerary's own column
+     * that wins: an itinerary with `share_token = null` is not shared, whatever
+     * arrives in the URL, and a live one only admits its own token. 403
+     * vs 404 is a deliberate choice — 404, because a prospective code exists
+     * only in the attacker's imagination, and confirming "trip 7 exists but
+     * you got the token wrong" is information. The route constraint already
+     * limits the shape to exactly what Str::random(40) produces, so a GET
+     * with `/shared/anything-else` never reaches this method.
+     *
+     * It loads ONLY the read surface the partials render (no addable rows, no
+     * editor state): a leaked token shows the trip, and none of the owner's
+     * controls or anything else about the editor.
+     */
+    public function sharedPreview(Itinerary $itinerary, string $token): View
+    {
+        abort_unless($itinerary->hasShareToken() && $itinerary->share_token === $token, 404);
+
+        $itinerary->load('days.items.destination', 'days.items.place', 'user');
+
+        return view('itineraries.shared', [
+            'itinerary' => $itinerary,
+            'unpricedStops' => app(ItineraryEditor::class)->countUnpricedStops($itinerary),
+        ]);
+    }
+
+    /**
      * THE ITINERARY AS A PRINTABLE PDF.
      *
      * `ensureOwner()` runs first and unconditionally. The PDF carries the whole

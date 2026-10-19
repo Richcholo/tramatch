@@ -12,87 +12,7 @@
         </a>
     </x-slot>
 
-    @php
-        $mapPoints = $itinerary->days
-            ->flatMap(function ($day) {
-                return $day->items
-                    ->filter(fn ($item) => $item->hasKnownLocation())
-                    ->map(function ($item) use ($day) {
-                        return [
-                            'day' => $day->day_number,
-                            'name' => $item->placeName(),
-                            'lat' => $item->latitude(),
-                            'lng' => $item->longitude(),
-                        ];
-                    });
-            })
-            ->values()
-            ->toArray();
-    @endphp
-
-    <div class="space-y-10">
-        <section class="relative overflow-hidden rounded-[2rem] bg-volcanic-teal p-8 text-white shadow-xl sm:p-12">
-            <div class="absolute -right-24 -top-24 h-96 w-96 rounded-full bg-boracay/25 blur-3xl"></div>
-            <div class="absolute -bottom-32 left-1/3 h-80 w-80 rounded-full bg-philippine-gold/15 blur-3xl"></div>
-
-            <div class="relative flex flex-wrap items-end justify-between gap-8">
-                <div>
-                    <p class="text-xs font-bold uppercase tracking-[0.3em] text-boracay-light">
-                        {{ ucfirst($itinerary->budget_level) }} trip
-                    </p>
-
-                    @if ($itinerary->area)
-                        <p class="mt-3 text-sm font-semibold uppercase tracking-[0.22em] text-philippine-gold">
-                            {{ $itinerary->area }}
-                        </p>
-                    @endif
-
-                    <h1 class="mt-5 max-w-4xl font-display text-5xl font-semibold leading-[0.95] tracking-[-0.05em] sm:text-7xl">
-                        {{ $itinerary->title }}
-                    </h1>
-
-                    <p class="mt-6 text-white/65">
-                        {{ $itinerary->trip_duration_days }} day(s)
-                        · {{ $itinerary->match_score }}% average match
-                        · ₱{{ number_format($itinerary->total_estimated_cost, 2) }}
-                    </p>
-
-                    {{-- The total sums stored figures, and an unpriced stop stores
-                         0. Without this line ₱8,375 reads as a complete answer
-                         when three of the stops were counted at zero. --}}
-                    @if ($unpricedStops > 0)
-                        <p class="mt-2 text-sm font-semibold text-philippine-gold">
-                            {{ $unpricedStops }} stop(s) without a verified price — the total above is incomplete.
-                        </p>
-                    @endif
-                </div>
-
-                <div class="flex flex-wrap gap-3">
-                    <form
-                        method="POST"
-                        action="{{ route('itineraries.complete', $itinerary) }}"
-                    >
-                        @csrf
-                        @method('PATCH')
-
-                        <button
-                            type="submit"
-                            class="rounded-full border border-white/35 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white hover:text-volcanic-teal"
-                        >
-                            {{ $itinerary->is_completed ? 'Mark active' : 'Mark completed' }}
-                        </button>
-                    </form>
-
-                    <button
-                        type="button"
-                        onclick="document.getElementById('delete-itinerary-confirmation').showModal()"
-                        class="rounded-full bg-red-500/15 px-5 py-3 text-sm font-semibold text-red-200 transition hover:bg-red-500 hover:text-white"
-                    >
-                        Delete
-                    </button>
-                </div>
-            </div>
-        </section>
+    @include('itineraries.partials.trip')
 
         <dialog
             id="delete-itinerary-confirmation"
@@ -143,43 +63,6 @@
             </div>
         </dialog>
 
-        @if (session('itinerary_warnings'))
-            <section class="rounded-[2rem] border border-philippine-gold/50 bg-philippine-gold/15 p-6 text-benguet-charcoal sm:p-8">
-                <p class="text-xs font-bold uppercase tracking-[0.25em] text-boracay-dark">
-                    Planning notes
-                </p>
-
-                <h2 class="mt-4 font-display text-3xl font-semibold text-volcanic-teal">
-                    Some selected places were not scheduled.
-                </h2>
-
-                <p class="mt-3 text-sm leading-6 text-benguet-charcoal/70">
-                    The itinerary only saved destinations that fit the daily time window.
-                </p>
-
-                <ul class="mt-5 space-y-3">
-                    @foreach (session('itinerary_warnings') as $warning)
-                        <li class="rounded-xl bg-white/60 p-4 text-sm">
-                            <strong class="text-volcanic-teal">
-                                {{ $warning['name'] }}
-                            </strong>
-
-                            <span class="text-benguet-charcoal/70">
-                                — {{ $warning['reason'] }}
-                            </span>
-                        </li>
-                    @endforeach
-                </ul>
-            </section>
-        @endif
-
-        <section class="rounded-[2rem] bg-island-white p-4 shadow-sm ring-1 ring-boracay-light sm:p-6">
-            <div
-                id="itinerary-map"
-                data-itinerary-points="{{ json_encode($mapPoints) }}"
-                class="h-[28rem] rounded-[1.5rem] bg-boracay-light"
-            ></div>
-        </section>
 
         <section data-itinerary-editor class="mt-4">
             <div class="mb-8 flex flex-wrap items-end justify-between gap-6">
@@ -225,15 +108,32 @@
                     </button>
 
                     {{--
+                        THE SHARE LINK. It is an owner-only page here, never
+                        this trip's guest rendering: the partial's hero is
+                        shared with the public link, so an entry point in
+                        there would render a minting button to strangers.
+                    --}}
+                    <a
+                        href="{{ route('itineraries.share', $itinerary) }}"
+                        class="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-boracay px-5 py-3 text-sm font-semibold text-volcanic-teal transition hover:bg-boracay hover:text-white"
+                    >
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 01-5.656-5.656l1.5-1.5M10 13.828a4 4 0 010-5.656l3-3a4 4 0 015.656 5.656l-1.5 1.5" />
+                        </svg>
+                        Share
+                    </a>
+
+                    {{--
                         The PDF export.
 
                         A plain GET link, not a form or a fetch: the browser
-                        handles the Content-Disposition itself, so this works with
-                        scripting off and needs no JavaScript at all. Inside the
-                        section header rather than the editor FORM on purpose --
-                        a button in here would submit the draft payload, and a
-                        form inside the editor would be discarded by the HTML
-                        parser and take every stop field with it.
+                        handles the Content-Disposition itself, so this works
+                        with scripting off and needs no JavaScript at all.
+                        Inside the section header rather than the editor FORM
+                        on purpose -- a button in here would submit the draft
+                        payload, and a form inside the editor would be
+                        discarded by the HTML parser and take every stop field
+                        with it.
                     --}}
                     <a
                         href="{{ route('itineraries.download', $itinerary) }}"
@@ -382,144 +282,7 @@
                 </li>
             </template>
 
-            <div data-editor-read>
-                <div class="grid gap-6 lg:grid-cols-2">
-                    @foreach ($itinerary->days as $day)
-                        <article class="rounded-[2rem] bg-island-white p-6 shadow-sm ring-1 ring-boracay-light sm:p-8">
-                            <div class="flex flex-wrap items-center justify-between gap-3">
-                                <h3 class="text-2xl font-bold text-volcanic-teal">
-                                    Day {{ $day->day_number }}
-                                </h3>
-
-                                @if ($day->date)
-                                    <span class="text-sm text-benguet-charcoal/60">
-                                        {{ $day->date->format('M d, Y') }}
-                                    </span>
-                                @endif
-                            </div>
-
-                            <div class="mt-7 space-y-6">
-                                @forelse ($day->items as $item)
-                                    <div class="relative border-l-2 border-boracay pl-5">
-                                        <span class="absolute -left-[0.45rem] top-0 h-3 w-3 rounded-full bg-philippine-gold"></span>
-
-                                        <p class="text-xs font-bold uppercase tracking-[0.18em] text-boracay-dark">
-                                            {{ $item->kindLabel() }}
-                                        </p>
-
-                                        <p class="mt-1 text-xs font-bold uppercase tracking-[0.18em] text-boracay-dark/70">
-                                            @if ($item->start_time && $item->end_time)
-                                                {{-- One instant, not a range. A lodging stop has no visit
-                                                     duration, and printing "16:45 – 16:45"
-                                                     reads as a bug rather than as the
-                                                     truthful statement that there is no
-                                                     duration to print. --}}
-                                                @if (substr($item->start_time, 0, 5) === substr($item->end_time, 0, 5))
-                                                    {{ substr($item->start_time, 0, 5) }}
-                                                @else
-                                                    {{ substr($item->start_time, 0, 5) }}
-                                                    –
-                                                    {{ substr($item->end_time, 0, 5) }}
-                                                @endif
-                                            @else
-                                                Flexible time
-                                            @endif
-                                        </p>
-
-                                        {{-- Attractions link to their page. A meal,
-                                             a hotel or a custom entry has no page
-                                             here, so its name is text — a link
-                                             needs a destination, and inventing
-                                             one would be a dead control. --}}
-                                        @if ($item->isAttraction() && $item->destination)
-                                            <a
-                                                href="{{ route('destinations.show', $item->destination) }}"
-                                                class="mt-2 block text-xl font-bold text-volcanic-teal hover:text-boracay-dark"
-                                            >
-                                                {{ $item->placeName() }}
-                                            </a>
-                                        @else
-                                            <span class="mt-2 block text-xl font-bold text-volcanic-teal">
-                                                {{ $item->placeName() }}
-                                            </span>
-                                        @endif
-
-                                        <p class="mt-2 text-sm text-benguet-charcoal/60">
-                                            @if ($item->isCustom())
-                                                {{ $item->custom_address ?: 'Your own stop' }}
-                                            @elseif ($item->place)
-                                                {{ $item->place->municipality }}, {{ $item->place->province }}
-                                            @elseif ($item->destination)
-                                                {{ $item->destination->municipality }}, {{ $item->destination->province }}
-                                            @endif
-                                        </p>
-
-                                        <div class="mt-3 flex flex-wrap gap-3 text-xs font-semibold text-benguet-charcoal/60">
-                                            <span>
-                                                ₱{{ number_format($item->estimated_cost, 2) }}
-                                            </span>
-
-                                            {{-- The road first, the timetable gap second.
-                                                 routeSummary() is a MEASURED
-                                                 leg. When there is no measured
-                                                 leg the gap is still worth
-                                                 printing -- it is the space
-                                                 between two times on this plan --
-                                                 but it is labelled, because the
-                                                 number in this slot is the flat
-                                                 45 estimate on a trip that has
-                                                 never been edited, and an
-                                                 unlabelled "45 min travel"
-                                                 beside a measured "9.9 km · 28
-                                                 min by road" reads as the same
-                                                 kind of number. It is not, and
-                                                 that difference was the panel's
-                                                 complaint. --}}
-                                            @if ($item->routeSummary())
-                                                <span>
-                                                    {{ $item->routeSummary() }} by road
-                                                </span>
-                                            @elseif ($item->travel_minutes_from_previous > 0)
-                                                <span>
-                                                    {{ $item->travel_minutes_from_previous }} min gap
-                                                    &middot; drive not measured
-                                                </span>
-                                            @endif
-                                        </div>
-
-                                        @if ($item->note)
-                                            <p class="mt-3 text-sm italic text-benguet-charcoal/60">
-                                                {{ $item->note }}
-                                            </p>
-                                        @endif
-                                    </div>
-                                @empty
-                                    <div class="rounded-2xl bg-palawan-sand p-5">
-                                        <p class="text-sm text-benguet-charcoal/60">
-                                            Nothing planned for this day yet. Edit the itinerary and add a stop.
-                                        </p>
-                                    </div>
-                                @endforelse
-
-                                {{-- What is left of the day, in words.
-                                     A sentence, deliberately, and never a
-                                     utilisation bar: the number only means
-                                     something next to a sentence saying what
-                                     it is. `freeTimeSentence()` returns null
-                                     for a full day and for a day with
-                                     nothing planned, so this prints nothing
-                                     in both of those cases rather than
-                                     claiming a day is tight. --}}
-                                @if ($freeTime = $day->freeTimeSentence())
-                                    <p data-free-time class="mt-6 text-sm font-semibold text-boracay-dark">
-                                        {{ $freeTime }}
-                                    </p>
-                                @endif
-                            </div>
-                        </article>
-                    @endforeach
-                </div>
-            </div>
+                @include('itineraries.partials.days')
 
             <form
                 method="POST"
