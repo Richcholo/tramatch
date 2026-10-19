@@ -85,6 +85,19 @@
                     <span data-swipe-count>{{ $cards->count() }}</span>
                     <span class="ml-1 text-benguet-charcoal/65">{{ $cards->count() === 1 ? 'place' : 'places' }} left</span>
                 </p>
+                {{--
+                    THE TAKE-BACK. Shown only when a decision exists to
+                    undo — this is the affordance for the swipe that just
+                    happened, whatever it was (like, pass or skip). Undoing
+                    pops the MOST RECENT row server-side, so it works even
+                    after a reload; the script only restores the card it is
+                    holding, and reloads when the server's answer is not it.
+                --}}
+                @if ($swipedCount > 0)
+                    <button type="button" data-swipe-undo data-undo-endpoint="{{ route('discover.swipes.undo') }}" class="min-h-10 rounded-md px-3 py-2 text-sm font-semibold text-island-white ring-1 ring-white/25 transition hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-philippine-gold active:scale-[0.98] active:duration-75">
+                        Undo last
+                    </button>
+                @endif
                 <button type="button" onclick="document.getElementById('reset-discovery-confirmation').showModal()" class="min-h-10 rounded-md px-3 py-2 text-sm font-semibold text-island-white ring-1 ring-white/25 transition hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-philippine-gold">
                     Reset deck
                 </button>
@@ -343,11 +356,24 @@
                                 @endforeach
                             </div>
 
-                            <div class="mt-auto grid grid-cols-2 gap-3 border-t border-white/10 pt-5">
-                                <button type="button" data-swipe-action="passed" class="min-h-12 rounded-md border border-white/20 px-4 py-3 text-sm font-semibold text-island-white transition hover:border-red-300/60 hover:bg-red-400/10 hover:text-red-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-300 active:scale-[0.98] active:duration-75">
+                            <div class="mt-auto grid grid-cols-3 gap-2 border-t border-white/10 pt-5">
+                                {{--
+                                    THREE ACTIONS, NOT TWO. "Pass" is a no — it
+                                    leaves the deck AND weighs its tags down —
+                                    while "Decide later" ("skip") parks the
+                                    card with no opinion at all: it leaves the
+                                    deck but never scores a place down, and
+                                    undoing it is a plain return. Before the
+                                    third button existed, a "no" and a shrug
+                                    looked identical in the data.
+                                --}}
+                                <button type="button" data-swipe-action="passed" class="min-h-12 rounded-md border border-white/20 px-3 py-3 text-sm font-semibold text-island-white transition hover:border-red-300/60 hover:bg-red-400/10 hover:text-red-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-300 active:scale-[0.98] active:duration-75">
                                     Pass
                                 </button>
-                                <button type="button" data-swipe-action="liked" class="tm-primary-button min-h-12 px-4 py-3 text-sm active:scale-[0.98]">
+                                <button type="button" data-swipe-action="skip" class="min-h-12 rounded-md border border-white/20 px-3 py-3 text-sm font-medium text-island-white/70 transition hover:border-white/40 hover:bg-white/5 hover:text-island-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-boracay-light active:scale-[0.98] active:duration-75">
+                                    Decide later
+                                </button>
+                                <button type="button" data-swipe-action="liked" class="tm-primary-button min-h-12 px-3 py-3 text-sm active:scale-[0.98]">
                                     Like
                                 </button>
                             </div>

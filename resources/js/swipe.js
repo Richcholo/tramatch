@@ -9,6 +9,18 @@ if (deck) {
     let currentX = 0;
     let dragging = false;
 
+    /*
+     * THE TAKE-BACK'S HAND half. After a decision the card element is
+     * kept -- detached but alive -- together with its id, so undo can put
+     * the very card the traveller saw back on top instead of re-fetching
+     * the deck. `flying` guards the window between the decision and the
+     * fly-off's cleanup timer: an undo inside that window would fight the
+     * timer over which card the deck's front is.
+     */
+    const undoButton = document.querySelector('[data-swipe-undo]');
+    const lastSwipe = { card: null, destinationId: null };
+    let flying = false;
+
     const updateCount = () => {
         if (count) {
             count.textContent = cards.length;
@@ -234,12 +246,38 @@ if (deck) {
 
         try {
             await saveSwipe(action);
+            /*
+             * THREE DECISIONS, THREE EXITS. A like flies right and a pass
+             * flies left, but a skip is an opinion neither way, so it
+             * drops straight down -- passing through the bottom of the
+             * deck rather than judging a side of the screen it never
+             * chose.
+             */
             const direction = action === 'liked' ? 1 : -1;
             card.style.transition = 'transform 280ms ease, opacity 280ms ease';
-            card.style.transform = `translateX(${direction * 700}px) rotate(${direction * 24}deg)`;
+            card.style.transform = action === 'skip'
+                ? 'translateY(700px)'
+                : `translateX(${direction * 700}px) rotate(${direction * 24}deg)`;
             card.style.opacity = '0';
 
+            lastSwipe.card = card;
+            lastSwipe.destinationId = card.dataset.destinationId;
+            flying = true;
+
             window.setTimeout(() => {
+                flying = false;
+
+                /*
+                 * GUARD AGAINST THE TAKE-BACK. If undo ran while this
+                 * timer was pending, the restored card is now the deck's
+                 * front and `card` is no longer cards[0] -- shifting then
+                 * would tear the restored card back off the deck. Only
+                 * the flight's own card is cleaned up.
+                 */
+                if (cards[0] !== card) {
+                    return;
+                }
+
                 card.remove();
                 cards.shift();
                 positionCards();
@@ -253,6 +291,72 @@ if (deck) {
             window.alert(error.message);
         }
     };
+
+    /*
+     * UNDO POPS ONE ROW AND THE BROWSER RESTORES ONE CARD. The server
+     * decides WHICH row is the most recent decision -- it is the truth,
+     * and another tab may have decided since this page loaded. When its
+     * answer is the card in hand, the card goes back exactly where it sat
+     * (before the current front, first in the deck as it was rendered);
+     * when it is not, a reload re-deals from the database. The listeners
+     * survive, because it is the same element -- a card that comes back
+     * swipeable without any rebinding.
+     */
+    const undoSwipe = async () => {
+        if (!undoButton || flying) {
+            return;
+        }
+
+        let payload = null;
+
+        try {
+            const response = await fetch(undoButton.dataset.undoEndpoint, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error('The take-back could not be saved.');
+            }
+
+            payload = response.status === 204 ? null : await response.json();
+        } catch (error) {
+            window.alert(error.message);
+            return;
+        }
+
+        if (
+            lastSwipe.card &&
+            payload &&
+            String(lastSwipe.destinationId) === String(payload.destination_id)
+        ) {
+            const card = lastSwipe.card;
+
+            cards.unshift(card);
+            card.style.transition = 'none';
+            card.style.transform = 'translateY(0) scale(1)';
+            card.style.filter = 'none';
+            card.style.opacity = '1';
+
+            if (cards[1]) {
+                cards[1].insertAdjacentElement('beforebegin', card);
+            } else if (deck) {
+                deck.appendChild(card);
+            }
+
+            lastSwipe.card = null;
+            lastSwipe.destinationId = null;
+            positionCards();
+            updateCount();
+        } else {
+            window.location.reload();
+        }
+    };
+
+    undoButton?.addEventListener('click', undoSwipe);
 
     const activeCard = () => cards[0];
 
@@ -328,6 +432,14 @@ if (deck) {
 
         if (event.key === 'ArrowRight') {
             completeSwipe('liked');
+        }
+
+        /*
+         * The keyboard's third decision, mirroring the three buttons:
+         * down is the exit that judges neither side of the screen.
+         */
+        if (event.key === 'ArrowDown') {
+            completeSwipe('skip');
         }
     });
 

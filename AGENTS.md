@@ -1023,6 +1023,64 @@ Contracts worth knowing:
 behind-every-word `z-index: -1`, the fly-off swipe, and the
 opaque card).
 
+#### Three decisions, and a take-back
+
+The deck has **three** actions, not two: Liked, Pass, **Decide later**
+(`skip`). Before the third existed a Pass did double duty as skip AND
+verdict, so "no opinion" and "no" sat in `destination_swipes`
+indistinguishable — rows were written and never read anywhere.
+
+- **A PASS IS READ BACK — ONE WEIGHT STEP PER PASS.**
+  `SwipeDeckService::penalisedWeights()` is the single interest-weight
+  implementation behind BOTH `cards()` and `emptyState()`; it reads the
+  passed rows back and subtracts one from each passed place's tags,
+  floored at zero. Weights are 1..3, so **a single pass against a
+  weight-1 interest erases it** — that is the rule doing its job, not a
+  bug to soften. Two consequences of the floor that must NOT drift
+  apart: a zero-weight tag is not a **match** in `cards()`
+  (`$weights->get(...) > 0`, not `has()`) and not an **interest** in
+  `emptyState()` — "shares your interests" must not invite a traveller
+  back for cards the deck will never deal.
+- **A SKIP IS NEVER READ INTO SCORING, AND THAT IS THE POINT.** The
+  penalty query filters `action = 'passed'` for exactly one reason; the
+  moment skip rows count, "decide later" and "no" are the same again.
+  A skip still keeps its card out of the deck (the deck excludes every
+  swipe row) — it is a park, not a purge.
+  `test_a_skip_is_never_a_penalised_no` runs the SAME fixture through
+  skip and pass: the survivor keeps its full weight under skip and dies
+  under pass. Do not "simplify" the filter away.
+- **THE SKIP FLIES DOWN, NOT SIDEWAYS.** A like flies right, a pass
+  flies left, and a skip drops straight through the bottom of the deck —
+  an exit that judges neither side of the screen it never chose.
+  ArrowDown is the keyboard path (← pass, → like, ↓ skip).
+- **UNDO POPS ONE ROW AND THE SERVER IS THE TRUTH ABOUT WHICH.**
+  `POST discover.swipes.undo` (`SwipeDiscoveryController::undo`) pops the
+  traveller's MOST RECENT row by `updated_at desc, id desc` —
+  `updateOrCreate` re-likes in place, so the latest decision can carry an
+  old id, and second-resolution timestamps can tie. 204 when there is
+  nothing of one's own to pop; a pop never touches another user's rows.
+  **The row is DELETED, not flipped** — an undone pass is "no opinion"
+  again, a state the row must represent by not existing.
+- **THE SCRIPT KEEPS THE FLOWN CARD ALIVE.** `lastSwipe` holds the
+  detached card element so undo can put the very card the traveller saw
+  back on the deck (before the current front — the DOM slot it rendered
+  in), without re-fetching or rebinding: the listeners survive because it
+  is the same element. When the server's popped destination is NOT the
+  card in hand (another tab decided), the browser **reloads** rather than
+  guessing — the alternative is a deck and a table that disagree.
+- **THE CLEANUP TIMER AND THE TAKE-BACK GUARD AGAINST EACH OTHER.**
+  Undo is refused while `flying` is set (the 280ms fly-off), and the
+  timer only cleans up its OWN card (`cards[0] === card`) — a race
+  between them would otherwise tear the restored card straight back off
+  the deck, because `cards.shift()` would take the restored card instead.
+- **THE UNDO BUTTON RENDERS ONLY WHEN A DECISION EXISTS**
+  (`$swipedCount > 0`, counted in the controller); `data-swipe-undo`
+  carrying `data-undo-endpoint` is its whole contract with `swipe.js`.
+  An empty deck page renders no undo affordance — the reset is that
+  page's way out. *Deck choreography for skip/undo has NOT been
+  clicked in a browser — re-click `/discover` after any change to
+  `swipe.js`.*
+
 ### The honest empty deck
 
 **`"You are all caught up."` WAS THE ONE SENTENCE FOR FOUR DIFFERENT

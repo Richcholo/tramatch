@@ -25,6 +25,11 @@ class SwipeDiscoveryController extends Controller
         return view('discover.index', [
             'cards' => $deck->cards($user),
             'emptyState' => $deck->emptyState($user),
+            // Only the undo button needs this: it renders when a decision
+            // exists to take back. A full deck and a decided-all deck both
+            // pass through here; the deck itself derives its state. This
+            // counts rows the traveller owns, never another user's.
+            'swipedCount' => DestinationSwipe::where('user_id', $user->id)->count(),
         ]);
     }
 
@@ -32,7 +37,7 @@ class SwipeDiscoveryController extends Controller
     {
         $validated = $request->validate([
             'destination_id' => ['required', 'integer', 'exists:destinations,id'],
-            'action' => ['required', 'in:liked,passed'],
+            'action' => ['required', 'in:liked,passed,skip'],
         ]);
 
         $destination = Destination::findOrFail($validated['destination_id']);
@@ -53,6 +58,44 @@ class SwipeDiscoveryController extends Controller
             'message' => 'Swipe saved.',
             'action' => $validated['action'],
         ]);
+    }
+
+    /**
+     * THE TAKE-BACK. Pops the traveller's MOST RECENT decision — like, pass
+     * or skip, all three undoable — and reports which destination was freed,
+     * so the browser can put the card back where it was instead of
+     * re-fetching the whole deck.
+     *
+     * The row is DELETED, not flipped: an undone pass is "no opinion" again,
+     * which is a state the row must represent by not existing — reusing the
+     * row with a null action would reintroduce the indistinguishability this
+     * feature exists to remove.
+     *
+     * Ordering is `updated_at` desc, then `id` desc: `updateOrCreate`
+     * re-likes the same destination in place, so the latest decision can
+     * carry an old id, and a second-resolution `updated_at` can tie — the id
+     * tie-breaker keeps the pop deterministic.
+     *
+     * 204 when there is nothing to undo, which is an honest answer for "you
+     * have not decided anything" — an empty deck page never reaches here,
+     * but a stale tab with a hot undo button can.
+     */
+    public function undo(Request $request): JsonResponse
+    {
+        $swipe = DestinationSwipe::query()
+            ->where('user_id', Auth::id())
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id')
+            ->first();
+
+        if (! $swipe) {
+            return response()->json(status: 204);
+        }
+
+        $freed = $swipe->destination_id;
+        $swipe->delete();
+
+        return response()->json(['destination_id' => $freed]);
     }
 
     /**

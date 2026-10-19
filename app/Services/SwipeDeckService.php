@@ -11,17 +11,14 @@ class SwipeDeckService
 {
     public function cards(User $user, int $limit = 20): Collection
     {
-        $profile = $user
-            ->load('travelProfile.tags')
-            ->travelProfile;
+        $resolved = $this->penalisedWeights($user);
 
-        if (!$profile) {
+        if ($resolved === null) {
             return collect();
         }
 
-        $weights = $profile->tags
-            ->pluck('pivot.weight', 'id')
-            ->map(fn ($weight) => (int) $weight);
+        $profile = $resolved['profile'];
+        $weights = $resolved['weights'];
 
         $totalWeight = $weights->sum();
 
@@ -52,7 +49,7 @@ class SwipeDeckService
                 $totalWeight
             ) {
                 $matchedTags = $destination->tags->filter(
-                    fn ($tag) => $weights->has($tag->id)
+                    fn ($tag) => $weights->get($tag->id, 0) > 0
                 );
 
                 $matchedWeight = $matchedTags->sum(
@@ -77,6 +74,58 @@ class SwipeDeckService
     }
 
     /**
+     * THE PROFILE'S INTEREST WEIGHTS, LESS WHAT THE TRAVELLER HAS SAID NO TO.
+     *
+     * Shape: `[profile, weights]` or null when the traveller has no profile —
+     * null, NOT an empty collection, because "no profile" and "profile with
+     * no weights" are different empty decks with different messages, and
+     * both `cards()` and `emptyState()` have to tell them apart.
+     *
+     * A PASS IS READ BACK HERE, FOR THE FIRST TIME. `destination_swipes`
+     * rows were written and never read anywhere: a pass cost the traveller
+     * the card and nothing else, so "no" and "decide later" could sit in the
+     * table indistinguishable. The penalty reads the passed rows back —
+     * every pass on a place carrying a tag subtracts ONE step from that
+     * tag's weight, floored at zero.
+     *
+     * Why one step: weights are 1..3, so a single pass against a
+     * weight-1 interest erases it. That is the rule doing its job — the
+     * weakest interest dying after one "no" — not a bug to soften while
+     * "making it friendlier".
+     *
+     * A SKIP IS NEVER READ HERE. `skipped` rows carry no opinion; this
+     * method deliberately does not touch them, because the whole point of
+     * the action is that "decide later" leaves no trace in scoring while
+     * still keeping the card out of the deck, and the moment it starts
+     * penalising, "no opinion" and "no" are the same again.
+     */
+    private function penalisedWeights(User $user): ?array
+    {
+        $profile = $user
+            ->load('travelProfile.tags')
+            ->travelProfile;
+
+        if (!$profile) {
+            return null;
+        }
+
+        $penalties = DestinationSwipe::query()
+            ->where('destination_swipes.user_id', $user->id)
+            ->where('destination_swipes.action', 'passed')
+            ->join('destination_tag', 'destination_tag.destination_id', '=', 'destination_swipes.destination_id')
+            ->selectRaw('destination_tag.tag_id as tag_id, count(*) as passes')
+            ->get()
+            ->mapWithKeys(fn ($row) => [(int) $row->tag_id => (int) $row->passes]);
+
+        $weights = $profile->tags
+            ->pluck('pivot.weight', 'id')
+            ->map(fn ($weight) => (int) $weight)
+            ->mapWithKeys(fn ($weight, $tagId) => [$tagId => max(0, $weight - ($penalties[$tagId] ?? 0))]);
+
+        return ['profile' => $profile, 'weights' => $weights];
+    }
+
+    /**
      * WHY THE DECK IS EMPTY, ATTRIBUTED TO THE LAYER THAT EMPTIED IT.
      *
      * The deck filters four times — budget tier, region, shared interests,
@@ -98,20 +147,22 @@ class SwipeDeckService
      * `no_profile` never reaches the view: the controller redirects a
      * profile-less traveller to the preferences form before this service is
      * asked anything.
+     *
+     * Every interest test below goes through `penalisedWeights()`, so a tag
+     * the traveller has passed down to zero weight is NOT an interest here
+     * either: "shares your interests" would otherwise invite a traveller back
+     * for cards the deck will never deal.
      */
     public function emptyState(User $user): array
     {
-        $profile = $user
-            ->load('travelProfile.tags')
-            ->travelProfile;
+        $resolved = $this->penalisedWeights($user);
 
-        if (! $profile) {
+        if ($resolved === null) {
             return ['reason' => 'no_profile'];
         }
 
-        $weights = $profile->tags
-            ->pluck('pivot.weight', 'id')
-            ->map(fn ($weight) => (int) $weight);
+        $profile = $resolved['profile'];
+        $weights = $resolved['weights'];
 
         if ($weights->isEmpty() || $weights->sum() === 0) {
             return [
@@ -157,7 +208,7 @@ class SwipeDeckService
         }
 
         $sharesAnInterest = fn (Destination $destination) => $destination->tags->contains(
-            fn ($tag) => $weights->has($tag->id)
+            fn ($tag) => $weights->get($tag->id, 0) > 0
         );
 
         $tagMatches = $inRegion->filter($sharesAnInterest);

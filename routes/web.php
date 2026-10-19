@@ -113,6 +113,11 @@ Route::middleware('auth')->group(function () {
         'store',
     ])->name('discover.swipes.store');
 
+    Route::post('/discover/swipes/undo', [
+        SwipeDiscoveryController::class,
+        'undo',
+    ])->name('discover.swipes.undo');
+
     Route::post('/discover/reset', [
         SwipeDiscoveryController::class,
         'reset',

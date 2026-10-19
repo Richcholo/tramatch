@@ -20,7 +20,7 @@
     "src": "node_modules/leaflet/dist/images/marker-shadow.png"
   },
   "resources/css/app.css": {
-    "file": "assets/app-BbUsfQjH.css",
+    "file": "assets/app-SdEbjIZ8.css",
     "name": "app",
     "names": [
       "app.css"
@@ -29,7 +29,7 @@
     "isEntry": true
   },
   "resources/js/app.js": {
-    "file": "assets/app-CNUd8cJ0.js",
+    "file": "assets/app-mNAS6zbU.js",
     "name": "app",
     "src": "resources/js/app.js",
     "isEntry": true,
