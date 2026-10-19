@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\ScheduleItineraryRequest;
 use App\Http\Requests\UpdateItineraryRequest;
+use App\Http\Requests\UpdateTripBudgetRequest;
 use App\Models\Destination;
 use App\Models\DestinationSwipe;
 use App\Models\Itinerary;
@@ -492,6 +493,41 @@ class ItineraryController extends Controller
             // is the complaint the routing work exists to answer.
             'estimated_gaps' => $preview['estimated_gaps'],
         ]);
+    }
+
+    /**
+     * Record — or remove — the peso ceiling this traveller is working to.
+     *
+     * A separate action for the same reason `addDay()` is one: this is a
+     * fact about the TRIP, not a field on the stops draft, and the editor
+     * form is a form for stops. It is also the only write on an itinerary
+     * that a traveller can make without touching the plan itself, which is
+     * the point — "does this fit?" is asked before the plan is settled.
+     *
+     * A blank field clears the ceiling (see UpdateTripBudgetRequest), and an
+     * absent field means the same: this endpoint writes the budget and
+     * nothing else.
+     *
+     * Nothing about the TOTAL is recomputed here. The stored total is the
+     * sum of the stops' own figures, and a ceiling does not change a price.
+     */
+    public function updateBudget(
+        UpdateTripBudgetRequest $request,
+        Itinerary $itinerary
+    ): RedirectResponse {
+        $this->ensureOwner($itinerary);
+
+        $amount = $request->validated()['budget_amount'] ?? null;
+
+        $itinerary->update([
+            'budget_amount' => $amount === null ? null : (float) $amount,
+        ]);
+
+        return redirect()
+            ->route('itineraries.show', $itinerary)
+            ->with('status', $amount === null
+                ? 'Budget cleared. This trip is no longer measured against a peso ceiling.'
+                : 'Budget saved.');
     }
 
     /**

@@ -1168,6 +1168,66 @@ exists but your code is wrong" is a fact nobody should learn.
   that structural rather than incidental — deleting it would not change the
   page, so keep it in the suite.
 
+### The peso budget check
+
+`itineraries.budget_amount` (nullable decimal, migration
+`2026_10_19_120000`, `hasColumn`-guarded) is **the traveller's own peso
+ceiling**, and `Itinerary::budgetCheck()` is the one place the comparison
+lives. The hero in `partials/trip.blade.php` renders whatever it returns.
+
+- **THE CEILING IS NEVER DERIVED FROM `budget_level`.** That column is a
+  catalogue FILTER and an exact-match tier (ADR 0002), not an amount; a
+  peso figure per tier would be a number nobody published. The field's own
+  hint says so on the page.
+- **NULL MEANS NO VERDICT, NOT ₱0 OF ₱0.** `budgetCheck()` returns null and
+  the hero prints nothing. `min:1` on the field exists so a typed zero is
+  refused with an explanation rather than stored as a budget that renders
+  as instantly, absurdly over.
+- **EQUALITY IS NOT OVER.** `over` is a strict `>`. A plan landing exactly
+  on the ceiling has fitted it, and "already ₱0.00 over" is a false alarm
+  dressed as precision.
+- **THE VERDICT NEVER CLAIMS COMPLETENESS.** It says "in verified prices so
+  far", because `total_estimated_cost` counts an unpriced stop as zero (the
+  column cannot hold null) — the unpriced COUNT is already printed by the
+  notice above it, so the verdict deliberately does not restate the number.
+  **Nothing here is divided by `group_size`, and neither is the total**;
+  scaling one side of a comparison by the party would be the app inventing
+  an arithmetic it cannot support. A hotel is charged once for the trip and
+  a place contributes its band's midpoint — both left as they are, because
+  a second, truer total beside this one would be two numbers on one screen.
+- **THE VERDICT IS CONDITIONAL; THE FIELD IS NOT.** The first version wrapped
+  the form in `@if ($budget)` next to the verdict, which made the only way
+  to reach a budget already having one.
+  `test_the_budget_field_is_there_before_a_budget_is` pins that, and it is
+  why the editor page (already in
+  `test_every_form_posts_to_a_route_that_accepts_its_method`'s page list)
+  exercises the PATCH route on a trip with no budget at all.
+- **THE PARTIAL NOW HOLDS ONE WRITE, GUARDED.** Its header used to say "it
+  renders nothing that writes, posts or toggles", which the budget form
+  made false. The `@auth` guard is what keeps the share page's zero-forms
+  invariant true, so the correction to that header comment is load-bearing
+  documentation, not tidying.
+- **THE BUDGET IS ITS OWN ENDPOINT, NOT A FIELD ON THE EDITOR FORM.**
+  `PATCH
+  itineraries/{itinerary}/budget` (`updateBudget()`), same `ensureOwner()`
+  fence as every other write on a trip; a blank field CLEARS the ceiling,
+  and an absent field means the same because the endpoint writes the budget
+  and nothing else. It is its own form because "does this fit?" is asked
+  before the plan is settled, and the editor form is a form for stops.
+
+**A NOTE ON FALSIFYING BLADE.** Four of the five budget falsifications
+passed; the fifth was a **no-op falsification** — the patch replaced
+`@auth` with `@if (auth()->check())`, which *is* the guard, so the test
+correctly still passed and the patch proved nothing. Worse, the harness's
+blunt string reverts then damaged the repo: `@endif`→`@endauth` rewrote
+two legitimate `@endif`s (breaking **87 tests** across the itinerary
+family with `Unclosed '{' on line 517`), and one revert duplicated a method
+signature in `ItineraryController.php`. Every one of those reverts reported
+"reverted" by its own check. **Restore from a byte-exact backup instead of
+re-deriving the original text**, and `php -l` every file a harness touched
+before believing the run. Redone with `copy()` semantics the guest-guard
+falsification bit immediately.
+
 ### Moving between places
 
 The destination page has no chevrons of its own — the stage's own chevrons move

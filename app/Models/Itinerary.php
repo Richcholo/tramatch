@@ -27,6 +27,7 @@ class Itinerary extends Model
         'area',
         'start_date',
         'budget_level',
+        'budget_amount',
         'trip_duration_days',
         'total_estimated_cost',
         'match_score',
@@ -37,6 +38,7 @@ class Itinerary extends Model
     {
         return [
             'start_date' => 'date',
+            'budget_amount' => 'decimal:2',
             'total_estimated_cost' => 'decimal:2',
             'match_score' => 'decimal:2',
             'is_completed' => 'boolean',
@@ -52,6 +54,52 @@ class Itinerary extends Model
     {
         return $this->hasMany(ItineraryDay::class)
             ->orderBy('day_number');
+    }
+
+    /**
+     * DOES THIS TRIP FIT THE BUDGET THE TRAVELLER STATED?
+     *
+     * The one place the arithmetic lives; the hero in
+     * `partials/trip.blade.php` renders whatever this returns, so the
+     * owner's page and the shared page cannot disagree about whether a trip
+     * is over. Returns null when no budget was set — "no ceiling stated" is
+     * a real state, and it must not render as a verdict of ₱0 over
+     * something.
+     *
+     * THE TOTAL IS A SUM OF WHAT THE CATALOGUE VERIFIED, and the arithmetic
+     * here does nothing to make it more complete than it is:
+     *
+     * - `total_estimated_cost` counts an unpriced stop as zero, because the
+     *   column cannot hold null. The unpriced count lives in
+     *   `ItineraryEditor::countUnpricedStops()` and the hero prints it
+     *   beside this line; the wording here ("in verified prices so far") is
+     *   what keeps a partially-priced trip from reading as a final one.
+     * - A hotel is charged once for the trip, not per night, and a place
+     *   contributes its band's MIDPOINT rather than an end of it. Neither is
+     *   corrected here: this compares against the traveller's own figure
+     *   using the same total the hero and the PDF print, and a second,
+     *   truer total beside it would be two numbers on one screen.
+     * - Nothing is divided by `group_size`. The total is not, so scaling the
+     *   budget by the party while leaving the total per-person would be the
+     *   app inventing a comparison it cannot support.
+     *
+     * @return array{amount: float, known: float, remaining: float, over: bool}|null
+     */
+    public function budgetCheck(): ?array
+    {
+        if ($this->budget_amount === null) {
+            return null;
+        }
+
+        $amount = (float) $this->budget_amount;
+        $known = (float) $this->total_estimated_cost;
+
+        return [
+            'amount' => $amount,
+            'known' => $known,
+            'remaining' => round($amount - $known, 2),
+            'over' => $known > $amount,
+        ];
     }
 
     /**

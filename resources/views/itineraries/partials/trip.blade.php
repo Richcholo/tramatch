@@ -1,16 +1,22 @@
 {{--
     The SHARED half of an itinerary page.
 
-    The hero, the unpriced-total notice, the "not scheduled" warnings block,
-    the map, and THAT IS IT. It is included by both the owner's editor page
-    (itineraries/show.blade.php) and the public share page
-    (itineraries/shared.blade.php), so the two views cannot drift: a fix to a
-    total, a label or the map here is a fix on both.
+    The hero, the total, the unpriced-total notice, THE PESO VERDICT, the
+    "not scheduled" warnings block, the map, and THAT IS IT. It is included by
+    both the owner's editor page (itineraries/show.blade.php) and the public
+    share page (itineraries/shared.blade.php), so the two views cannot drift:
+    a fix to a total, a label or the map here is a fix to both.
 
-    It renders nothing that writes, posts or toggles. The days grid is NOT
-    here -- it is `partials/days.blade.php`, a separate include, because the
-    owner's editor reads and writes around its own section header that this
-    file deliberately does not carry.
+    ONE EXCEPTION TO "IT RENDERS NOTHING THAT WRITES", and it is worth
+    naming rather than discovering later: the budget field is a real form in
+    here, `@auth`-guarded, because the ceiling it edits is a money fact that
+    belongs beside the total it is compared against — and the guard is what
+    keeps the shared page's zero-forms invariant true. If you add a second
+    write to this partial, it needs the same guard and the same reasoning.
+
+    The days grid is NOT here -- it is `partials/days.blade.php`, a separate
+    include, because the owner's editor reads and writes around its own
+    section header that this file deliberately does not carry.
 --}}
 
     @php
@@ -59,25 +65,92 @@
 
                     {{-- The total sums stored figures, and an unpriced stop stores
                          0. Without this line ₱8,375 reads as a complete answer
-                         when three of the stops were counted at zero. {{--
-    The SHARED half of an itinerary page.
-
-    The hero, the unpriced-total notice, the "not scheduled" warnings block,
-    the map, and THAT IS IT. It is included by both the owner's editor page
-    (itineraries/show.blade.php) and the public share page
-    (itineraries/shared.blade.php), so the two views cannot drift: a fix to a
-    total, a label or the map here is a fix on both.
-
-    It renders nothing that writes, posts or toggles. The days grid is NOT
-    here -- it is `partials/days.blade.php`, a separate include, because the
-    owner's editor reads and writes around its own section header that this
-    file deliberately does not carry.
---}}
+                         when three of the stops were counted at zero. --}}
                     @if ($unpricedStops > 0)
                         <p class="mt-2 text-sm font-semibold text-philippine-gold">
                             {{ $unpricedStops }} stop(s) without a verified price — the total above is incomplete.
                         </p>
                     @endif
+
+                    {{-- THE PESO VERDICT, or its absence. `budgetCheck()` returns
+                         null until the traveller states a ceiling, and null
+                         renders NOTHING — not "₱0 of ₱0" — because "no budget
+                         set" is a real state and a budget of zero is not a
+                         budget. It lives here, in the SHARED hero, so the
+                         owner and every guest of the public link read the same
+                         sentence about the same trip. The wording says "in
+                         verified prices so far" precisely because the total
+                         above counts unpriced stops as zero; the notice right
+                         above this line is where the count is printed, so the
+                         number is not restated here. --}}
+                    @php($budget = $itinerary->budgetCheck())
+                    @if ($budget)
+                        <p @class([
+                            'mt-3 text-sm font-semibold',
+                            'text-red-300' => $budget['over'],
+                            'text-white/80' => ! $budget['over'],
+                        ])>
+                            @if ($budget['over'])
+                                Against your ₱{{ number_format($budget['amount'], 2) }} budget:
+                                ₱{{ number_format($budget['known'], 2) }} in verified prices so far —
+                                already ₱{{ number_format(abs($budget['remaining']), 2) }} over.
+                            @else
+                                Against your ₱{{ number_format($budget['amount'], 2) }} budget:
+                                ₱{{ number_format($budget['known'], 2) }} in verified prices so far,
+                                leaving ₱{{ number_format($budget['remaining'], 2) }}.
+                            @endif
+                        </p>
+                    @endif
+
+                    {{-- OWNER ONLY, and the guard is load-bearing: this partial
+                         renders for guests on the public share link, and the
+                         shared page contributes ZERO forms (ItineraryShareTest
+                         pins that), so a budget field here without @auth would
+                         both leak a control to strangers and break that
+                         invariant.
+
+                         IT RENDERS WHETHER OR NOT A BUDGET IS SET, which is the
+                         whole point of the control: it is how a ceiling gets
+                         set in the first place. The first version wrapped the
+                         form in `@if ($budget)` alongside the verdict and the
+                         only way to reach a budget became already having one.
+                         The verdict is conditional; the FIELD IS NOT. --}}
+                    @auth
+                        <form method="POST" action="{{ route('itineraries.budget.update', $itinerary) }}" class="mt-4 flex flex-wrap items-end gap-2">
+                            @csrf
+                            @method('PATCH')
+
+                            <div>
+                                <label for="budget_amount" class="block text-xs font-bold uppercase tracking-[0.2em] text-white/60">
+                                    Budget for this trip (₱)
+                                </label>
+                                <input
+                                    id="budget_amount"
+                                    name="budget_amount"
+                                    type="number"
+                                    step="0.01"
+                                    min="1"
+                                    max="10000000"
+                                    inputmode="decimal"
+                                    value="{{ old('budget_amount', $itinerary->budget_amount) }}"
+                                    placeholder="e.g. 15000"
+                                    class="mt-2 min-h-11 w-44 rounded-lg border border-white/25 bg-white/10 px-3 py-2 text-base text-white placeholder:text-white/40 focus:border-boracay-light focus:outline-none focus:ring-2 focus:ring-boracay"
+                                >
+                            </div>
+
+                            <button
+                                type="submit"
+                                class="inline-flex min-h-11 items-center justify-center rounded-lg border border-boracay-light px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
+                            >
+                                Save budget
+                            </button>
+
+                            <p class="w-full text-xs text-white/55">
+                                Clear the field and save to remove the ceiling. It is your figure —
+                                this app does not guess one from the trip's budget level.
+                            </p>
+                        </form>
+                    @endauth
                 </div>
 
                 {{-- OWNER ACTIONS, and that is precisely why they are guarded
