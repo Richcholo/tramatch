@@ -1314,6 +1314,45 @@ the generator ever called it.
 `test_closed_days_alone_are_not_read_as_closed_all_week` is in `ItineraryHoursTest`
 because the bug lives in the trait, not in the generator.
 
+#### **A DESTINATION PAGE CAN PUT THE PLACE ON A TRIP, AND IT DOES NOT OWN A
+SECOND SET OF RULES**
+
+The plan's wording: "closes the discovery → planning loop; today that page
+references no itinerary." True — `/discover` had a way in and nothing had a way
+out.
+
+- **`ItineraryEditor::addDestinationTo()` IS A SHIM OVER `apply()`, AND THAT IS
+  THE WHOLE DESIGN.** It rebuilds the draft from the stored rows, appends the new
+  stop under a **negative key** exactly as the browser's add dialog does, and
+  calls `apply()`. So the liked rule, the duplicate rule, a real start slot
+  instead of `00:00`, the written leg and the refreshed total are all **the one
+  implementation**. The negative key is the mechanism, not a trick:
+  `resolveNewStops()` judges exactly those rows.
+  Falsifying it by placing the stop by hand fails two tests immediately — no time
+  at all, and an unresolved leg.
+- **`recordInterest()` RUNS BEFORE THE PLACEMENT, AND THE ORDER IS PART OF THE
+  FEATURE.** Recorded afterwards, `apply()` refuses with *"You can only add places
+  you liked while swiping"* — which is what the falsification showed. Someone who
+  arrived from `/destinations` rather than from a swipe has liked nothing, so
+  requiring a like first would block the very entry point this exists to add.
+  Adding a place to a trip **is** a like, and it upgrades a `passed` rather than
+  leaving it standing beside a planned visit.
+- **THE PICKER OFFERS EXACTLY THE TRIPS THAT WOULD WORK** — same province, not
+  already visiting it. Offering a Paoay trip here and refusing it on submit is a
+  UI that invites the mistake it then prevents. The refusal still exists for a
+  hand-posted form, because a UI is not a security boundary.
+- **A GUEST IS TOLD WHY, NOT SHOWN A DEAD FORM**, and a traveller with no trip
+  in the province is pointed at the one page that can make one. An empty `<select>`
+  is not a way out.
+- **NOT A SECOND FILLED BUTTON.** `.tm-primary-button` is the one filled control
+  on the destination page and "Find similar places" holds it; Reviews moved to
+  `05` for this section at `04 / Plan`.
+- **THE ROUTE IS A THREE-SEGMENT POST**, so nothing can be swallowed by
+  route-model binding — the `admin/sources/status` trap is a single extra segment
+  on the same method, which this is not. A **day id from another trip is refused**
+  with `abort_unless($day->itinerary_id === $itinerary->id)`, the same ownership
+  boundary `UpdateItineraryRequest::after()` draws.
+
 #### An itinerary stop has four shapes
 
 `itinerary_items.item_type` is **attraction | meal | lodging | custom**, and it

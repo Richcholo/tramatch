@@ -123,6 +123,22 @@ Route::middleware('auth')->group(function () {
         'store',
     ])->name('reviews.store');
 
+    /*
+     * Closes the loop this page previously left open: it referenced no
+     * itinerary at all, so someone who found a place by browsing had to go and
+     * find their trip again to do anything with it.
+     *
+     * Declared AFTER the reviews route and never before the show route, because
+     * this is a three-segment POST and `/destinations/{destination:slug}` is a
+     * two-segment GET. Nothing here can be swallowed by route-model binding —
+     * the trap `admin/sources/status` fell into is a single extra segment on the
+     * same method, which this is not.
+     */
+    Route::post('/destinations/{destination:slug}/add-to-trip', [
+        DestinationController::class,
+        'addToTrip',
+    ])->name('destinations.add-to-trip');
+
     Route::resource('itineraries', ItineraryController::class)
         ->only([
             'index',

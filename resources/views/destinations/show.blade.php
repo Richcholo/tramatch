@@ -338,10 +338,108 @@
                     @endif
                 </section>
 
+                {{--
+                    The page's own route into planning. Before this, finding a
+                    place by browsing was a dead end: the page referenced no
+                    itinerary at all.
+
+                    NOT A SECOND FILLED BUTTON. `.tm-primary-button` is the one
+                    filled control on this page and "Find similar places" already
+                    holds it, so this is an outline form beside it. Two turquoise
+                    slabs on one screen is a page asking which one you meant.
+
+                    THE TRIP IS CHOSEN FROM A `<select>`, NOT A LIST OF CARDS, so
+                    the panel stays one row however many trips the traveller has.
+                    Days live inside the trip's own select, because that is the
+                    only order in which they make sense.
+
+                    AND THE EMPTY CASES SAY WHAT IS TRUE rather than rendering an
+                    empty select: a traveller with no trip in this province is
+                    told there is none and pointed at the one place that can make
+                    one, which is not something a disabled control can do.
+                --}}
+                <section class="tm-panel">
+                    <p class="tm-eyebrow">04 / Plan</p>
+
+                    <h2 class="mt-4 font-display text-3xl font-semibold text-island-white">
+                        Put this on a trip.
+                    </h2>
+
+                    @auth
+                        @if (($addableTrips ?? collect())->isNotEmpty())
+                            <form
+                                method="POST"
+                                action="{{ route('destinations.add-to-trip', $destination) }}"
+                                class="mt-5 flex flex-wrap items-end gap-3"
+                            >
+                                @csrf
+
+                                <label class="block">
+                                    <span class="tm-eyebrow">Trip</span>
+
+                                    <select
+                                        name="itinerary_id"
+                                        class="mt-2 block min-h-11 rounded-lg border border-white/25 bg-volcanic-teal px-3 py-2 text-sm font-semibold text-island-white"
+                                    >
+                                        @foreach (($addableTrips ?? collect()) as $trip)
+                                            <option value="{{ $trip->id }}">
+                                                {{ $trip->title }} ({{ $trip->trip_duration_days }} day{{ $trip->trip_duration_days === 1 ? '' : 's' }})
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                </label>
+
+                                <label class="block">
+                                    <span class="tm-eyebrow">Day</span>
+
+                                    <select
+                                        name="day_id"
+                                        class="mt-2 block min-h-11 rounded-lg border border-white/25 bg-volcanic-teal px-3 py-2 text-sm font-semibold text-island-white"
+                                    >
+                                        @foreach (($addableTrips ?? collect())->flatMap->days as $day)
+                                            <option value="{{ $day->id }}">
+                                                Day {{ $day->day_number }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                </label>
+
+                                <button type="submit" class="tm-primary-button rounded-full px-5 py-3">
+                                    Add to trip
+                                </button>
+                            </form>
+
+                            <p class="mt-4 text-sm text-island-white/60">
+                                Adding this also marks it as liked, so it shows up in
+                                your trip's list of places you liked.
+                            </p>
+                        @else
+                            <p class="mt-4 max-w-2xl text-sm text-island-white/60">
+                                {{-- Not "you cannot do this here". Why there is
+                                     nothing to add it to is the useful part. --}}
+                                You have no trip in {{ $destination->province }} yet, and this
+                                place belongs to one. Start a trip there and it will be
+                                waiting for you here.
+                            </p>
+
+                            <a
+                                href="{{ route('itineraries.create') }}"
+                                class="mt-5 inline-flex min-h-11 items-center rounded-full border border-white/30 px-5 py-3 text-sm font-semibold text-island-white transition hover:border-island-white hover:bg-white/10"
+                            >
+                                Plan a {{ $destination->province }} trip
+                            </a>
+                        @endif
+                    @else
+                        <p class="mt-4 max-w-2xl text-sm text-island-white/60">
+                            Sign in to put {{ $destination->name }} on one of your trips.
+                        </p>
+                    @endauth
+                </section>
+
                 <section class="tm-panel">
                     <div class="flex items-start justify-between gap-4">
                         <div>
-                            <p class="tm-eyebrow">04 / Reviews</p>
+                            <p class="tm-eyebrow">05 / Reviews</p>
 
                             <h2 class="mt-4 font-display text-3xl font-semibold text-island-white">
                                 Traveler notes.

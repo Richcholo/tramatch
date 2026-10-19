@@ -477,35 +477,115 @@ class ItineraryEditor
             });
     }
 
-    /**
-     * What a stop the traveller just added is allowed to be.
+/**
+     * Put one catalogue destination onto one day of a trip the traveller owns.
      *
-     * Stored rows skip this entirely: they were validated when they were new,
-     * and re-checking them on every save would refuse a trip its own history
-     * the moment a catalogue row changed. Only negative keys — stops that do
-     * not exist yet — are judged.
+     * **THIS IS A THIN SHIM OVER `apply()`, AND THAT IS THE POINT.** The
+     * destination page's "add to a trip" has to obey every rule the editor form
+     * obeys — active, not already on the trip, placed at a real slot rather than
+     * 00:00, its leg written, totals refreshed — and the cheapest honest way to
+     * guarantee that is to have no second implementation. So the draft is
+     * reconstructed from the stored rows, the new stop is appended under a
+     * NEGATIVE key exactly as the browser's add dialog does, and the one
+     * placement path in the app runs.
      *
-     *   attraction  active, liked while swiping, and not already on the trip.
-     *               The liked rule is what ties the editor to the discovery
-     *               deck: the picker and this check read the same swipes.
-     *   meal/lodging  active, in this trip's province, and not already stored
-     *               on it. There is no liked rule because places have no
-     *               swipes; the picker and this check read the same active rows
-     *               instead. The province rule is what ties a stop to the trip:
-     *               the generator only ever plans inside one province, so a
-     *               Batangas hotel on a Benguet trip is a nonsense the editor
-     *               must not create. Repeats inside one save are allowed — two
-     *               nights at one hotel, lunch twice at a favorite — while a
-     *               repeat of a stored stop is still a duplicate.
-     *   custom  the traveller's own booking. Always allowed — it is theirs,
-     *               not the catalogue's, and there is nothing to check it
-     *               against.
+     * The negative key is the mechanism, not a trick: `resolveNewStops()` judges
+     * exactly those rows, so the new stop passes through the same acceptance
+     * check the editor's own dialog rows do — including the liked rule. A
+     * separate `addDestination()` with its own arithmetic would be one more place
+     * for the two to disagree, and nothing on a stop records which one placed it.
      *
-     * @param  Collection<int, ItineraryItem>  $stored
-     * @param  array<int|string, array<string, mixed>>  $draft
-     * @param  Collection<int, Destination>  $destinations
-     * @param  Collection<int, \App\Models\Place>  $places
+     * @see recordInterest() for why "liked" is a precondition here rather than an accident.
      */
+    public function addDestinationTo(
+        Itinerary $itinerary,
+        Destination $destination,
+        ItineraryDay $day
+    ): ItineraryItem {
+        abort_unless($day->itinerary_id === $itinerary->id, 404);
+
+        $draft = [];
+
+        foreach ($itinerary->days()->with('items')->get() as $existingDay) {
+            foreach ($existingDay->items as $item) {
+                $draft[$item->id] = [
+                    'day_id' => $existingDay->id,
+                    'sort_order' => $item->sort_order,
+                    'item_type' => $item->item_type,
+                    'destination_id' => $item->destination_id,
+                    'place_id' => $item->place_id,
+                    'custom_name' => $item->custom_name,
+                    'custom_address' => $item->custom_address,
+                    'custom_latitude' => $item->custom_latitude,
+                    'custom_longitude' => $item->custom_longitude,
+                    'start_time' => $item->start_time,
+                    'end_time' => $item->end_time,
+                    'note' => $item->note,
+                ];
+            }
+        }
+
+        $draft[-1] = [
+            'day_id' => $day->id,
+            'sort_order' => $day->items()->count() + 1,
+            'item_type' => ItineraryItem::TYPE_ATTRACTION,
+            'destination_id' => $destination->id,
+        ];
+
+        $this->apply($itinerary, $draft);
+
+        $added = $itinerary->days()
+            ->with('items')
+            ->get()
+            ->flatMap(fn ($existing) => $existing->items)
+            ->first(fn ($item) => $item->destination_id === $destination->id);
+
+        if ($added === null) {
+            throw new RuntimeException(
+                $destination->name.' could not be added to this trip.'
+            );
+        }
+
+        return $added;
+    }
+
+    /**
+     * Record that the traveller picked this place.
+     *
+     * **ADDING A PLACE TO A TRIP IS A LIKE, AND THE ALTERNATIVE IS WORSE.** The
+     * editor refuses any destination the traveller has not liked, and the picker
+     * offers exactly the liked ones — that rule is what ties the editor to the
+     * deck. Someone who reaches a destination page from `/destinations` rather
+     * than from a swipe has never liked anything, so requiring a like first
+     * would block the very entry point this exists to add. Recording the interest
+     * instead makes the two surfaces agree: what is on the trip is what they
+     * chose, and "places you liked" stays a true list.
+     *
+     * Idempotent, and it never leaves a stale `passed` behind: a skip says "not
+     * this one", and choosing to plan it is the traveller changing their mind,
+     * which is the whole point of swipes becoming reversible.
+     */
+    public static function recordInterest(int $userId, Destination $destination): void
+    {
+        $existing = DestinationSwipe::query()
+            ->where('user_id', $userId)
+            ->where('destination_id', $destination->id)
+            ->first();
+
+        if ($existing === null) {
+            DestinationSwipe::create([
+                'user_id' => $userId,
+                'destination_id' => $destination->id,
+                'action' => 'liked',
+            ]);
+
+            return;
+        }
+
+        if ($existing->action !== 'liked') {
+            $existing->update(['action' => 'liked']);
+        }
+    }
     private function resolveNewStops(
         Itinerary $itinerary,
         User $user,

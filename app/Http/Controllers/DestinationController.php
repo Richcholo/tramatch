@@ -5,10 +5,12 @@ namespace App\Http\Controllers;
 use App\Domain\Destinations\DestinationCarousel;
 use App\Models\Destination;
 use App\Models\User;
+use App\Services\ItineraryEditor;
 use App\Services\RecommendationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
+use RuntimeException;
 
 class DestinationController extends Controller
 {
@@ -79,7 +81,7 @@ class DestinationController extends Controller
         return view('destinations.index', compact('destinations', 'locations'));
     }
 
-    public function show(Destination $destination): View
+    public function show(Request $request, Destination $destination): View
     {
         abort_unless($destination->is_active, 404);
 
@@ -90,6 +92,27 @@ class DestinationController extends Controller
                 ->with('user')
                 ->latest(),
         ]);
+
+        /*
+         * The trips this place can be added to, and nothing else.
+         *
+         * SAME PROVINCE, OR NOT OFFERED AT ALL. The generator only ever plans
+         * inside one province and the editor refuses a hotel from another one, so
+         * a Baguio destination offered against a Paoay trip would be a nonsense
+         * the UI invited and the server then had to refuse. Not offering it is
+         * the honest shape; the refusal still exists, because a hand-posted form
+         * is not a UI.
+         *
+         * AND NOT A TRIP ALREADY VISITING IT — a second copy of a place is a
+         * duplicate, and the editor says so by name.
+         */
+        $addableTrips = $request->user()?->itineraries()
+            ->where('area', $destination->province)
+            ->whereDoesntHave('days.items', fn ($query) => $query
+                ->where('destination_id', $destination->id))
+            ->with('days')
+            ->latest('id')
+            ->get() ?? collect();
 
         /*
          * The stage, with THIS destination centred.
@@ -116,6 +139,7 @@ return view('destinations.show', [
             'perDayHours' => $destination->normalisedDailyHours(),
             'daySlugs' => Destination::daySlugs(),
             'updatedOn' => $this->updatedOn($destination),
+                'addableTrips' => $addableTrips,
         ]);
     }
 
@@ -378,4 +402,71 @@ return view('destinations.show', [
 
         return $latest?->copy()->format('j M Y');
     }
+/**
+     * Add this destination to one of the traveller's trips.
+     *
+     * Closes the loop the plan names: this page referenced no itinerary at all,
+     * so someone who found a place by browsing had to go and find their trip
+     * again to do anything with it.
+     *
+     * Everything the editor form refuses is refused here too, and the refusals
+     * are the editor's own — this method owns no placement arithmetic and no
+     * acceptance rules, only the question of *which* trip and *which* day.
+     *
+     * @see ItineraryEditor::addDestinationTo() for why that is a shim over apply().
+ */
+public function addToTrip(
+    Request $request,
+    Destination $destination,
+    ItineraryEditor $editor
+): RedirectResponse {
+    abort_unless($destination->is_active, 404);
+
+    $validated = $request->validate([
+        'itinerary_id' => ['required', 'integer'],
+        'day_id' => ['required', 'integer'],
+    ]);
+
+    $user = $request->user();
+
+    $itinerary = $user->itineraries()->findOrFail($validated['itinerary_id']);
+
+    if ($itinerary->area !== $destination->province) {
+        return back()->withErrors([
+            'itinerary_id' => $itinerary->title.' is a trip to '
+                .$itinerary->area.', and this place is in '.$destination->province.'.',
+        ]);
+    }
+
+    $already = $itinerary->days()
+        ->with('items')
+        ->get()
+        ->flatMap(fn ($day) => $day->items)
+        ->contains(fn ($item) => $item->destination_id === $destination->id);
+
+    if ($already) {
+        return back()->withErrors([
+            'itinerary_id' => $destination->name.' is already on '.$itinerary->title.'.',
+        ]);
+    }
+
+    $day = $itinerary->days()->findOrFail($validated['day_id']);
+
+    // Recorded BEFORE the placement, because the editor's acceptance rule is
+    // "liked while swiping" and the destination page has just learned that this
+    // traveller chose this place. Recording it afterwards would be refused by the
+    // rule the rest of the app obeys.
+    ItineraryEditor::recordInterest($user->id, $destination);
+
+    try {
+        $editor->addDestinationTo($itinerary, $destination, $day);
+    } catch (RuntimeException $exception) {
+        return back()->withErrors(['itinerary_id' => $exception->getMessage()]);
+    }
+
+    return redirect()
+        ->route('itineraries.show', $itinerary)
+        ->with('status', $destination->name.' added to '.$itinerary->title.', day '.$day->day_number.'.');
+}
+
 }
