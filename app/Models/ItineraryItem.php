@@ -241,6 +241,33 @@ class ItineraryItem extends Model
     }
 
     /**
+     * DOES ANYONE VERIFY A PRICE FOR THIS STOP?
+     *
+     * A custom entry is always unpriced — it is the traveller's own, and the
+     * catalogue has no figure for it. A meal or a hotel is unpriced when its
+     * place row carries no verified band. Attractions always carry their
+     * curated estimate.
+     *
+     * **This is the one answer, shared by the header count and the PDF.** The
+     * page prints "3 stop(s) without a verified price — the total above is
+     * incomplete" and the PDF has to print the same claim about the same rows;
+     * two copies of this rule is how a document says a total is complete on
+     * the page the traveller read it from.
+     */
+    public function hasVerifiedPrice(): bool
+    {
+        if ($this->isCustom()) {
+            return false;
+        }
+
+        if ($this->place) {
+            return $this->place->hasVerifiedPrice();
+        }
+
+        return true;
+    }
+
+    /**
      * Whether this stop can be routed from and mapped.
      *
      * Both coordinates or neither: half a position is not a position, and a

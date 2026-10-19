@@ -155,6 +155,23 @@ class ItineraryPdf
             $days->count() === 1 ? 'day' : 'days'
         ), self::MUTED);
 
+        // THE TOTAL IS A SUM OF VERIFIED PRICES, AND SAYS SO WHEN IT ISN'T
+        // THE WHOLE STORY. An unpriced stop stores 0 because the column cannot
+        // hold null, so the cover's figure silently counts it as free. The web
+        // page says "3 stop(s) without a verified price — the total above is
+        // incomplete"; a printed trip is the artefact a traveller keeps and
+        // trusts, so it cannot be the one place that claim is missing.
+        $unpriced = $this->unpricedCount($days);
+
+        if ($unpriced > 0) {
+            $p->text('F1', 8.5, self::MARGIN, 96, sprintf(
+                '%d stop%s ha%s no published price — the total above counts the verified ones.',
+                $unpriced,
+                $unpriced === 1 ? '' : 's',
+                $unpriced === 1 ? 's' : 've'
+            ), self::MUTED);
+        }
+
         $p->text('F1', 9, self::MARGIN, 84, 'Budget: '.ucfirst((string) $itinerary->budget_level), self::MUTED);
 
         // A hairline above the footer, in gold at low presence.
@@ -284,6 +301,10 @@ class ItineraryPdf
             $p->text('F1', 9, $timeX, $y - 40, 'to '.$this->clock($item->end_time), self::MUTED);
         }
 
+        // THE KIND, on the same column as the time, because a day reads as a
+        // schedule only if you can tell at a glance which stop is dinner.
+        $p->text('F3', 7.5, $timeX, $y - 68, $this->fit($item->kindLabel(), 'F3', 7.5, 56), self::GOLD);
+
         // The same rule the page follows, and for the same reason. A printed trip
         // is the one artefact a traveller takes away and trusts, so the gap
         // between two stops must say whether the drive was measured or is the
@@ -301,16 +322,24 @@ class ItineraryPdf
         $textX = $x + 74;
         $textW = $cardW - 74 - $imageW - 16;
 
-        $name = $this->fit((string) ($destination->name ?? 'Stop'), 'F2', 12, $textW);
+        // EVERY STOP IS READ THROUGH ITS OWN READERS. A meal, a hotel and a
+        // traveller's own entry have no destination: this used to read
+        // `$destination->name ?? 'Stop'`, so half the itinerary printed the
+        // literal word "Stop" with no place, no price and no source — a
+        // document that looked complete and described a third of the trip.
+        $name = $this->fit($item->placeName(), 'F2', 12, $textW);
         $p->text('F2', 12, $textX, $y - 24, $name, self::CHARCOAL);
 
-        $place = $this->placeLine($destination);
+        $place = $this->stopPlaceLine($item);
         $p->text('F1', 8.5, $textX, $y - 38, $this->fit($place, 'F1', 8.5, $textW), self::MUTED);
 
         // The fee and the opening hours, side by side, because they are the two
-        // facts a traveller actually needs at this point in the plan.
+        // facts a traveller actually needs at this point in the plan. A PLACE
+        // prints its band WITH ITS UNIT — "per room, per night" beside
+        // "₱4,500" is the difference between a price and a rumour — and a stop
+        // nobody has priced says so instead of printing ₱0.
         $facts = array_filter([
-            $destination && $destination->estimated_cost ? 'Est. '.$this->money($destination->estimated_cost) : null,
+            $this->costLine($item),
             $destination ? $this->hoursLine($destination) : null,
         ]);
 
@@ -322,12 +351,89 @@ class ItineraryPdf
             $p->text('F3', 8, $textX, $y - 65, $this->fit((string) $item->note, 'F3', 8, $textW), self::MUTED);
         }
 
+        // WHERE THE PRICE CAME FROM. Every curated place in this app carries a
+        // source URL, and a printed trip is the artefact a traveller keeps — a
+        // price with no citation cannot be checked when it turns out to be
+        // wrong. Printed on its own line because a full URL is long.
+        $source = $this->sourceLine($item);
+
+        if ($source !== null) {
+            $p->text('F3', 6.5, $textX, $y - 74, $this->fit($source, 'F3', 6.5, $textW), self::MUTED);
+        }
+
         // THE IMAGE SLOT. A photograph when the owner has uploaded one, and a
         // typographic plate when they have not — which, for the whole catalogue
         // right now, is always.
         $this->imageSlot($x + $cardW - $imageW - 8, $y - $cardH + 8, $imageW, $cardH - 16, $destination);
 
         return $y - $cardH - 14;
+    }
+
+    /**
+     * WHERE A STOP IS, for the four stop shapes.
+     *
+     * A custom entry prints the address the traveller typed, because that is
+     * the only location this app holds for it.
+     */
+    private function stopPlaceLine(ItineraryItem $item): string
+    {
+        if ($item->isCustom()) {
+            return (string) ($item->custom_address ?: 'Your own stop');
+        }
+
+        if ($item->place) {
+            return $item->place->municipality.', '.$item->place->province;
+        }
+
+        if ($item->destination) {
+            return $this->placeLine($item->destination);
+        }
+
+        return '';
+    }
+
+    /**
+     * THE PRICE LINE, WHICH MAY BE THE ABSENCE OF A PRICE.
+     *
+     * `PHP 0` is not a free lunch: an unpriced stop stores 0 because the
+     * column cannot hold null, and printing that figure here would state a
+     * price nobody published. So a stop with no verified price says so, and a
+     * place prints the band's own unit rather than a bare number.
+     */
+    private function costLine(ItineraryItem $item): ?string
+    {
+        if (! $item->hasVerifiedPrice()) {
+            return 'No published price';
+        }
+
+        if ($item->place) {
+            return $item->place->priceLabel();
+        }
+
+        if ($item->destination && $item->destination->estimated_cost) {
+            return 'Est. '.$this->money($item->destination->estimated_cost);
+        }
+
+        return null;
+    }
+
+    /**
+     * THE CITATION, or null.
+     *
+     * Only where there is one to give: a curated place carries the URL its
+     * price and hours were read from. An attraction's hours are cited on the
+     * destination page and its fee is a curated estimate, so the line is for
+     * the places — the rows whose figures are somebody else's claim.
+     */
+    private function sourceLine(ItineraryItem $item): ?string
+    {
+        if (! $item->place) {
+            return null;
+        }
+
+        $url = trim((string) $item->place->source_url);
+
+        return $url === '' ? null : 'Source: '.$url;
     }
 
     private function imageSlot(float $x, float $y, float $w, float $h, $destination): void
@@ -387,6 +493,22 @@ class ItineraryPdf
 
         $p->text('F1', 9, $x, $y - 20, sprintf('Day %d total · %s', $day->day_number, $this->money($spent)), self::CHARCOAL);
 
+        // A DAY TOTAL THAT COUNTS AN UNPRICED STOP AT ZERO IS NOT A TOTAL.
+        // The same claim the cover and the page make, per day, because this is
+        // the line a traveller reads when deciding whether today is affordable.
+        $dayUnpriced = $day->items
+            ->reject(fn (ItineraryItem $item): bool => $item->hasVerifiedPrice())
+            ->count();
+
+        if ($dayUnpriced > 0) {
+            $p->text('F1', 8, $x, $y - 32, sprintf(
+                '%d stop%s here ha%s no published price — this day total counts the verified ones.',
+                $dayUnpriced,
+                $dayUnpriced === 1 ? '' : 's',
+                $dayUnpriced === 1 ? 's' : 've'
+            ), self::MUTED);
+        }
+
         $running = 0.0;
 
         foreach ($day->items->sortBy('sort_order') as $item) {
@@ -420,6 +542,14 @@ class ItineraryPdf
             ['Some places are ungated', 'Where a destination is marked as always open, that means no gate — not that a facility, guide or permit is unnecessary.'],
             ['Respect the sites you visit', 'Many of these are churches, ancestral homes and protected landscapes. Dress for the place and follow posted rules.'],
         ];
+
+        // A NOTE ONLY WHEN THERE IS SOMETHING IT HAS TO WARN ABOUT. Four
+        // standing notes is already a page a traveller skims; a fifth about
+        // missing prices on a trip where every price is published would be
+        // noise wearing a warning's clothes.
+        if ($this->unpricedCount($itinerary->days) > 0) {
+            $notes[] = ['Some prices are missing', 'Where a stop\'s price is absent, that is a place the catalogue has no verified figure for — not a place that is free. Every curated figure on this sheet carries the source it was read from.'];
+        }
 
         $y = $p->height() - 186;
         $colophonWidth = $p->width() - (self::MARGIN * 2) - 12;
@@ -463,6 +593,23 @@ class ItineraryPdf
             .$itinerary->days->count().' '.(($itinerary->days->count() === 1) ? 'day' : 'days').'.', self::MUTED);
         $p->textRight('F1', 9, $p->width() - self::MARGIN, 96,
             'Generated '.now()->format('j M Y, H:i'), self::MUTED);
+    }
+
+    /**
+     * HOW MANY STOPS HAVE NO VERIFIED PRICE, ANSWERED BY THE ITEM.
+     *
+     * The rule is `ItineraryItem::hasVerifiedPrice()` — the same one the web
+     * header counts with, so the sheet and the page cannot disagree about
+     * whether a total is complete. This only tallies: the days are already
+     * loaded, and asking the service would re-query the whole trip to produce
+     * a number this document is going to print next to the total.
+     */
+    private function unpricedCount(Collection $days): int
+    {
+        return $days
+            ->sum(fn (ItineraryDay $day) => $day->items
+                ->reject(fn (ItineraryItem $item): bool => $item->hasVerifiedPrice())
+                ->count());
     }
 
     // -- the logo ---------------------------------------------------------

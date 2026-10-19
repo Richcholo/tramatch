@@ -813,13 +813,11 @@ class ItineraryEditor
             ->get()
             ->pluck('items')
             ->flatten()
-            ->filter(function (ItineraryItem $item): bool {
-                if ($item->isCustom()) {
-                    return true;
-                }
-
-                return $item->place && ! $item->place->hasVerifiedPrice();
-            })
+            // `hasVerifiedPrice()` is the item's own answer, shared with the
+            // PDF. This used to be the only copy of the rule, which is exactly
+            // the shape of thing that drifts the moment a second surface
+            // needs the same verdict.
+            ->reject(fn (ItineraryItem $item): bool => $item->hasVerifiedPrice())
             ->count();
     }
 

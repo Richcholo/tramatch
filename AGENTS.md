@@ -1214,6 +1214,51 @@ exists but your code is wrong" is a fact nobody should learn.
   that structural rather than incidental — deleting it would not change the
   page, so keep it in the suite.
 
+### The PDF, and the four shapes of stop
+
+**THE SHEET WAS BUILT WHEN EVERY STOP WAS AN ATTRACTION, AND IT SHOWED.**
+`stop()` read `$destination->name ?? 'Stop'`, so a meal, a hotel and the
+traveller's own entry printed the literal word **"Stop"** — no name, no
+place, no price, no source — on a document that looked finished and
+described a third of the trip. Every stop is now read through its own
+readers (`placeName()`, `kind`, `place`, `custom_address`).
+
+- **A PRICE PRINTS ITS UNIT, OR ITS ABSENCE.** `costLine()` never prints
+  `PHP 0`: an unpriced stop stores 0 because the column cannot hold null, and
+  that figure would state a price nobody published. A place prints
+  `Place::priceLabel()` — "₱4,500 per room, per night", "₱750–₱950 a head,
+  per meal" — because a bare number beside nothing is a rumour.
+- **`ItineraryItem::hasVerifiedPrice()` IS THE ONE RULE** for what counts as
+  priced. `ItineraryEditor::countUnpricedStops()` now delegates to it, and
+  the PDF tallies with it, so the page and the sheet cannot disagree about
+  whether a total is complete. It used to be a closure inside the editor —
+  the shape of thing that drifts the moment a second surface needs the same
+  verdict.
+- **THE TOTAL IS QUALIFIED WHEREVER IT APPEARS**: the cover, the day footer
+  ("1 stop here has no published price — this day total counts the verified
+  ones") and a colophon note **added only when the trip actually has
+  unpriced stops** — a fifth standing warning on a fully-priced trip would be
+  noise wearing a warning's clothes.
+- **EVERY CURATED FIGURE IS CITED.** A place stop prints `Source: <url>` on
+  its own line; a price with no source cannot be checked when it turns out to
+  be wrong. Attractions do not get the line: their fee is a curated estimate
+  and their hours are cited on the destination page.
+- **AN UNRESOLVED LEG WAS ALREADY LABELLED** ("+45 min gap (drive not
+  measured)", versus "9.9 km · 28 min by road") and two tests now hold both
+  halves, so a refactor cannot quietly merge them.
+- **A COPY STRING MUST MEAN ONE THING IN THE DOCUMENT.** The colophon note
+  originally *quoted* "No published price", which made a presence assertion
+  pass on the colophon's prose while the stop's own line printed nothing —
+  the `"0% match"`-inside-`"100% match"` trap in prose. The copy no longer
+  contains the phrase, and the test asserts a **count of 1**. Asserting on
+  strings that appear in two places is how a guard reports green over a
+  missing feature.
+
+`tests/Feature/ItineraryPdfStopsTest.php` (11 tests, nine falsification
+checks across five cases). **Nothing renders a PDF in this repo** — the
+composition, the spacing and whether the new lines collide on the card are
+unverified by anything but the bytes. Open the file.
+
 ### Bulk edit in admin, and why it is page-scoped and javaless
 
 `Admin\DestinationController::bulkUpdate()` (POST
