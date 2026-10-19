@@ -102,6 +102,22 @@
                         </p>
                     @endif
 
+                    {{-- WHAT THE AVERAGE MATCH NUMBER IS. A bare "62.3% average
+                         match" is the black box this sentence opens; the stops'
+                         own scores are NOT stored, so it explains the SCALE and
+                         refuses to invent a per-stop breakdown.
+
+                         OWNER ONLY, and the guard is load-bearing for privacy
+                         rather than tidiness: the percentage itself stays
+                         visible to a share guest (it is already on this shared
+                         hero), but the sentence describes the traveller's own
+                         interest weights, which are nobody else's to read. --}}
+                    @auth
+                        <p class="mt-2 max-w-2xl text-sm leading-6 text-white/60">
+                            {{ app(\App\Domain\Matches\MatchScore::class)->sentenceForAverage($itinerary) }}
+                        </p>
+                    @endauth
+
                     {{-- OWNER ONLY, and the guard is load-bearing: this partial
                          renders for guests on the public share link, and the
                          shared page contributes ZERO forms (ItineraryShareTest

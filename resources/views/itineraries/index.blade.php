@@ -38,6 +38,13 @@
                             · {{ $itinerary->match_score }}% average match
                             · ₱{{ number_format($itinerary->total_estimated_cost, 2) }}
                         </p>
+
+                        {{-- The same explanation the trip's own hero carries,
+                             from the same presenter: a percentage with no
+                             stated scale is a number nobody can act on. --}}
+                        <p class="mt-2 max-w-2xl text-sm leading-6 text-benguet-charcoal/55">
+                            {{ app(\App\Domain\Matches\MatchScore::class)->sentenceForAverage($itinerary) }}
+                        </p>
                     </div>
 
                     <span class="tm-gold-badge">

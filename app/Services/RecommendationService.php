@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Domain\Matches\MatchScore;
 use App\Models\Destination;
 use App\Models\DestinationSwipe;
 use App\Models\User;
@@ -9,6 +10,17 @@ use Illuminate\Support\Collection;
 
 class RecommendationService
 {
+    /**
+     * Why a score is the number it is.
+     *
+     * Injected rather than resolved per row so the sentence has one
+     * implementation: `recommend()` and `candidates()` both set
+     * `recommendation_reason` from it, and a second copy of "30 is the floor"
+     * on one page and not the other is the drift this repo keeps paying for.
+     */
+    public function __construct(private readonly MatchScore $matchScore)
+    {
+    }
     /**
      * The traveller's shortlist: the destinations they actually liked.
      *
@@ -62,12 +74,16 @@ class RecommendationService
                 Destination $destination
             ) use (
                 $weights,
-                $totalWeight
+                $totalWeight,
+                $profile
             ) {
                 $this->score($destination, $weights, $totalWeight);
 
-                $destination->recommendation_reason =
-                    'You liked this destination during discovery and it matches your travel profile.';
+                // Was a fixed sentence that never mentioned the score or the
+                // interests behind it — a "Why it matches" block with nothing
+                // in it. The number it now explains is the number on the card.
+                $destination->recommendation_reason = $this->matchScore
+                    ->explain($destination, $profile)['reason'];
 
                 return $destination;
             })
@@ -149,7 +165,7 @@ class RecommendationService
                 fn ($query) => $query->where('province', $area)
             )
             ->get()
-            ->map(function (Destination $destination) use ($weights, $totalWeight, $likedIds) {
+            ->map(function (Destination $destination) use ($weights, $totalWeight, $likedIds, $profile) {
                 $this->score($destination, $weights, $totalWeight);
 
                 $destination->is_liked = in_array(
@@ -157,6 +173,13 @@ class RecommendationService
                     $likedIds,
                     true
                 );
+
+                // The generation form prints a bare "% match" beside every
+                // candidate, so the floor sentence has to travel with the row:
+                // a 30% with no tag chips beside it is the number with the
+                // least explanation on the page.
+                $destination->match_explanation = $this->matchScore
+                    ->explain($destination, $profile);
 
                 return $destination;
             })

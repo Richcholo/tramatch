@@ -1168,6 +1168,41 @@ exists but your code is wrong" is a fact nobody should learn.
   that structural rather than incidental — deleting it would not change the
   page, so keep it in the suite.
 
+### Why a match score is the number it is
+
+`App\Domain\Matches\MatchScore` is the one implementation of "why this
+percentage", injected into `RecommendationService` (never resolved per row).
+It **explains; it never recomputes** — the score stays where it is computed
+(`RecommendationService::score()`), and the points credited to interests are
+read back off the stored number (`score - FLOOR`), so rounding can never make
+the sentence disagree with the figure printed beside it.
+
+- **THE FLOOR IS THE FEATURE.** `score = preference * 0.7 + 30`, so **30 of
+  every 100 points is a fixed grant** and a place sharing nothing scores 30.
+  Printed bare, "30% match" reads as a bad score to anyone who has not been
+  told where the scale starts; the sentence says so in as many words.
+  `MatchScore::FLOOR` and that `+ 30` are **two constants in two classes** —
+  `test_the_floor_the_explanation_quotes_is_the_floor_the_score_uses` is the
+  only thing holding them together, and if one is retuned without the other,
+  every sentence on every page describes a scale the numbers do not live on.
+- **THE TRIP'S AVERAGE EXPLAINS ITS SHAPE AND INVENTS NOTHING.** Per-stop
+  scores are NOT stored (they depend on the traveller's interests as they
+  stand now), so `sentenceForAverage()` gives the stop count and the scale
+  and refuses a fabricated breakdown.
+- **A GUEST GETS THE NUMBER AND NOT THE TRAVELLER.** The hero is the shared
+  partial, so the average sentence is `@auth`-guarded — a privacy boundary,
+  not styling: the percentage was already visible to a share guest, but "5 of
+  your 26 interest points" is nobody else's to read.
+- **THE GENERATION FORM SPEAKS ONLY WHERE NOTHING ELSE DOES.** A candidate
+  carrying shared interests shows those interests as chips immediately below
+  its score, so the sentence is printed **only for the chip-less row** — the
+  bare 30% that had no visible reason beside it. A sentence on every row
+  would be noise.
+- **`recommendation_reason` USED TO BE A CONSTANT.** It read "You liked this
+  destination during discovery and it matches your travel profile" — a
+  "Why it matches" block with nothing in it, on a card whose headline is a
+  percentage. The service now fills it from the presenter.
+
 ### The peso budget check
 
 `itineraries.budget_amount` (nullable decimal, migration

@@ -196,6 +196,21 @@
                                         · {{ $destination->match_score }}% match
                                     </span>
 
+                                    {{-- WHY THAT NUMBER, ONLY WHERE IT IS UNEXPLAINED.
+                                         A candidate carrying shared interests shows
+                                         its tag chips immediately below, so the
+                                         score has visible reasons. A candidate
+                                         with NO chips is the one row where a bare
+                                         "30% match" stands alone — and 30 is the
+                                         floor every place starts on, not a verdict.
+                                         The sentence comes from the same presenter
+                                         the recommendations page uses. --}}
+                                    @if (($destination->matched_tags ?? collect())->isEmpty())
+                                        <span class="mt-1 block text-xs text-benguet-charcoal/55">
+                                            {{ $destination->match_explanation['reason'] ?? '' }}
+                                        </span>
+                                    @endif
+
                                     <span class="mt-2 flex flex-wrap gap-2">
                                         @foreach ($destination->matched_tags as $tag)
                                             <span class="rounded-full bg-boracay-light px-2 py-1 text-xs font-semibold text-boracay-dark">
