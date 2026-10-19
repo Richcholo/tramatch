@@ -188,6 +188,11 @@ Route::middleware('auth')->group(function () {
         'regenerateShareLink',
     ])->name('itineraries.share.regenerate');
 
+    Route::get('/itineraries/{itinerary}/calendar', [
+        ItineraryController::class,
+        'calendar',
+    ])->name('itineraries.calendar');
+
     Route::patch('/itineraries/{itinerary}/budget', [
         ItineraryController::class,
         'updateBudget',

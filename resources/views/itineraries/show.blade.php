@@ -135,6 +135,26 @@
                         discarded by the HTML parser and take every stop field
                         with it.
                     --}}
+                    {{--
+                        THE CALENDAR FILE, ONLY WHEN THERE ARE DATES.
+                        An undated trip has no day to put anything on, so the
+                        control is not rendered at all — a button whose only
+                        possible outcome is a refusal is worse than no button,
+                        and `calendar()` still explains itself if the URL is
+                        typed by hand.
+                    --}}
+                    @if ($itinerary->start_date)
+                        <a
+                            href="{{ route('itineraries.calendar', $itinerary) }}"
+                            class="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-boracay px-5 py-3 text-sm font-semibold text-volcanic-teal transition hover:bg-boracay hover:text-white"
+                        >
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3M4 11h16M5 5h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V6a1 1 0 011-1z" />
+                            </svg>
+                            Add to calendar
+                        </a>
+                    @endif
+
                     <a
                         href="{{ route('itineraries.download', $itinerary) }}"
                         class="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-boracay px-5 py-3 text-sm font-semibold text-volcanic-teal transition hover:bg-boracay hover:text-white"

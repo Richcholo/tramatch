@@ -252,6 +252,60 @@ class ItineraryItem extends Model
     }
 
     /**
+     * A driving-directions link for the drive INTO this stop, or null.
+     *
+     * **A DIRECTION IS A DIFFERENT KIND OF CLAIM FROM A MEASUREMENT.** The
+     * driving lines on the map are drawn from OSRM; this hands the traveller
+     * to a map app's own routing, which is a live estimate under live
+     * traffic. So the label says "Directions" and the title says it is a
+     * driving route from the previous stop — it is not a promise about how
+     * long the drive takes, and it must never be printed beside a measured
+     * leg as though it were the same number.
+     *
+     * Origin is the previous stop **when it has a pin**; the first stop of a
+     * day omits the origin so the map app asks where the traveller actually
+     * is, which is the question only they can answer. A stop without both
+     * coordinates returns null and the view renders nothing: a link to a
+     * search box is not directions, and the stop already says it cannot be
+     * routed to.
+     */
+    public function directionsUrl(?self $previous = null): ?string
+    {
+        if (! $this->hasKnownLocation()) {
+            return null;
+        }
+
+        $destination = $this->coordinate($this->latitude()).','.$this->coordinate($this->longitude());
+
+        $query = [
+            'api' => 1,
+            'destination' => $destination,
+            'travelmode' => 'driving',
+        ];
+
+        if ($previous && $previous->hasKnownLocation()) {
+            $query = [
+                'api' => 1,
+                'origin' => $this->coordinate($previous->latitude()).','.$this->coordinate($previous->longitude()),
+                'destination' => $destination,
+                'travelmode' => 'driving',
+            ];
+        }
+
+        return 'https://www.google.com/maps/dir/?'.http_build_query($query);
+    }
+
+    /**
+     * Six decimals, always — the convention every map URL uses, and it stops
+     * `http_build_query` quietly printing 120.5960 as `120.596`, which reads
+     * as a precision problem in a link a traveller is about to trust.
+     */
+    private function coordinate(float $value): string
+    {
+        return number_format($value, 6, '.', '');
+    }
+
+    /**
      * The leg into this stop, in words.
      *
      * Null when the route is unresolved, which the UI must render as "not

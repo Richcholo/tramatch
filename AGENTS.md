@@ -1214,6 +1214,56 @@ exists but your code is wrong" is a fact nobody should learn.
   that structural rather than incidental — deleting it would not change the
   page, so keep it in the suite.
 
+### The trip in a calendar, and a link to the drive
+
+`App\Services\ItineraryCalendar` writes the `.ics`; `ItineraryItem::directionsUrl()`
+builds the per-stop link. Both are promises about somebody's day, so both
+have to carry the awkward truths rather than smooth them over.
+
+- **AN UNTIMED STOP IS NOT INVENTED.** It becomes an **all-day,
+  `TRANSP:TRANSPARENT`, `STATUS:TENTATIVE`** event: it occupies the day
+  without claiming the traveller is there all day, and without putting 08:00
+  into a calendar that never had one. The file's own `X-WR-CALDESC` counts how
+  many stops are in that state.
+- **TIMES ARE UTC (`...Z`), NOT FLOATING LOCAL TIME.** A floating time is
+  read in the VIEWER's timezone, which quietly moves a Baguio morning for
+  anyone planning the trip from abroad. 08:00 Manila is `20261103T000000Z`,
+  and `test_times_are_written_in_utc_not_as_floating_local_time` pins the
+  conversion rather than trusting it.
+- **`$day->date` CASTS TO A MUTABLE CARBON**, so `build()` wraps it in
+  `CarbonImmutable::instance()` before `setTime()` touches it. Same lesson as
+  `Itinerary::asDate()`: a mutable cast handed to code that calls `modify()`
+  gives two names for one object. `event()`/`instant()` take `CarbonInterface`
+  so neither can be handed the other by accident.
+- **AN UNDATED TRIP IS NOT A CALENDAR FILE.** `build()` returns null when no
+  DAY carries a date and the action redirects back with the reason; the link
+  is not even rendered in that state, because a button whose only possible
+  outcome is a refusal is worse than no button.
+- **CRLF, 75-OCTET FOLDING AND TEXT ESCAPING ARE THE THREE THINGS A
+  CALENDAR WRITER GETS WRONG.** `fold()` counts **octets**, never characters
+  — a name like `Pinto` (6 characters, 7 bytes) is exactly where a
+  character-counting fold corrupts the file for every reader. Escaping
+  `\` `;` `,` and newlines is what keeps "Le Chef, Baguio" one property
+  instead of a `SUMMARY` plus a property called `Baguio`.
+- **THE UID IS DERIVED FROM THE STOP'S ID**, so re-downloading UPDATES the
+  traveller's events instead of duplicating them.
+- **A DIRECTION IS NOT A MEASUREMENT.** The link hands over to a map app's
+  live estimate under live traffic; it must never read like the measured
+  OSRM leg printed beside it, so the title says "driving directions from the
+  previous stop". Origin is the previous stop **when it has a pin**; the
+  first stop of a day omits it so the map asks where the traveller actually
+  is. A stop without both coordinates gets **no link at all** — a link to a
+  search box is not directions. Coordinates are formatted to six decimals so
+  `http_build_query` cannot print `120.5960` as `120.596`.
+- **`downloadFilename()` IS ONE FORMATTER FOR BOTH DOWNLOADS.** The PDF's
+  private helper was generalised rather than copied, so the calendar file
+  next to the PDF in the same folder follows the same convention.
+
+`tests/Feature/ItineraryCalendarTest.php` pins all of it (17 tests, seven
+falsifications — including one that had to be rebuilt in PHP after its
+PowerShell needle never matched, because a falsification that does not apply
+is not a falsification).
+
 ### Why a match score is the number it is
 
 `App\Domain\Matches\MatchScore` is the one implementation of "why this

@@ -10,6 +10,7 @@ use App\Models\DestinationSwipe;
 use App\Models\Itinerary;
 use App\Models\ItineraryDay;
 use App\Models\Place;
+use App\Services\ItineraryCalendar;
 use App\Services\ItineraryEditor;
 use App\Services\ItineraryGenerator;
 use App\Services\Pdf\ItineraryPdf;
@@ -353,7 +354,7 @@ class ItineraryController extends Controller
              * in the header is what stops Safari from rendering it in a tab and
              * the traveller wondering why they cannot find their place.
              */
-            'Content-Disposition' => 'attachment; filename="'.$this->pdfFilename($itinerary).'"',
+            'Content-Disposition' => 'attachment; filename="'.$this->downloadFilename($itinerary, 'pdf').'"',
             'Content-Length' => (string) strlen($document),
         ]);
     }
@@ -366,11 +367,23 @@ class ItineraryController extends Controller
      * inject a second header. A route id is in the name too, because two trips
      * can easily share a title and a downloads folder cannot tell them apart.
      */
-    private function pdfFilename(Itinerary $itinerary): string
+    /**
+     * A filename that is safe as a header value AND recognisable in a folder.
+     *
+     * The title is free text, so it is slugged rather than quoted: a title
+     * carrying a quote or a newline would let the traveller's own itinerary name
+     * inject a second header. A route id is in the name too, because two trips
+     * can easily share a title and a downloads folder cannot tell them apart.
+     *
+     * ONE formatter for both downloads (the PDF and the calendar), because two
+     * copies of "slug it, cap it, add the id" is how the calendar ends up with
+     * a different convention from the document next to it in the same folder.
+     */
+    private function downloadFilename(Itinerary $itinerary, string $extension): string
     {
         $slug = Str::slug((string) $itinerary->title) ?: 'itinerary';
 
-        return Str::limit($slug, 60, '').'-'.$itinerary->id.'.pdf';
+        return Str::limit($slug, 60, '').'-'.$itinerary->id.'.'.$extension;
     }
 
     /**
@@ -528,6 +541,37 @@ class ItineraryController extends Controller
             ->with('status', $amount === null
                 ? 'Budget cleared. This trip is no longer measured against a peso ceiling.'
                 : 'Budget saved.');
+    }
+
+    /**
+     * THE TRIP AS A CALENDAR FILE.
+     *
+     * Owner-only, like the PDF: a calendar entry is a personal artefact and
+     * the share link is for reading, not for taking away.
+     *
+     * An UNDATED trip returns null from the writer and is redirected back
+     * with the reason, rather than downloading a file of undated events that
+     * every calendar client would file somewhere arbitrary. The link is not
+     * even rendered in that state — a control that only ever fails is worse
+     * than no control, but the reason is still here for a hand-made request.
+     */
+    public function calendar(Itinerary $itinerary, ItineraryCalendar $calendar): Response|RedirectResponse
+    {
+        $this->ensureOwner($itinerary);
+
+        $document = $calendar->build($itinerary);
+
+        if ($document === null) {
+            return redirect()
+                ->route('itineraries.show', $itinerary)
+                ->with('status', 'This trip has no dates, so there is nothing to put in a calendar.');
+        }
+
+        return response($document, 200, [
+            'Content-Type' => 'text/calendar; charset=utf-8',
+            'Content-Disposition' => 'attachment; filename="'.$this->downloadFilename($itinerary, 'ics').'"',
+            'Content-Length' => (string) strlen($document),
+        ]);
     }
 
     /**
