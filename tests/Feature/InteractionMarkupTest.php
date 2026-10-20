@@ -399,6 +399,387 @@ class InteractionMarkupTest extends TestCase
         }
     }
 
+    /**
+     * A MISSING CLOSING BRACE SWALLOWS A WHOLE BLOCK, AND NOTHING FAILS.
+     *
+     * CSS nesting is legal, so a rule written inside another rule is valid CSS:
+     * it compiles, it bundles, every other assertion stays green. The selector
+     * simply comes out wrong -- `.font-script .tm-place-nav__input` instead of
+     * `.tm-place-nav__input` -- and matches nothing, because `.font-script`
+     * exists on exactly one decorative span on the welcome page.
+     *
+     * That is how the whole place strip shipped unstyled: the prev/next links,
+     * the Quickhop label, the input and its placeholder, and the Go button, all
+     * falling back to inherited colour on the destination page's dark ground.
+     * The report was "gray text against a dark background, tough to read". The
+     * braces balanced, the build succeeded, and no assertion in the suite read
+     * the stylesheet's structure -- so the defect was entirely in computed
+     * styling, which this repo has learned twice is the thing nothing measures.
+     *
+     * At-rules are exempt because they are SUPPOSED to contain rules: @media,
+     * @layer, @supports and @keyframes. What must not happen is a plain rule
+     * sitting anywhere below another plain rule.
+     */
+    #[Test]
+    public function no_plain_rule_is_swallowed_inside_another_plain_rule(): void
+    {
+        $rules = $this->ruleNesting();
+
+        $swallowed = array_values(array_filter(
+            $rules,
+            static fn (array $rule) => $rule['outer'] !== null
+        ));
+
+        $described = array_map(
+            static fn (array $rule) => $rule['outer']
+                .' contains '.$rule['selector']
+                .' (line '.$rule['line'].')',
+            $swallowed
+        );
+
+        $this->assertSame(
+            [],
+            $swallowed,
+            'A closing brace is missing somewhere in app.css, so these rules are nested '
+            .'inside another rule and will never match. Swallowed: '.implode('; ', $described)
+        );
+
+        /*
+         * The specific block that shipped this way. The general assertion
+         * above catches any future swallowing, but only this half says that
+         * the Quickhop form still HAS rules at all -- deleting them would
+         * leave the stylesheet flat and unswallowed and perfectly unstyled.
+         */
+        foreach ([
+            '.tm-place-nav__link',
+            '.tm-place-nav__name',
+            '.tm-place-nav__label',
+            '.tm-place-nav__input',
+            '.tm-place-nav__go',
+        ] as $selector) {
+            $declared = null;
+
+            foreach ($rules as $rule) {
+                if ($rule['selector'] === $selector) {
+                    $declared = $rule;
+                    break;
+                }
+            }
+
+            $this->assertNotNull(
+                $declared,
+                'app.css declares no `'.$selector.'` rule, so the place strip renders '
+                .'unstyled on the destination page'
+            );
+
+            $this->assertNull(
+                $declared['outer'],
+                '`'.$selector.'` is nested inside `'.$declared['outer'].'`, so the compiled '
+                .'selector asks for it beneath an element that never wraps the strip'
+            );
+        }
+    }
+
+    /**
+     * Every rule in app.css with its line, and the plain rule that contains it
+     * when there is one.
+     *
+     * Comments are BLANKED rather than deleted -- `stylesheet()` deletes them,
+     * which collapses the line count and would send whoever reads a failure to
+     * the wrong rule. The replaced text keeps every newline, so line numbers
+     * still point at the real file.
+     *
+     * Braces inside CSS strings would confuse this scanner; app.css carries
+     * none, and the scan reports a balanced depth of zero when it is reading
+     * the file correctly.
+     */
+    protected function ruleNesting(): array
+    {
+        $path = resource_path('css/app.css');
+
+        $this->assertFileExists($path);
+
+        $css = preg_replace_callback(
+            '#/\*.*?\*/#s',
+            static fn (array $comment) => preg_replace('/[^\n]/', ' ', $comment[0]),
+            (string) file_get_contents($path)
+        );
+
+        $rules = [];
+        $stack = [];
+        $pending = '';
+        $line = 1;
+
+        for ($i = 0, $length = strlen($css); $i < $length; $i++) {
+            $character = $css[$i];
+
+            if ($character === "\n") {
+                $line++;
+                continue;
+            }
+
+            if ($character === '{') {
+                $selector = trim(preg_replace('/\s+/', ' ', $pending));
+                $pending = '';
+
+                $outer = null;
+
+                foreach ($stack as $frame) {
+                    if ($frame['plain']) {
+                        $outer = $frame['selector'];
+                        break;
+                    }
+                }
+
+                $rules[] = [
+                    'line' => $line,
+                    'selector' => $selector,
+                    'outer' => $outer,
+                ];
+
+                $stack[] = [
+                    'selector' => $selector,
+                    'plain' => ! str_starts_with($selector, '@'),
+                ];
+
+                continue;
+            }
+
+            if ($character === '}') {
+                array_pop($stack);
+                continue;
+            }
+
+            if ($character === ';') {
+                $pending = '';
+                continue;
+            }
+
+            $pending .= $character;
+        }
+
+        $this->assertSame(
+            0,
+            count($stack),
+            'app.css has unbalanced braces, so this scan is reading the file wrong '
+            .'and would report nonsense'
+        );
+
+        return $rules;
+    }
+
+    /**
+     * THE STRIP'S COLOURS, MEASURED AGAINST THE GROUND THEY SIT ON.
+     *
+     * "Gray text against a dark background, tough to read" was the report, and
+     * the root cause was the swallowed block above: none of these rules matched,
+     * so everything fell back to inherited colour. Restoring them restores the
+     * INTENDED colours -- which is why this test measures those rather than
+     * asserting they exist. Three of the eight controls still failed AA once
+     * restored, which is a separate defect the structural guard cannot see.
+     *
+     * Translucent values are BLENDED before measuring: 40% white over the
+     * input's translucent fill is not 40% white, and comparing the raw RGBA
+     * against the background is not what a reader sees.
+     *
+     * Nothing else in this repository measures contrast, so this is the only
+     * thing that would notice a palette change pushing these back under AA.
+     */
+    #[Test]
+    public function the_place_strips_controls_read_at_wcag_aa_on_the_teal_ground(): void
+    {
+        $ground = $this->resolveColour('var(--color-volcanic-teal)');
+        $ground = array_slice($ground, 0, 3);
+
+        $inputFill = $this->blendOnto(
+            $this->resolveColour($this->declarationOf($this->ruleBody('.tm-place-nav__input'), 'background-color')),
+            $ground
+        );
+
+        $cases = [
+            ['Quickhop label', $this->resolveColour($this->declarationOf($this->ruleBody('.tm-place-nav__label'), 'color')), $ground, '10px bold'],
+            ['Quickhop input text', $this->resolveColour($this->declarationOf($this->ruleBody('.tm-place-nav__input'), 'color')), $inputFill, '14px'],
+            ['Quickhop placeholder', $this->resolveColour($this->declarationOf($this->ruleBody('.tm-place-nav__input::placeholder'), 'color')), $inputFill, '14px'],
+            ['Go button', $this->resolveColour($this->declarationOf($this->ruleBody('.tm-place-nav__go'), 'color')), $this->resolveColour($this->declarationOf($this->ruleBody('.tm-place-nav__go'), 'background-color')), '14px bold'],
+            ['Go button, hovered', $this->resolveColour($this->declarationOf($this->ruleBody('.tm-place-nav__go:hover'), 'color')), $this->resolveColour($this->declarationOf($this->ruleBody('.tm-place-nav__go:hover'), 'background-color')), '14px bold'],
+            ['Previous / next link', $this->resolveColour($this->declarationOf($this->ruleBody('.tm-place-nav__link'), 'color')), $ground, '16px'],
+            ['Catalogue position', $this->resolveColour($this->declarationOf($this->ruleBody('.tm-place-nav__position'), 'color')), $ground, '11px bold'],
+            ['"Last place" end label', $this->resolveColour($this->declarationOf($this->ruleBody('.tm-place-nav__empty'), 'color')), $ground, '12px'],
+        ];
+
+        foreach ($cases as [$label, $foreground, $background, $size]) {
+            $ratio = $this->contrastRatio($foreground, $background);
+
+            /*
+             * WCAG "large text" starts at 18.66px bold / 24px regular, and
+             * nothing in this strip reaches it -- so 4.5:1 applies to all of
+             * these, including the 10px label.
+             */
+            $this->assertGreaterThanOrEqual(
+                4.5,
+                $ratio,
+                $label.' reads at '.round($ratio, 2).':1 on the destination page ('
+                .$size.', needs 4.5:1). Someone reported this strip as hard to read; '
+                .'do not take it back under AA.'
+            );
+        }
+    }
+
+    /** The declarations inside one rule. No nesting, which the test above pins. */
+    protected function ruleBody(string $selector): string
+    {
+        $pattern = '#'.preg_quote($selector, '#').'\s*\{([^{}]*)\}#';
+
+        $this->assertMatchesRegularExpression(
+            $pattern,
+            $this->stylesheet(),
+            'app.css declares no `'.$selector.'` rule, so this control has no styling to measure'
+        );
+
+        preg_match($pattern, $this->stylesheet(), $matches);
+
+        return (string) $matches[1];
+    }
+
+    protected function declarationOf(string $body, string $property): string
+    {
+        /*
+         * The lookbehind is load-bearing: `color` also occurs inside
+         * `background-color`, and a bare `color:` pattern matches there first
+         * and returns the FILL as if it were the text. Comparing a fill with
+         * itself then reports ~1.2:1 and blames the text colour.
+         */
+        $pattern = '#(?<![-\w])'.preg_quote($property, '#').'\s*:\s*([^;]+);#';
+
+        $this->assertMatchesRegularExpression(
+            $pattern,
+            $body,
+            'the rule carries no `'.$property.'` declaration, so there is nothing to measure'
+        );
+
+        preg_match($pattern, $body, $matches);
+
+        return trim($matches[1]);
+    }
+
+    /**
+     * A declaration to [red, green, blue, alpha].
+     *
+     * Rejects anything it does not recognise rather than guessing: a value
+     * this scanner cannot read must fail loudly, because silently returning
+     * black would make every colour here "pass" against a dark ground.
+     *
+     * @return array{0: int, 1: int, 2: int, 3: float}
+     */
+    protected function resolveColour(string $value): array
+    {
+        $value = trim($value);
+
+        if (preg_match('/^var\(--color-([a-z-]+)\)$/', $value, $matches)) {
+            $hex = $this->paletteTokens()[$matches[1]] ?? null;
+
+            $this->assertNotNull($hex, 'the palette defines no token `--color-'.$matches[1].'`');
+
+            return [...$this->hexToRgb($hex), 1.0];
+        }
+
+        if (preg_match('/^rgb\(\s*(\d+)\s+(\d+)\s+(\d+)\s*\/\s*([0-9.]+)\s*\)$/', $value, $matches)) {
+            return [(int) $matches[1], (int) $matches[2], (int) $matches[3], (float) $matches[4]];
+        }
+
+        if (preg_match('/^rgb\(\s*(\d+)\s+(\d+)\s+(\d+)\s*\)$/', $value, $matches)) {
+            return [(int) $matches[1], (int) $matches[2], (int) $matches[3], 1.0];
+        }
+
+        if (preg_match('/^#([0-9a-f]{6})$/i', $value, $matches)) {
+            return [...$this->hexToRgb('#'.$matches[1]), 1.0];
+        }
+
+        if ($value === 'white') {
+            return [255, 255, 255, 1.0];
+        }
+
+        $this->fail('the colour scanner cannot read `'.$value.'`, so this measurement is worthless');
+    }
+
+    /** @return array<string, string> token name => uppercase hex */
+    protected function paletteTokens(): array
+    {
+        $tokens = [];
+
+        preg_match_all(
+            '/--color-([a-z-]+):\s*(#[0-9A-Fa-f]{6})/',
+            $this->stylesheet(),
+            $matches,
+            PREG_SET_ORDER
+        );
+
+        foreach ($matches as $match) {
+            $tokens[$match[1]] = strtoupper($match[2]);
+        }
+
+        $this->assertNotEmpty($tokens, 'no palette tokens were read from app.css');
+
+        return $tokens;
+    }
+
+    protected function hexToRgb(string $hex): array
+    {
+        return [
+            (int) hexdec(substr($hex, 1, 2)),
+            (int) hexdec(substr($hex, 3, 2)),
+            (int) hexdec(substr($hex, 5, 2)),
+        ];
+    }
+
+    /**
+     * Blend a possibly-translucent colour over an opaque one, the way the
+     * browser composites it before the eye ever measures the pair.
+     *
+     * @param  array  $over  [r, g, b, alpha]
+     * @param  array  $onto  [r, g, b]
+     * @return array{0: int, 1: int, 2: int}
+     */
+    protected function blendOnto(array $over, array $onto): array
+    {
+        return [
+            (int) round($over[0] * $over[3] + $onto[0] * (1 - $over[3])),
+            (int) round($over[1] * $over[3] + $onto[1] * (1 - $over[3])),
+            (int) round($over[2] * $over[3] + $onto[2] * (1 - $over[3])),
+        ];
+    }
+
+    protected function contrastRatio($foreground, array $background): float
+    {
+        $fg = array_slice($foreground, 0, 3);
+
+        if (count($foreground) === 4 && $foreground[3] < 1.0) {
+            $fg = $this->blendOnto($foreground, $background);
+        }
+
+        $light = $this->relativeLuminance($fg);
+        $dark = $this->relativeLuminance($background);
+
+        [$high, $low] = $light >= $dark ? [$light, $dark] : [$dark, $light];
+
+        return ($high + 0.05) / ($low + 0.05);
+    }
+
+    protected function relativeLuminance(array $rgb): float
+    {
+        $channel = static function (int $value): float {
+            $normalised = $value / 255;
+
+            return $normalised <= 0.04045
+                ? $normalised / 12.92
+                : pow(($normalised + 0.055) / 1.055, 2.4);
+        };
+
+        return 0.2126 * $channel($rgb[0])
+            + 0.7152 * $channel($rgb[1])
+            + 0.0722 * $channel($rgb[2]);
+    }
+
     protected function userWithProfile(): User
     {
         $user = User::factory()->create();

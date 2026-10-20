@@ -1777,132 +1777,147 @@
 
 .font-script {
     font-family: 'Pinyon Script', 'Segoe Script', 'Brush Script MT', cursive;
+}
 
-    /* --- the place strip: previous, next, quickhop ------------------------- */
+/* --- the place strip: previous, next, quickhop ------------------------- */
+
+/*
+ * BELOW THE STAGE, ON THE PAGE'S OWN DARK GROUND, and it borrows nothing
+ * from the carousel.
+ *
+ * The stage's chevrons move the FAN. These links change which destination
+ * the page is about. They are therefore text and names, never arrows: the
+ * stage already spent a lesson on arrows that meant something other than
+ * what they looked like, and "Baguio" is the information a next control owes
+ * you anyway -- an arrow cannot tell you where you are going.
+ *
+ * A visible focus ring on the link, because the whole point of a Next is
+ * that somebody is going to press it with a keyboard.
+ */
+.tm-place-nav__link {
+    color: var(--color-island-white);
+    text-decoration: none;
+}
+
+.tm-place-nav__link:hover .tm-place-nav__name {
+    color: var(--color-boracay-light);
+}
+
+.tm-place-nav__link:focus-visible {
+    outline: 2px solid var(--color-philippine-gold);
+    outline-offset: 4px;
+    border-radius: 2px;
+}
+
+.tm-place-nav__arrow {
+    color: var(--color-boracay-light);
+    font-size: 1.125rem;
+    line-height: 1;
+    flex-shrink: 0;
+    transition: transform 200ms var(--ease-out);
+}
+
+.tm-place-nav__link:hover .tm-place-nav__arrow {
+    transform: translateX(-3px);
+}
+
+.tm-place-nav__link:hover .tm-place-nav__arrow:last-child,
+.tm-place-nav__link:hover .tm-place-nav__arrow:first-child {
+    transform: translateX(3px);
+}
+
+.tm-place-nav__label {
+    display: block;
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--color-boracay-light);
+}
+
+.tm-place-nav__name {
+    display: block;
+    font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
+    font-size: 1.25rem;
+    line-height: 1.2;
+    transition: color 200ms var(--ease-out);
+}
+
+/*
+ * The "no previous" / "no next" end of the catalogue. `aria-hidden` in the
+ * markup: an empty control is not information, and announcing "Last place in
+ * Luzon" to a screen reader on every page load is noise where the absence of
+ * a link would have said nothing at all. It is still visible, because a
+ * visitor needs to know WHY there is no Next.
+ */
+.tm-place-nav__empty {
+    display: inline-block;
+    font-size: 0.75rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+
+    /* 35% white is 3.13:1 at 12px -- below AA for the one line that has to
+       explain WHY there is no Next. 50% measures 4.98:1. */
+    color: rgb(255 255 255 / 0.5);
+}
+
+.tm-place-nav__position {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: rgb(255 255 255 / 0.55);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.tm-place-nav__input {
+    background-color: rgb(255 255 255 / 0.06);
+    border: 1px solid rgb(255 255 255 / 0.2);
+    border-radius: 0.375rem;
+    padding: 0.625rem 0.875rem;
+    font-size: 0.875rem;
+    color: var(--color-island-white);
+}
+
+.tm-place-nav__input::placeholder {
+    /* 40% white measures 3.48:1 on the input's own translucent fill; 60%
+       clears AA while staying visibly quieter than the typed text. */
+    color: rgb(255 255 255 / 0.6);
+}
+
+.tm-place-nav__input:focus-visible {
+    outline: 2px solid var(--color-philippine-gold);
+    outline-offset: 2px;
+}
+
+.tm-place-nav__go {
+    background-color: var(--color-boracay);
 
     /*
-     * BELOW THE STAGE, ON THE PAGE'S OWN DARK GROUND, and it borrows nothing
-     * from the carousel.
-     *
-     * The stage's chevrons move the FAN. These links change which destination
-     * the page is about. They are therefore text and names, never arrows: the
-     * stage already spent a lesson on arrows that meant something other than
-     * what they looked like, and "Baguio" is the information a next control owes
-     * you anyway -- an arrow cannot tell you where you are going.
-     *
-     * A visible focus ring on the link, because the whole point of a Next is
-     * that somebody is going to press it with a keyboard.
+     * Deep Volcanic Teal, not Benguet Charcoal: charcoal on this turquoise
+     * measures 4.24:1 and fails AA at 14px bold, the same defect
+     * `.tm-primary-button` was fixed for. Measured, not assumed.
      */
-    .tm-place-nav__link {
-        color: var(--color-island-white);
-        text-decoration: none;
-    }
+    color: var(--color-volcanic-teal);
+    font-weight: 700;
+    font-size: 0.875rem;
+    padding: 0.625rem 1.25rem;
+    border-radius: 0.375rem;
+    min-height: 2.75rem;
+    transition: background-color 200ms var(--ease-out), transform 100ms var(--ease-out);
+}
 
-    .tm-place-nav__link:hover .tm-place-nav__name {
-        color: var(--color-boracay-light);
-    }
+.tm-place-nav__go:hover {
+    background-color: var(--color-boracay-dark);
 
-    .tm-place-nav__link:focus-visible {
-        outline: 2px solid var(--color-philippine-gold);
-        outline-offset: 4px;
-        border-radius: 2px;
-    }
+    /* The fill darkens, so the text has to lighten with it: teal text on
+       boracay-dark is 3.26:1. White on that fill is 4.90:1. */
+    color: var(--color-island-white);
+}
 
-    .tm-place-nav__arrow {
-        color: var(--color-boracay-light);
-        font-size: 1.125rem;
-        line-height: 1;
-        flex-shrink: 0;
-        transition: transform 200ms var(--ease-out);
-    }
-
-    .tm-place-nav__link:hover .tm-place-nav__arrow {
-        transform: translateX(-3px);
-    }
-
-    .tm-place-nav__link:hover .tm-place-nav__arrow:last-child,
-    .tm-place-nav__link:hover .tm-place-nav__arrow:first-child {
-        transform: translateX(3px);
-    }
-
-    .tm-place-nav__label {
-        display: block;
-        font-size: 0.625rem;
-        font-weight: 700;
-        letter-spacing: 0.25em;
-        text-transform: uppercase;
-        color: var(--color-boracay-light);
-    }
-
-    .tm-place-nav__name {
-        display: block;
-        font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
-        font-size: 1.25rem;
-        line-height: 1.2;
-        transition: color 200ms var(--ease-out);
-    }
-
-    /*
-     * The "no previous" / "no next" end of the catalogue. `aria-hidden` in the
-     * markup: an empty control is not information, and announcing "Last place in
-     * Luzon" to a screen reader on every page load is noise where the absence of
-     * a link would have said nothing at all. It is still visible, because a
-     * visitor needs to know WHY there is no Next.
-     */
-    .tm-place-nav__empty {
-        display: inline-block;
-        font-size: 0.75rem;
-        letter-spacing: 0.2em;
-        text-transform: uppercase;
-        color: rgb(255 255 255 / 0.35);
-    }
-
-    .tm-place-nav__position {
-        font-size: 0.6875rem;
-        font-weight: 700;
-        letter-spacing: 0.25em;
-        text-transform: uppercase;
-        color: rgb(255 255 255 / 0.55);
-        font-variant-numeric: tabular-nums;
-        white-space: nowrap;
-    }
-
-    .tm-place-nav__input {
-        background-color: rgb(255 255 255 / 0.06);
-        border: 1px solid rgb(255 255 255 / 0.2);
-        border-radius: 0.375rem;
-        padding: 0.625rem 0.875rem;
-        font-size: 0.875rem;
-        color: var(--color-island-white);
-    }
-
-    .tm-place-nav__input::placeholder {
-        color: rgb(255 255 255 / 0.4);
-    }
-
-    .tm-place-nav__input:focus-visible {
-        outline: 2px solid var(--color-philippine-gold);
-        outline-offset: 2px;
-    }
-
-    .tm-place-nav__go {
-        background-color: var(--color-boracay);
-        color: var(--color-benguet-charcoal);
-        font-weight: 700;
-        font-size: 0.875rem;
-        padding: 0.625rem 1.25rem;
-        border-radius: 0.375rem;
-        min-height: 2.75rem;
-        transition: background-color 200ms var(--ease-out), transform 100ms var(--ease-out);
-    }
-
-    .tm-place-nav__go:hover {
-        background-color: var(--color-boracay-dark);
-    }
-
-    .tm-place-nav__go:active {
-        transform: scale(0.98);
-    }
+.tm-place-nav__go:active {
+    transform: scale(0.98);
 }
 
 /*
