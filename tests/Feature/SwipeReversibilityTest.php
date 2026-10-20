@@ -85,6 +85,94 @@ class SwipeReversibilityTest extends TestCase
         $this->assertFalse($deck()->contains($survivor->id));
     }
 
+    /**
+     * THE PENALTY IS PER TAG, AND THIS TEST IS THE ONE THAT NOTICES IF IT
+     * IS NOT.
+     *
+     * The two tests above use a SINGLE interest, where a penalty query with
+     * no GROUP BY is accidentally correct — there is only one tag to lump
+     * the total onto. That accident is exactly how a broken query survived:
+     * `count(*)` over the joined rows with bare `tag_id` columns is illegal
+     * on MySQL's strict mode ("Mixing of GROUP columns ... with no GROUP
+     * columns is illegal") and SILENTLY WRONG on SQLite, which returns ONE
+     * row carrying the whole pass count against one arbitrary tag.
+     *
+     * So on the test driver the bug did not crash — it ERASED one interest
+     * outright (a weight of 2 minus the 2 total passes is 0) while leaving
+     * the other interest at full strength. Two interests at weight 2, a pass
+     * against each, and the honest arithmetic leaves both at 1. Assert BOTH
+     * tag-only survivors stay in the deck: whichever tag the database picks
+     * to collapse onto, one of them dies under the bug, so the assertion
+     * bites regardless of the driver's row order.
+     *
+     * This is the third sqlite/MySQL divergence this repo has paid for. A
+     * query exercised only on the test driver has not been exercised.
+     */
+    public function test_the_pass_penalty_is_counted_per_tag_not_lumped_onto_one(): void
+    {
+        $this->actingAsUser(tags: ['Beaches' => 2, 'Museums' => 2]);
+
+        $beach = Tag::firstOrCreate(['name' => 'Beaches', 'slug' => 'beaches']);
+        $museum = Tag::firstOrCreate(['name' => 'Museums', 'slug' => 'museums']);
+
+        // The two passed places: each carries exactly ONE interest, so each
+        // pass should cost exactly one tag exactly one step.
+        $passedBeach = $this->destination('Saud Beach', 'economy');
+        $passedBeach->tags()->attach($beach->id);
+
+        $passedMuseum = $this->destination('Pinto Museum', 'economy');
+        $passedMuseum->tags()->attach($museum->id);
+
+        // The two survivors, each carrying exactly ONE interest. Under the
+        // honest rule both keep weight 1 and both still match. Under the
+        // collapsed rule one interest is erased to 0 and its survivor
+        // leaves the deck.
+        $survivingBeach = $this->destination('Nagsasa Cove', 'economy');
+        $survivingBeach->tags()->attach($beach->id);
+
+        $survivingMuseum = $this->destination('Baguio Museum', 'economy');
+        $survivingMuseum->tags()->attach($museum->id);
+
+        $this->postSwipe($passedBeach, 'passed')->assertOk();
+        $this->postSwipe($passedMuseum, 'passed')->assertOk();
+
+        $deck = app(SwipeDeckService::class)
+            ->cards(User::findOrFail($this->userId));
+
+        // Asserting mere PRESENCE is too weak, and the first version of this
+        // test proved it: the deck's stretch card is allowed to carry a place
+        // that shares none of the traveller's interests, so a survivor whose
+        // interest was erased still turned up in `pluck('id')` and the test
+        // passed against the broken query. The interest is the claim, so the
+        // assertion has to be about the INTEREST — the card must be on the
+        // deck as a MATCH, which only a surviving weight can make true.
+        $matched = $deck->reject(fn (Destination $destination) => $destination->is_novelty);
+
+        $this->assertTrue(
+            $matched->contains('id', $survivingBeach->id),
+            'the beach interest was penalised for BOTH passes, so a pass on '
+            .'a museum cost a beach it had nothing to do with'
+        );
+
+        $this->assertTrue(
+            $matched->contains('id', $survivingMuseum->id),
+            'the museum interest was penalised for BOTH passes, so a pass on '
+            .'a beach cost a museum it had nothing to do with'
+        );
+
+        // And the arithmetic itself. The denominator is the PENALISED total
+        // (`$weights->sum()`), so two interests at weight 2 losing one step
+        // each leaves 1 + 1 = 2, and a single-beach place matches 1 of 2 —
+        // 50%. Under the collapsed rule one interest is erased to 0 and the
+        // other keeps 2, so the same place would read either 0 (unmatched,
+        // gone from the matches) or 100, never 50.
+        $this->assertSame(
+            50.0,
+            (float) $matched->firstWhere('id', $survivingBeach->id)->preference_score,
+            'the beach interest should have lost exactly one step of two'
+        );
+    }
+
     public function test_a_skip_is_never_a_penalised_no(): void
     {
         $beaches = Tag::firstOrCreate(['name' => 'Beaches', 'slug' => 'beaches']);

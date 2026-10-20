@@ -243,6 +243,19 @@ class SwipeDeckService
             ->where('destination_swipes.user_id', $user->id)
             ->where('destination_swipes.action', 'passed')
             ->join('destination_tag', 'destination_tag.destination_id', '=', 'destination_swipes.destination_id')
+            // THE GROUP BY IS NOT OPTIONAL, AND ITS ABSENCE WAS A 500 ON
+            // EVERY DEPLOYED DECK. This counts passes per tag. Without a
+            // GROUP BY, SQLite returns the count over the whole result set
+            // and MySQL's strict mode refuses the query outright
+            // ("Mixing of GROUP columns ... with no GROUP columns is
+            // illegal"). The suite runs sqlite, so every test passed while
+            // /discover 500'd on the host — and, worse, the SQLite path was
+            // silently computing ONE tag's count for every tag.
+            //
+            // This is the third sqlite/MySQL divergence this repo has paid
+            // for; the rule it teaches is that a query only exercised on the
+            // test driver has never been exercised at all.
+            ->groupBy('destination_tag.tag_id')
             ->selectRaw('destination_tag.tag_id as tag_id, count(*) as passes')
             ->get()
             ->mapWithKeys(fn ($row) => [(int) $row->tag_id => (int) $row->passes]);
