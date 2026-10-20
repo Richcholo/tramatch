@@ -2208,6 +2208,101 @@ refuses vendor names in route URIs at all and requires exactly the
   in the app reads it. If a lock feature ever lands, it starts from scratch
   with its own tests.
 
+#### The nudge becomes state: remembered picks, promoted to the front
+
+Until this landed the assist was **stateless**: its picks were flashed to the
+session, rendered once, and gone. The model's output could not become anything
+the system acted on, which is exactly the "fun bonus" shape this work exists to
+replace. A validated reply is now written to `discovery_suggestions` and
+`SwipeDeckService::cards()` promotes those picks to the FRONT OF THE NEXT REAL
+DEAL, so a nudge changes what the traveller is actually shown rather than only
+what they read once.
+
+The authority split does **not** move — read the table above first. The model
+still decides selection and one sentence; the server still decides membership,
+price, coordinates, hours, distance and travel time.
+
+- **NOTHING WRITES BEFORE `validate()`.** `DiscoveryAssist::remember()` is the
+  only writer and it is called on the one path past decode, candidate
+  membership and the catalogue re-read. So **an invented id cannot reach the
+  table** (this is the F2 falsification: writing the raw reply throws a
+  foreign-key violation), and **a failure state is never remembered as an
+  opinion** — throttled, unparseable, unconfigured and no-pool all return
+  before the write. `a_throttled_attempt_is_never_remembered`,
+  `a_reply_of_only_invented_ids_is_never_remembered` and
+  `an_invented_id_never_reaches_the_table` pin all three.
+- **ONE BATCH PER TRAVELLER, REPLACED WHOLESALE**, inside a transaction with
+  the insert. A fresh nudge supersedes the previous one rather than
+  appending: a stack of old batches would promote picks from three opinions ago
+  and there would be no single `rank` order to replay. Half a batch — old picks
+  deleted, new ones only partly in — is the state the transaction exists to
+  make impossible.
+- **PROMOTION IS A REORDER — NEVER A FILTER AND NEVER AN INJECTION.** The rule
+  and the shape are `diversify()`'s. Only rows already on the deck can be
+  promoted; a remembered pick that has since been decided, archived, or
+  filtered out by a changed tier or region simply does not move, because
+  membership is the deck's own deal. `promoteSuggested()` looks each
+  remembered id up **in the dealt deck** and `continue`s when it is absent.
+  The F4 falsification (fetch the off-deck row and push it in anyway) turns a
+  decided card back up on the deck, and
+  `a_remembered_pick_that_has_been_decided_never_comes_back` is the guard.
+- **THE MODEL'S `rank` IS THE ORDER, NOT OUR SCORE.**
+  `discovery_suggestions.rank` replays the reply's own position — the model's
+  ranking is the one decision it owns — so promotion **must not** re-sort by
+  `preference_score`, which is our arithmetic and was already applied when the
+  candidates were built. The F5 falsification (sort the promoted front by our
+  score) puts a 75 ahead of the model's first pick at 25 and reds
+  `the_next_deal_leads_with_the_remembered_picks_in_the_models_order`.
+- **THE STRETCH CARD CAN NEVER BE PROMOTED, structurally.** Novelty rows share
+  none of the traveller's interests, so they are not in `$deck` when
+  `promoteSuggested()` runs — `$novelty` is appended after it — and a
+  remembered suggestion for one finds no row, moves nothing, and the card
+  stays last with its "Outside your interests" badge. That is deliberate: the
+  stretch card's whole rule is that an unranked place never leads. The F3
+  falsification (delete the `promoteSuggested()` call) reds it, and so does
+  F4, because the injected row lands in front of the novelty.
+- **THE BATCH IS BOUNDED BY `planning.limits.assist_choices` (3)**, which is
+  asserted to be **at most `MAX_PER_TAG`**, so promotion can never stack more
+  cards of one tag at the front than `diversify()` already allows. The cap
+  moved no further than it had to: past the front, the deck's relative order is
+  untouched, so with no remembered batch the result is the deck **byte for
+  byte**.
+- **THE BATCH DIES WHEREVER SWIPES DIE**: `discover.reset`
+  (`SwipeDiscoveryController::reset`) and `PreferenceController::update`. A
+  reset chooses the front of a deck that no longer exists, so leaving it would
+  re-promote picks from before the reset and "start fresh" would arrive still
+  holding the old opinion. Saving preferences is the same reset-the-deck
+  behaviour — the picks were chosen for interest weights that just changed.
+  F6 and F7 are the two deletions removed, each red on its own one-line test.
+- **THE CARD SAYS WHO CHOSE IT.** `is_suggested` is set only by
+  `promoteSuggested()` — it is initialised to `false` in `cards()`'s scoring map
+  and flipped nowhere else — and the deck renders a badge plus the model's
+  sentence under the **same "the model's own words, unchecked" label** the
+  assist panel uses. F8 (remove the badge block) reds
+  `the_remembered_sentence_is_rendered_on_the_card_with_the_models_words_label`.
+- **A SWALLOWED 500 IS NOT A PASSING TEST.** The invented-id tests assert the
+  RESPONSE (`assertRedirect(route('discover.index'))` + the expected session
+  key) as well as the table, because the controller does not catch exceptions:
+  a foreign-key violation inside `remember()` becomes a 500 that the default
+  exception handler renders, and a test that only inspects the table would
+  report green over a request that never finished. That is what F2's first
+  attempt did until the response assertion was added.
+- **`DiscoverySuggestion` has no factory and no soft deletes** — it is written
+  by `remember()` and read by `promoteSuggested()`, nothing else. `cascadeOnDelete`
+  on both foreign keys: a deleted traveller leaves no orphans, and an
+  admin-permanently-deleted destination leaves no suggestion pointing at a row
+  that no longer exists.
+- **Migration verified on MySQL in both directions**, not only against
+  sqlite's fresh build: `migrate` creates it and `migrate:rollback --step=1`
+  drops it (both foreign keys, the `unique(user_id, destination_id)` index and
+  `rank` NOT NULL confirmed with `SHOW COLUMNS`/`SHOW INDEX`).
+
+`tests/Feature/DiscoverySuggestionMemoryTest.php` (14 tests, eight
+falsifications across eight cases, every restore byte-exact). **No browser
+automation exists**, so the badge and the quote on the deck card are held only
+by markup assertions — re-click `/discover` after touching
+`discover/index.blade.php` or `SwipeDeckService::promoteSuggested()`.
+
 #### What is NOT verified yet
 
 **Nothing here has been clicked in a browser or rendered on a page except by

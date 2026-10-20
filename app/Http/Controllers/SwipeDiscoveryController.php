@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Destination;
 use App\Models\DestinationSwipe;
+use App\Models\DiscoverySuggestion;
 use App\Services\Planning\DiscoveryAssist;
 use App\Services\SwipeDeckService;
 use Illuminate\Http\JsonResponse;
@@ -131,6 +132,12 @@ class SwipeDiscoveryController extends Controller
     public function reset(): RedirectResponse
     {
         DestinationSwipe::where('user_id', Auth::id())->delete();
+
+        // RESET FORGETS THE NUDGE TOO. The remembered batch chose the front
+        // of a deck that no longer exists; leaving it would re-promote picks
+        // from before the reset, so "start fresh" would arrive still holding
+        // the old opinion about what to see first.
+        DiscoverySuggestion::where('user_id', Auth::id())->delete();
 
         return redirect()->route('discover.index')
             ->with('toast_message', 'Your discovery deck was reset.');

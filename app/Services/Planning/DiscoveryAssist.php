@@ -3,10 +3,12 @@
 namespace App\Services\Planning;
 
 use App\Models\Destination;
+use App\Models\DiscoverySuggestion;
 use App\Models\User;
 use App\Services\SwipeDeckService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 /**
  * THE DISCOVERY ASSIST: "stuck? tell me where to look next."
@@ -36,6 +38,13 @@ use Illuminate\Support\Facades\Cache;
  *   account field — free-tier content is used to improve Google's products.
  * - **ONE REQUEST, NEVER A LOOP.** Failures are returned, not retried; the
  *   only thing repeated is the traveller clicking again after the cooldown.
+ * - **A VALIDATED REPLY BECOMES STATE — HERE AND NOWHERE ELSE.** `remember()`
+ *   writes the surviving picks to `discovery_suggestions` after every check
+ *   has passed, so the deck's next deal promotes them to the front. Nothing
+ *   upstream of `validate()` may write: an invented id must not be able to
+ *   reach the table, and a failure state must not be remembered as an
+ *   opinion. The model's words are state too; the catalogue stays the only
+ *   source for every fact beside them.
  * - **THE COOLDOWN RECORDS THE SPENT REQUEST**, success or failure — a 429
  *   means the free tier is out of breath right now and an immediate second
  *   click would make it worse. An unconfigured key or an empty pool reaches
@@ -110,6 +119,12 @@ class DiscoveryAssist
                 'rejected' => $named,
             ];
         }
+
+        // THE NUDGE BECOMES STATE. Only here — past decode, past membership,
+        // past the catalogue re-read — is the reply something the system may
+        // act on. A failure above returns before this line, so a throttled or
+        // unparseable attempt is never remembered as a pick.
+        $this->remember($user, $valid);
 
         return [
             'status' => 'ok',
@@ -226,6 +241,40 @@ class DiscoveryAssist
         }
 
         return $suggestions;
+    }
+
+    /**
+     * THE BATCH, REPLACED WHOLESALE.
+     *
+     * One active batch per traveller: a fresh nudge supersedes the previous
+     * one rather than appending, so the front of the deck is always the LAST
+     * thing the model was asked — a stack of old batches would promote picks
+     * from three opinions ago and the rank column would have no single order
+     * to replay.
+     *
+     * THE REPLACEMENT IS TRANSACTIONAL with the insert, because a traveller
+     * left with half a batch — old picks deleted, new ones only partly in —
+     * would be dealt a front half nobody chose.
+     *
+     * Rank is the reply's own position after validation: the model's ranking
+     * is the one decision it owns, so promotion replays it instead of
+     * re-sorting by score, which is our arithmetic and was already applied
+     * when the candidates were built.
+     */
+    private function remember(User $user, Collection $suggestions): void
+    {
+        DB::transaction(function () use ($user, $suggestions) {
+            $user->discoverySuggestions()->delete();
+
+            foreach ($suggestions->values() as $index => $suggestion) {
+                DiscoverySuggestion::create([
+                    'user_id' => $user->id,
+                    'destination_id' => $suggestion['destination']->id,
+                    'rank' => $index + 1,
+                    'why' => $suggestion['why'],
+                ]);
+            }
+        });
     }
 
     /**

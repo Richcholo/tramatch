@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Tag;
 use App\Models\Destination;
+use App\Models\DiscoverySuggestion;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -78,7 +79,13 @@ class PreferenceController extends Controller
             ])->all()
         );
 
+        // SAVING PREFERENCES IS THE RESET-THE-DECK BEHAVIOUR: every swipe
+        // goes, and so does the assistant's remembered batch. The picks were
+        // chosen for the interest weights that just changed, and promoting
+        // them after the sync would put a stale model opinion at the front of
+        // a deck built from the new one.
         $user->destinationSwipes()->delete();
+        $user->discoverySuggestions()->delete();
 
         return redirect()->route('discover.index')
             ->with('status', 'Your travel preferences were saved. Start swiping to personalize your results.');

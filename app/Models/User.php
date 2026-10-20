@@ -53,6 +53,11 @@ class User extends Authenticatable
         return $this->hasMany(DestinationSwipe::class);
     }
 
+    public function discoverySuggestions(): HasMany
+    {
+        return $this->hasMany(DiscoverySuggestion::class);
+    }
+
     public function isAdmin(): bool
     {
         return in_array($this->role, ['admin', 'super_admin'], true);

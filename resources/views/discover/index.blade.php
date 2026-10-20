@@ -445,6 +445,23 @@
                                 @endunless
                             </div>
 
+                            {{-- THE REMEMBERED NUDGE, ON THE CARD IT MOVED.
+                                 `is_suggested` is set only by
+                                 SwipeDeckService::promoteSuggested(), and the
+                                 sentence is the model's stored words rendered
+                                 with the same label the panel uses — the card
+                                 never lets its quote read as verified copy.
+                                 Every other fact on this card is ours. --}}
+                            @if ($destination->is_suggested ?? false)
+                                <div class="mt-4 flex flex-wrap items-center gap-3">
+                                    <span class="tm-gold-badge tm-gold-badge--dark">Suggested next</span>
+                                </div>
+                                <p class="mt-2 line-clamp-2 text-sm leading-6 text-island-white/75">
+                                    &ldquo;{{ $destination->suggest_why }}&rdquo;
+                                    <span class="text-island-white/45">&mdash; the model's own words, unchecked.</span>
+                                </p>
+                            @endif
+
                             <p class="mt-4 line-clamp-4 text-sm leading-6 text-island-white/75">
                                 {{ $destination->description }}
                             </p>

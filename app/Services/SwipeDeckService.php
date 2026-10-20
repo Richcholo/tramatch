@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Destination;
 use App\Models\DestinationSwipe;
+use App\Models\DiscoverySuggestion;
 use App\Models\User;
 use Illuminate\Support\Collection;
 
@@ -111,6 +112,11 @@ class SwipeDeckService
                 // mistake "scored 0" for "chosen to stretch you".
                 $destination->is_novelty = false;
 
+                // And nothing is suggested until the remembered batch says so
+                // — the flag is flipped only by promoteSuggested(), so a card
+                // cannot carry "Suggested next" by any other path.
+                $destination->is_suggested = false;
+
                 return $destination;
             });
 
@@ -132,9 +138,87 @@ class SwipeDeckService
         $room = max(1, $limit - self::NOVELTY_SLOTS);
         $deck = $this->diversify($matches)->take($room)->values();
 
+        $deck = $this->promoteSuggested($user, $deck);
+
         $novelty = $this->noveltyCard($scored, $deck);
 
         return $novelty ? $deck->push($novelty) : $deck;
+    }
+
+    /**
+     * THE ASSIST'S REMEMBERED PICKS, PROMOTED TO THE FRONT.
+     *
+     * THIS IS WHERE THE MODEL'S OUTPUT BECOMES SOMETHING THE SYSTEM ACTS ON.
+     * Until this method existed the assist was stateless: its picks were
+     * flashed, rendered once and gone. The remembered batch now reorders the
+     * traveller's NEXT deal, so a nudge changes what they are actually shown
+     * rather than only what they read once.
+     *
+     * TWO RULES, MIRRORING THE ONES ALREADY AROUND IT:
+     *
+     * - **A REORDER, NEVER A FILTER AND NEVER AN INJECTION** — the same shape
+     *   as `diversify()`. Only rows already on the deck can be promoted; a
+     *   remembered pick that has since been decided, archived or filtered out
+     *   by a changed tier or region simply does not move, because membership
+     *   is the deck's own deal. Nothing outside the deal is ever pushed in.
+     * - **THE MODEL'S RANK IS THE ORDER, NOT OUR SCORE.** `rank` replays the
+     *   reply's own position — the model's ranking is the one decision it
+     *   owns (config/planning.php `authority`). The rest of the deck keeps
+     *   its relative order behind the promoted front, so with no remembered
+     *   batch the result is the deck untouched, byte for byte.
+     *
+     * THE STRETCH CARD CANNOT BE PROMOTED, structurally: novelty rows share
+     * none of the traveller's interests, they are not in `$deck` at this
+     * point — `$novelty` is appended after this method runs — so a remembered
+     * suggestion for one finds no row here, moves nothing, and the card stays
+     * last with its "Outside your interests" badge. That is deliberate: the
+     * stretch card's whole rule is that an unranked place never leads.
+     *
+     * The batch is bounded by `planning.limits.assist_choices` (3), which a
+     * test holds to be at most `MAX_PER_TAG`, so promotion can never stack
+     * more cards of one tag at the front than the cap already allows.
+     */
+    private function promoteSuggested(User $user, Collection $deck): Collection
+    {
+        $suggestions = DiscoverySuggestion::query()
+            ->where('user_id', $user->id)
+            ->orderBy('rank')
+            ->get();
+
+        if ($suggestions->isEmpty() || $deck->isEmpty()) {
+            // The untouched path, and the common one: a traveller who has
+            // never asked for a nudge is dealt the arithmetic's own order
+            // with no flags flipped at all.
+            return $deck;
+        }
+
+        $byId = $deck->keyBy('id');
+
+        $front = collect();
+        $promoted = [];
+
+        foreach ($suggestions as $suggestion) {
+            $destination = $byId->get($suggestion->destination_id);
+
+            if ($destination === null) {
+                continue;
+            }
+
+            $destination->is_suggested = true;
+            $destination->suggest_why = $suggestion->why;
+
+            $promoted[$destination->id] = true;
+
+            $front->push($destination);
+        }
+
+        if ($front->isEmpty()) {
+            return $deck;
+        }
+
+        return $front
+            ->concat($deck->reject(fn (Destination $destination) => isset($promoted[$destination->id])))
+            ->values();
     }
 
     /**
