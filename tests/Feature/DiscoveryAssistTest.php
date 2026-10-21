@@ -650,9 +650,210 @@ class DiscoveryAssistTest extends TestCase
         $this->assertStringNotContainsString('sk-test-must-never-be-rendered', $page);
     }
 
+    // ------------------------------------------------------- the feedback UI
+
+    /**
+     * A TWENTY-SECOND REQUEST WITH NO FEEDBACK IS INDISTINGUISHABLE FROM A
+     * DEAD BUTTON.
+     *
+     * Reported verbatim: "there should be a popup window or something to tell
+     * if it's loading or not ... I can't see what's supposed to happen". Both
+     * of the assist's outcomes already rendered somewhere -- the panel below
+     * the fold, the toast in a corner that takes no layout space -- and neither
+     * is where a traveller who just pressed a button is looking.
+     *
+     * The dialog needs a loading mark, a success mark and a failure mark, and
+     * the submit hook that opens it. Asserted on the ELEMENTS, not on the
+     * script's prose: a component that mentions a spinner in a comment and
+     * renders none is the failure this file keeps meeting.
+     */
+    #[Test]
+    public function the_assist_carries_a_loading_and_an_outcome_dialog(): void
+    {
+        $html = (string) $this->actingAs($this->user)->get(route('discover.index'))->getContent();
+        $dom = $this->dom($html);
+
+        $dialog = $dom->query('//*[@data-assist-feedback]')->item(0);
+
+        $this->assertNotNull(
+            $dialog,
+            'the assist renders no feedback dialog, so a click on it reports nothing while it waits'
+        );
+
+        $this->assertSame('dialog', $dialog->nodeName, 'the feedback overlay must be a <dialog>, so Escape closes it.');
+
+        foreach (['loading', 'ok', 'error'] as $mark) {
+            $this->assertSame(
+                1,
+                $dom->query('//*[@data-assist-mark="'.$mark.'"]')->length,
+                'the feedback dialog has no "'.$mark.'" mark to show'
+            );
+        }
+
+        // The form the script hooks. Without this exact attribute the dialog
+        // never opens on submit and the feature is markup that does nothing.
+        $this->assertSame(
+            1,
+            $dom->query('//form[@data-assist-form]')->length,
+            'the assist form is not marked for the feedback script, so the dialog never opens'
+        );
+
+        // And the script itself, in the same response.
+        $this->assertStringContainsString('data-assist-feedback-script', $html);
+    }
+
+    /**
+     * A SUCCESS OPENS THE DIALOG WITH THE CHECK MARK.
+     *
+     * The outcome is settled SERVER-SIDE into `data-assist-outcome` and the
+     * script only reveals the matching mark. That split is the point: the
+     * failure sentence belongs to the controller's `assistMessage()`, and a
+     * script composing its own would be a second copy of it.
+     */
+    #[Test]
+    public function a_successful_nudge_lands_with_the_success_outcome(): void
+    {
+        $this->fakeGemini([
+            'picks' => [
+                ['id' => $this->candidates[0]->id, 'why' => 'A garden in the middle of the city.'],
+            ],
+        ]);
+
+        $html = $this->followRedirects(
+            $this->actingAs($this->user)->post(route('discover.assist'))
+        )->assertOk()->getContent();
+
+        $dialog = $this->dom($html)->query('//*[@data-assist-feedback]')->item(0);
+
+        $this->assertNotNull($dialog);
+        $this->assertSame(
+            'ok',
+            $dialog->getAttribute('data-assist-outcome'),
+            'a successful assist must arrive knowing it succeeded, or the dialog shows a spinner forever'
+        );
+    }
+
+    /**
+     * AND A FAILURE OPENS IT WITH THE CROSS.
+     *
+     * This is the state that was invisible before: a 503 from an overloaded
+     * model was a five-second corner toast, and a traveller watching the button
+     * saw only that the page came back.
+     */
+    #[Test]
+    public function a_failed_nudge_lands_with_the_failure_outcome(): void
+    {
+        $this->fakeHttp(Http::response([
+            'error' => ['code' => 503, 'message' => 'This model is currently experiencing high demand.'],
+        ], 503));
+
+        $html = $this->followRedirects(
+            $this->actingAs($this->user)->post(route('discover.assist'))
+        )->assertOk()->getContent();
+
+        $dialog = $this->dom($html)->query('//*[@data-assist-feedback]')->item(0);
+
+        $this->assertNotNull($dialog);
+        $this->assertSame(
+            'error',
+            $dialog->getAttribute('data-assist-outcome'),
+            'a failed assist must arrive knowing it failed'
+        );
+
+        // The sentence the traveller reads inside the dialog is the
+        // controller's own, not a second copy written for the popup.
+        $this->assertStringContainsString('not answering right now', $html);
+    }
+
+    /**
+     * AN ORDINARY PAGE LOAD HAS NO OUTCOME, AND THAT IS LOAD-BEARING.
+     *
+     * The dialog is rendered on every visit -- it has to be, because a
+     * redirect lands on this page and the markup cannot be added after the
+     * fact without JavaScript building it. So the resting state must be
+     * "no outcome", or opening the deck would flash a tick or a cross at
+     * someone who had not asked for anything.
+     */
+    #[Test]
+    public function a_page_load_with_no_assist_behind_it_declares_no_outcome(): void
+    {
+        $dialog = $this->dom(
+            (string) $this->actingAs($this->user)->get(route('discover.index'))->getContent()
+        )->query('//*[@data-assist-feedback]')->item(0);
+
+        $this->assertNotNull($dialog);
+        $this->assertSame(
+            '',
+            (string) $dialog->getAttribute('data-assist-outcome'),
+            'the deck declares an assist outcome on an untouched page load, so the dialog would open on arrival'
+        );
+    }
+
+    /**
+     * ONE FAILURE, ONE SENTENCE, TWO PLACES THAT MUST AGREE.
+     *
+     * The corner toast is the fallback for scripting-off and for browsers
+     * without `<dialog>`; the centre dialog is the default. Both read
+     * `assistMessage()`, and this holds them to the same string -- the shape
+     * of drift being a failure whose popup and toast describe it differently
+     * and nobody noticing which one is right.
+     *
+     * `assertSame` inside the session assertion rather than two separate
+     * `assertStringContainsString`s on the page: the page carries both, so the
+     * loose version passes while they disagree.
+     */
+    #[Test]
+    public function the_failure_sentence_is_the_same_in_the_dialog_and_the_toast(): void
+    {
+        $this->fakeHttp(Http::response('Server exploded', 500));
+
+        $this->actingAs($this->user)
+            ->post(route('discover.assist'))
+            ->assertRedirect(route('discover.index'));
+
+        $fromDialog = session('assist_message');
+        $fromToast = session('toast_message');
+
+        $this->assertIsString(
+            $fromDialog,
+            'the failure was flashed without `assist_message`, so the dialog cannot say what went wrong'
+        );
+        $this->assertIsString(
+            $fromToast,
+            'the failure was flashed without `toast_message`, so the scripting-off fallback is gone'
+        );
+
+        // `assertSame` rather than two `assertStringContainsString`s on the
+        // page: the page carries both sentences, so the loose version passes
+        // while they disagree.
+        $this->assertSame(
+            $fromToast,
+            $fromDialog,
+            'the toast and the dialog describe one failure two ways'
+        );
+
+        // And the sentence is the controller's own, not a placeholder that
+        // happens to match.
+        $this->assertStringContainsString('not answering right now', $fromDialog);
+    }
+
     // -------------------------------------------------------------- helpers
 
     private array $capturedRequests = [];
+
+    private function dom(string $html): \DOMXPath
+    {
+        $document = new \DOMDocument();
+
+        // libxml's HTML parser is noisy about the modern markup in this app
+        // (void elements, SVG) and every complaint is irrelevant here; the
+        // structure is what is being read.
+        libxml_use_internal_errors(true);
+        $document->loadHTML($html);
+        libxml_clear_errors();
+
+        return new \DOMXPath($document);
+    }
 
     private function candidate(string $name, string $municipality, string $province, array $tags, float $fee): Destination
     {

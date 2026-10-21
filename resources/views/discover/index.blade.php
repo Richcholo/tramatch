@@ -41,6 +41,19 @@
     --}}
     <x-flash-toast />
 
+    {{--
+        THE ASSIST'S OWN FEEDBACK, and the reason it is not the toast.
+
+        The nudge is a 20-second synchronous POST. The toast is a five-second
+        corner notice that takes no layout space, which is right for "your deck
+        was reset" and wrong for "here is what the model said" -- the goal of
+        the assist. This dialog covers the wait, then reports the outcome where
+        the traveller is actually looking: at the button they pressed.
+    --}}
+    @if ($assistAvailable ?? false)
+        <x-assist-feedback />
+    @endif
+
     <div class="tm-page relative isolate overflow-hidden py-10 sm:py-12">
         {{--
             THE BACKDROP: the page's own ground, a blurred and
@@ -106,9 +119,9 @@
                     the reply comes back as the suggestion panel below.
                 --}}
                 @if ($assistAvailable)
-                    <form method="POST" action="{{ route('discover.assist') }}">
+                    <form method="POST" action="{{ route('discover.assist') }}" data-assist-form>
                         @csrf
-                        <button type="submit" class="min-h-10 rounded-md px-3 py-2 text-sm font-semibold text-philippine-gold ring-1 ring-philippine-gold/40 transition hover:bg-philippine-gold/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-philippine-gold active:scale-[0.98] active:duration-75">
+                        <button type="submit" class="min-h-10 rounded-md px-3 py-2 text-sm font-semibold text-philippine-gold ring-1 ring-philippine-gold/40 transition hover:bg-philippine-gold/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-philippine-gold active:scale-[0.98] active:duration-75 disabled:cursor-wait disabled:opacity-60">
                             Stuck? Ask for a nudge
                         </button>
                     </form>

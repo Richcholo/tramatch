@@ -171,8 +171,21 @@ class SwipeDiscoveryController extends Controller
                 ->with('assist_result', $result);
         }
 
+        // THE FAILURE IS FLASHED TWICE, AND THE TWO ARE NOT REDUNDANT.
+        //
+        // `toast_message` is the bottom-right five-second notice, which is what
+        // a traveller sees when the feedback dialog cannot open -- scripting
+        // off, or a browser without `<dialog>`. `assist_message` is the same
+        // sentence read by the dialog that covers the button they pressed.
+        //
+        // Both carry `assistMessage()`'s exact words, from this one call, so
+        // the corner and the centre cannot describe one failure two ways. A
+        // test pins that they are equal.
+        $message = $this->assistMessage($result);
+
         return redirect()->route('discover.index')
-            ->with('toast_message', $this->assistMessage($result));
+            ->with('toast_message', $message)
+            ->with('assist_message', $message);
     }
 
     /**
