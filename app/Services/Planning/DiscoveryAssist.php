@@ -54,7 +54,8 @@ class DiscoveryAssist
 {
     public function __construct(
         private readonly GeminiClient $gemini,
-        private readonly SwipeDeckService $deck
+        private readonly SwipeDeckService $deck,
+        private readonly TripBrief $brief
     ) {
         //
     }
@@ -288,28 +289,10 @@ class DiscoveryAssist
      */
     private function prompt(User $user, Collection $candidates): string
     {
-        $profile = $user->travelProfile;
-
-        $interests = $profile->tags
-            ->map(fn ($tag) => $tag->name.' (weight '.(int) $tag->pivot->weight.')')
-            ->implode(', ');
-
-        $region = $profile->preferred_region;
-
-        $rows = $candidates
-            ->map(fn (Destination $destination): array => [
-                'id' => $destination->id,
-                'name' => $destination->name,
-                'area' => trim($destination->municipality.', '.$destination->province),
-                'tags' => $destination->tags->pluck('name')->values()->all(),
-                'catalogue_fee_estimate' => $this->feeNote($destination),
-            ])
-            ->toJson(JSON_UNESCAPED_UNICODE);
+        $rows = $this->brief->candidateRows($candidates);
 
         $preface = "A traveller using a Luzon travel catalogue wants help deciding where to look next. This is a discovery suggestion, not an itinerary.\n\n"
-            ."Traveller profile, with no personal details: budget tier \"{$profile->budget_level}\""
-            .($region ? "; region preference \"$region\"" : '')
-            ."; interests (name and weight 1-3): $interests.\n\n"
+            ."Traveller profile, with no personal details: ".$this->brief->profileClause($user).".\n\n"
             ."Candidate catalogue rows, already filtered to their tier and to places they have not decided on:\n$rows\n\n"
             ."Choose at most ".(int) config('planning.limits.assist_choices')." distinct ids from the candidate rows "
             ."— the places most worth this traveller's time next, ranked best first. Each pick carries one sentence "
@@ -322,29 +305,11 @@ class DiscoveryAssist
     }
 
     /**
-     * A FEE NOTE ONLY WHEN SOMEONE PUBLISHED ONE.
+     * HOW LONG UNTIL THIS TRAVELLER MAY ASK AGAIN, in whole seconds.
      *
-     * The catalogue's own rule — "no verified figure" is a real state, and a
-     * question mark inventing one in the prompt would start the lie the
-     * readback exists to stop. A published display string is shared verbatim;
-     * `estimated_cost` is prefixed with its own origin so the model cannot
-     * misread it as a ticket price.
+     * The cooldown is recorded on failure too (see `assist()`), so the number
+     * below is read after a 429 as well as after a success.
      */
-    private function feeNote(Destination $destination): ?string
-    {
-        $display = trim((string) $destination->entrance_fee_display);
-
-        if ($display !== '') {
-            return $display;
-        }
-
-        if ($destination->estimated_cost !== null && (float) $destination->estimated_cost > 0) {
-            return 'curated estimate PHP '.number_format((float) $destination->estimated_cost, 0);
-        }
-
-        return null;
-    }
-
     private function cooldownRemaining(User $user): int
     {
         $endsAt = (int) Cache::get($this->cooldownKey($user), 0);
