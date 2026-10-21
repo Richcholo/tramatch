@@ -61,7 +61,20 @@ return [
     */
     'gemini' => [
         'key' => env('GEMINI_API_KEY'),
-        'model' => env('GEMINI_MODEL', 'gemini-2.5-flash'),
+        // A DEFAULT THAT IS ACTUALLY CALLABLE, which is not a detail.
+        //
+        // This read 'gemini-2.5-flash' and shipped, and the first live assist
+        // failure was a 404: "This model models/gemini-2.5-flash is no longer
+        // available to new users." Google retires models; a default pointing
+        // at a retired one fails for every deployment that never set
+        // GEMINI_MODEL, with a provider message the traveller never sees.
+        //
+        // It is still a DEFAULT and not a pin — a retirement is an `.env`
+        // change, never a code change — but a default has to name a model that
+        // answers today, or "you left it blank" becomes indistinguishable from
+        // "the service is down". `gemini-3.8-flash` is the model Google's own
+        // 404 named as the replacement, measured callable with a current key.
+        'model' => env('GEMINI_MODEL', 'gemini-3.8-flash'),
         'base_url' => env(
             'GEMINI_BASE_URL',
             'https://generativelanguage.googleapis.com/v1beta/models'

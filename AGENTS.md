@@ -2167,7 +2167,7 @@ refuses vendor names in route URIs at all and requires exactly the
   cap: an unparseable reply or a reply of only invented ids is REPORTED
   ("did not come back in the shape we asked" / "did not name any place from
   the catalogue"), not re-asked. The route URI never names the vendor, and a
-  new model is an `.env` change (`GEMINI_MODEL`, default `gemini-2.5-flash`).
+  new model is an `.env` change (`GEMINI_MODEL`, default `gemini-3.8-flash`).
 - **A free tier is a budget, and the spend is recorded on failure too.** The
   cooldown (`planning.limits.assist_cooldown`, 45 s default, keyed per
   traveller in the cache) is recorded in a `finally` — a 429 means the tier is
@@ -2196,6 +2196,51 @@ refuses vendor names in route URIs at all and requires exactly the
   request the traveller is actively waiting on and 90 s of hang is a frozen
   page. NOTE this timeout is currently read but never mitigates the real UX —
   a slow model means a 20 s button press. Watch it in the click-through.
+- **A RETIRED MODEL IS INDISTINGUISHABLE FROM AN OUTAGE, AND THAT COST A LIVE
+  DEBUGGING SESSION.** The first assist failure on the host was
+  `"The suggestion service is not answering right now. Try again shortly."`
+  — the `upstream`/`unreachable` copy — and the real answer was a **404**:
+  *"This model models/gemini-2.5-flash is no longer available to new users.
+  Please update your code to use models/gemini-3.8-flash."* A retired model,
+  a refused key and a dead host all produce that one sentence.
+
+  Four things made this take an SSH round-trip, and each is worth keeping:
+
+  - **`GEMINI_MODEL` was probably never set, so the config DEFAULT was doing
+    the asking** — and the default was `gemini-2.5-flash`. A default has to
+    name a model that answers today, or "you left it blank" becomes
+    indistinguishable from "the service is down". It is now
+    `gemini-3.8-flash`, and `the_configured_default_model_is_not_a_retired_one`
+    reads the SHIPPED default out of `config/services.php` and refuses a
+    retired id — assert on the fallback, not on an env that happens to be set.
+  - **THE STATUS WAS THROWN AWAY.** `GeminiClient` swallowed the non-2xx into
+    `upstream` with no `Log::` anywhere in the planning layer — the same
+    "loud failure turned into a quiet fallback with no signal" recorded for the
+    routing layer. It now logs `planning.gemini_{upstream,throttled,unreachable,
+    unparseable}` with the status, the model and **the provider's own
+    `error.message`**, because the status alone leaves the guess intact. Read
+    that line before touching anything else. It carries **no key** — a
+    "just log the request" fix is how a credential reaches a log file.
+  - **LISTING A MODEL AND BEING PERMITTED TO CALL IT ARE DIFFERENT THINGS.**
+    A local probe had listed 50 models including `gemini-2.5-flash` and
+    concluded the key was fine, which sent the diagnosis after the network and
+    the CA bundle for several rounds. `ListModels` is not an entitlement.
+    Probe with a real `generateContent` — that is what the host did, and what
+    `probe-models.php` does.
+  - **THE KEY WAS NEVER THE PROBLEM, AND THE `AQ.` PREFIX WAS A RED HERRING.**
+    The 404 came back with auth having succeeded. A new-style `AQ.` key is not
+    invalid merely for not starting `AIza`.
+
+  Measured with a live key on 2026-10-21: **callable** — `gemini-3.8-flash`,
+  `gemini-3-flash-preview`, `gemini-flash-latest`; **retired for new
+  credentials** — `gemini-2.5-flash`, `gemini-2.5-pro` (and
+  `gemini-2.5-flash-latest`, which never resolved). `gemini-3.8-flash` is the
+  model Google's own 404 named, and the default.
+  `an_upstream_refusal_logs_the_status_and_the_providers_words` pins the line
+  and the no-key rule, and `a_retired_model_does_not_leak_the_model_id_to_the_
+  traveller` pins that the fix did NOT make the diagnosis visible on the page:
+  the log is for whoever runs the deployment, the message is for whoever
+  clicked.
 - **`is_locked` is DORMANT, deliberately.** The itinerary expansion left
   `itinerary_items.is_locked` (created guarded in
   `2026_10_14_091000_extend_itinerary_items_for_places.php`) as machinery for

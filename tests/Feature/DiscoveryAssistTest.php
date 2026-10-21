@@ -11,6 +11,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -463,6 +464,124 @@ class DiscoveryAssistTest extends TestCase
 
         $this->assertStringContainsString('did not come back in the shape we asked for', $page);
         $this->assertCount(1, $this->capturedRequests);
+    }
+
+    // ------------------------------------------------------ the diagnosis
+
+    /**
+     * THE LOG LINE THAT TURNS A RETIRED MODEL INTO A LOG READ.
+     *
+     * THE FAILURE THIS EXISTS FOR. The first live assist failure was a 404:
+     * "This model models/gemini-2.5-flash is no longer available to new users."
+     * `upstream` is one kind covering a retired model, a refused key and an
+     * outage, the traveller's copy names none of them, and the status was
+     * thrown away on the floor — so telling those three apart meant hand-running
+     * a cURL probe over SSH against a host reachable only through the terminal.
+     * The diagnostic is the whole point: this asserts the provider's own words
+     * reach the log, because the status alone leaves the guess intact.
+     *
+     * The key must NOT be in the context. A log file is read by more people than
+     * an `.env` is, and a credential leak in a diagnostics line is the failure
+     * mode a "just log the request" fix walks straight into.
+     */
+    #[Test]
+    public function an_upstream_refusal_logs_the_status_and_the_providers_words(): void
+    {
+        Log::shouldReceive('warning')
+            ->once()
+            ->withArgs(function (string $channel, array $context) {
+                $this->assertSame('planning.gemini_upstream', $channel);
+                $this->assertSame(404, $context['status']);
+
+                // The exact sentence Google answered the live probe with.
+                $this->assertStringContainsString(
+                    'no longer available to new users',
+                    (string) $context['provider_message']
+                );
+
+                $this->assertStringNotContainsString(
+                    'test-gemini-key',
+                    json_encode($context)
+                );
+
+                return true;
+            });
+
+        $this->fakeHttp(Http::response([
+            'error' => [
+                'code' => 404,
+                'message' => 'This model models/gemini-2.5-flash is no longer available to new users.',
+                'status' => 'NOT_FOUND',
+            ],
+        ], 404));
+
+        $this->followRedirects(
+            $this->actingAs($this->user)->post(route('discover.assist'))
+        )->assertOk();
+    }
+
+    /**
+     * AND THE TRAVELLER IS STILL TOLD NOTHING INTERNAL. The log line is for
+     * whoever runs the deployment; the page is for the person who clicked. A
+     * fix that made the 404 visible in the message would trade a debuggable
+     * silence for a leaked implementation detail.
+     */
+    #[Test]
+    public function a_retired_model_does_not_leak_the_model_id_to_the_traveller(): void
+    {
+        $this->fakeHttp(Http::response([
+            'error' => [
+                'code' => 404,
+                'message' => 'This model models/gemini-2.5-flash is no longer available to new users.',
+            ],
+        ], 404));
+
+        $page = $this->followRedirects(
+            $this->actingAs($this->user)->post(route('discover.assist'))
+        )->assertOk()->getContent();
+
+        $this->assertStringContainsString('not answering', $page);
+        $this->assertStringNotContainsString('gemini', $page);
+        $this->assertStringNotContainsString('no longer available', $page);
+    }
+
+    /**
+     * THE DEFAULT IN config/services.php MUST BE A MODEL THAT ANSWERS TODAY.
+     *
+     * It read `gemini-2.5-flash` and shipped, so every deployment that never
+     * set GEMINI_MODEL asked for a retired model and got a 404 dressed as an
+     * outage. A default is not a pin — a retirement is still an `.env` change —
+     * but "you left it blank" must not be indistinguishable from "the service
+     * is down", which is exactly what a retired default makes true.
+     *
+     * Asserted on the SHIPPED default with GEMINI_MODEL unset, so this fails
+     * when the fallback rots rather than when the env happens to be set.
+     */
+    #[Test]
+    public function the_configured_default_model_is_not_a_retired_one(): void
+    {
+        $services = file_get_contents(base_path('config/services.php'));
+
+        $this->assertMatchesRegularExpression(
+            "/'model'\s*=>\s*env\(\s*'GEMINI_MODEL'\s*,\s*'(?<model>[^']+)'\s*\)/",
+            $services,
+            'config/services.php no longer has a readable GEMINI_MODEL default.'
+        );
+
+        preg_match(
+            "/'model'\s*=>\s*env\(\s*'GEMINI_MODEL'\s*,\s*'(?<model>[^']+)'\s*\)/",
+            $services,
+            $matches
+        );
+
+        // The two the live probe measured as retired for a current key. A third
+        // retirement belongs here too, which is the point: this list is the
+        // record of what Google has taken away.
+        $this->assertNotContains(
+            $matches['model'],
+            ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash-latest'],
+            'The default model is one Google has retired for new credentials.'
+        );
     }
 
     #[Test]
