@@ -304,6 +304,29 @@
                         {{ $destination->latitude }}, {{ $destination->longitude }}
                     </p>
                 </div>
+
+                @php
+                    $weatherEmbedUrl = 'https://embed.windy.com/embed2.html?'.http_build_query([
+                        'lat' => $destination->latitude,
+                        'lon' => $destination->longitude,
+                        'detailLat' => $destination->latitude,
+                        'detailLon' => $destination->longitude,
+                        'width' => 650,
+                        'height' => 300,
+                        'zoom' => 8,
+                        'level' => 'surface',
+                        'overlay' => 'wind',
+                        'product' => 'ecmwf',
+                        'menu' => '',
+                        'message' => 'true',
+                        'marker' => 'true',
+                        'calendar' => 'now',
+                        'pressure' => 'true',
+                        'type' => 'map',
+                        'location' => 'coordinates',
+                    ]);
+                @endphp
+
             </section>
 
             <aside class="space-y-8">
@@ -433,4 +456,30 @@
             </aside>
         </div>
     </div>
+
+    <details class="group fixed right-4 top-24 z-40 w-[min(22rem,calc(100vw-2rem))]">
+        <summary class="ml-auto flex w-fit cursor-pointer list-none items-center gap-2 rounded-full border border-white/20 bg-volcanic-teal px-4 py-3 text-sm font-bold text-island-white shadow-xl transition hover:border-boracay-light focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-philippine-gold [&::-webkit-details-marker]:hidden">
+            <span aria-hidden="true">☁</span>
+            Weather
+            <span class="text-boracay-light transition group-open:rotate-180" aria-hidden="true">⌄</span>
+        </summary>
+
+        <div class="mt-3 rounded-2xl border border-white/15 bg-volcanic-teal p-4 shadow-2xl">
+            <p class="text-xs font-bold uppercase tracking-[0.2em] text-boracay-light">
+                Around {{ $destination->name }}
+            </p>
+
+            <iframe
+                src="{{ $weatherEmbedUrl }}"
+                title="Interactive local weather map near {{ $destination->name }}"
+                loading="lazy"
+                allowfullscreen
+                class="mt-3 h-56 w-full overflow-hidden rounded-xl border border-white/10 bg-boracay-light"
+            ></iframe>
+
+            <p class="mt-3 text-xs text-boracay-light/60">
+                Interactive wind map by Windy.
+            </p>
+        </div>
+    </details>
 </x-app-layout>

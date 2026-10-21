@@ -24,7 +24,12 @@
     ])
 </head>
 
-<body class="tm-topographic-background min-h-screen bg-sea-glass text-benguet-charcoal antialiased">
+<body @class([
+    'min-h-screen text-benguet-charcoal antialiased',
+    'tm-topographic-background' => ! request()->routeIs('destinations.show'),
+    'bg-volcanic-teal' => request()->routeIs('destinations.show'),
+    'bg-sea-glass' => ! request()->routeIs('destinations.show'),
+])>
     <x-navigation-loading />
 
     <header class="relative z-30 border-b border-white/10 bg-volcanic-teal">
@@ -142,7 +147,8 @@
     <main @class([
         'relative z-10',
         'w-full' => $bareMain,
-        'mx-auto max-w-[1600px] px-5 py-10 sm:px-8 lg:px-12' => ! $bareMain,
+        'w-full px-5 py-10 sm:px-8 lg:px-12' => request()->routeIs('destinations.show'),
+        'mx-auto max-w-[1600px] px-5 py-10 sm:px-8 lg:px-12' => ! $bareMain && ! request()->routeIs('destinations.show'),
     ])>
         @if (session('status'))
             <div class="mb-8 rounded-2xl border border-boracay bg-boracay-light p-4 text-benguet-charcoal">
