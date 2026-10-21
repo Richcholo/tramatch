@@ -64,7 +64,16 @@ class GeminiClient
                         // BE the JSON the prompt asked for, not prose around it.
                         'responseMimeType' => 'application/json',
                         'temperature' => 0.4,
-                        'maxOutputTokens' => 2048,
+                        // THE BUDGET HAS TO COVER THE THOUGHTS, NOT JUST THE
+                        // ANSWER. These are thinking models: a measured 3-pick
+                        // reply used 577 `thoughtsTokenCount` against 112
+                        // `candidatesTokenCount`, and both are billed against
+                        // this one number. 8192 leaves room for a full
+                        // `max_candidates_per_request` (40) candidate list
+                        // without the answer being cut off mid-JSON — which is
+                        // the `truncated` failure the client now names
+                        // separately instead of calling it a shape error.
+                        'maxOutputTokens' => (int) config('planning.limits.assist_output_tokens'),
                     ],
                 ]);
         } catch (ConnectionException $e) {
@@ -88,12 +97,41 @@ class GeminiClient
             throw GeminiError::of('upstream');
         }
 
+        // A REPLY THAT RAN OUT OF ROOM IS NOT A REPLY OF THE WRONG SHAPE.
+        //
+        // These models think before they answer, and the thoughts are billed
+        // against the same `maxOutputTokens` budget as the answer. When the
+        // budget is too small the answer is cut off mid-JSON and `json_decode`
+        // below returns null FOR THE SAME REASON a malformed reply does — so
+        // without this check a truncation is reported to the traveller as "did
+        // not come back in the shape we asked for", which is a false statement
+        // about a reply that was in exactly the right shape.
+        //
+        // `finishReason` is the only field that tells them apart, and until
+        // this landed nothing in the app read it.
+        $finishReason = (string) $response->json('candidates.0.finishReason');
+
+        if ($finishReason === 'MAX_TOKENS') {
+            Log::warning('planning.gemini_truncated', [
+                'model' => (string) config('services.gemini.model'),
+                'status' => $response->status(),
+                'finish_reason' => $finishReason,
+                // The counts that prove it: thoughts eating the budget is the
+                // cause, and only these numbers show it.
+                'usage' => $response->json('usageMetadata'),
+                'text_length' => mb_strlen((string) $response->json('candidates.0.content.parts.0.text')),
+            ]);
+
+            throw GeminiError::of('truncated');
+        }
+
         $decoded = json_decode((string) $response->json('candidates.0.content.parts.0.text'), true);
 
         if (! is_array($decoded)) {
             Log::warning('planning.gemini_unparseable', [
                 'model' => (string) config('services.gemini.model'),
                 'status' => $response->status(),
+                'finish_reason' => $finishReason,
                 'body_start' => mb_substr((string) $response->body(), 0, 200),
             ]);
 

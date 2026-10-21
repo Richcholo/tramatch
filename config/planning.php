@@ -79,6 +79,22 @@ return [
         // nothing.
         'assist_choices' => (int) env('PLANNING_ASSIST_CHOICES', 3),
 
+        // THE OUTPUT BUDGET, AND WHY IT IS NOT A SMALL NUMBER.
+        //
+        // These models are THINKING models: they emit reasoning tokens before
+        // the answer, and `thoughtsTokenCount` is billed against this SAME
+        // budget. Measured on a live 3-pick reply: 577 thoughts against 112
+        // answer tokens. A budget sized to the answer alone therefore truncates
+        // the JSON mid-string, and the reply is thrown away as malformed when
+        // it was in the right shape and simply ran out of room.
+        //
+        // 8192 covers a full `max_candidates_per_request` (40) list with room
+        // for the thoughts. It is a ceiling, not a spend -- a model that
+        // answers in 700 tokens is billed for 700. The client reads
+        // `finishReason` and names a truncation separately from a bad shape,
+        // so this number being wrong is now diagnosable rather than invisible.
+        'assist_output_tokens' => (int) env('PLANNING_ASSIST_OUTPUT_TOKENS', 8192),
+
         // ONE request per assist, written as data so the claim the demo makes
         // is the same claim the HTTP-level test enforces: it reads this value
         // as the expected request count and fails if the client ever makes

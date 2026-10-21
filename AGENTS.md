@@ -2173,14 +2173,44 @@ refuses vendor names in route URIs at all and requires exactly the
   traveller in the cache) is recorded in a `finally` — a 429 means the tier is
   out of breath right now, and an immediate second click doubles the pressure.
   A key-less or empty-pool ask never reaches the wire and records nothing. The
-  failure states are TOASTS (cooldown, throttled, upstream, unparseable,
-  no-picks, no-pool), each one sentence the traveller can act on; the RESULT is
+  failure states are TOASTS (cooldown, throttled, upstream, truncated,
+  unparseable, no-picks, no-pool), each one sentence the traveller can act on; the RESULT is
   a `session('assist_result')` PANEL above the deck, because it is content and
   the layout's flash banner is full-bleed on this deliberately bare route —
   read the reset-toast history in the frontend section before touching either.
 - **A reply that is not the JSON shape is its own kind** (`unparseable` vs
   `no_picks`): transport, throttle, shape and empty-pool are different truths
   about the world and get different messages.
+- **A TRUNCATED REPLY IS NOT A MALFORMED ONE, AND CONFLATING THEM COST A LIVE
+  DEBUGGING SESSION.** These models THINK before they answer and the thoughts
+  are billed against the SAME `maxOutputTokens` budget as the answer, so a
+  budget too small cuts the JSON off mid-string and `json_decode()` returns null
+  for exactly the same reason a genuinely malformed reply does. Reported live as
+  "It's success on the API side, but doesn't really output anything" and read as
+  `unparseable` — *"did not come back in the shape we asked for"*, which is a
+  false statement about a reply that was in the right shape. Measured:
+  `maxOutputTokens: 256` on `gemini-3-flash-preview` yields
+  `finishReason: MAX_TOKENS`, `usage {"candidatesTokenCount":9,
+  "thoughtsTokenCount":243}`, and the raw text `'Here is the JSON
+  requested:\n```'` — 31 chars.
+  `GeminiClient::ask()` now reads `candidates.0.finishReason` and throws the
+  **`truncated`** kind on `MAX_TOKENS`, with its own traveller sentence
+  ("ran long and was cut off") and its own log line
+  (`planning.gemini_truncated`, carrying `usageMetadata` — the counts are the
+  only thing that shows the thoughts ate the budget).
+  **`finishReason` was read NOWHERE in `app/` before this**, which is why the
+  two states were indistinguishable. Any new honesty condition on a model reply
+  should read it too.
+- **THE OUTPUT BUDGET HAS TO COVER THE THOUGHTS.** A measured 3-pick reply used
+  **577 `thoughtsTokenCount` against 112 `candidatesTokenCount`**, and both come
+  out of one number. `planning.limits.assist_output_tokens` (env
+  `PLANNING_ASSIST_OUTPUT_TOKENS`, default **8192**) is now the single home for
+  it, read into `maxOutputTokens` by `GeminiClient`, so it is a `.env` change
+  rather than a code change. 2048 was the shipped value and is a *ceiling*, not
+  a spend: a model that answers in 700 tokens is billed for 700.
+  `the_output_budget_reaches_the_wire_from_config` asserts the config value
+  reaches the wire **and** that it is above 2048, because the floor is the
+  measured thoughts, not a preference.
 - **The transport sends exactly one POST.** `GeminiClient::ask()` has no retry
   (the falsification harness adds a fake 3-attempt loop against the budget
   test to prove that rule bites). One request per assist, at most the

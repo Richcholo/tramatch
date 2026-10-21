@@ -201,6 +201,7 @@ class SwipeDiscoveryController extends Controller
                 .$result['retry_after'].' seconds.',
             'throttled' => 'The suggestion model is out of free requests right now — try again in a minute.',
             'upstream', 'unreachable' => 'The suggestion service is not answering right now. Try again shortly.',
+            'truncated' => 'The suggestion ran long and was cut off before it finished. Try again.',
             'unparseable' => 'The suggestion did not come back in the shape we asked for. Try again.',
             'no_picks' => 'It did not name any place from the catalogue. Try again.',
             default => 'There are no places left to choose a suggestion from.',

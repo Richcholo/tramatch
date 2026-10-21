@@ -264,6 +264,46 @@ class DiscoveryAssistTest extends TestCase
         $this->assertStringNotContainsString($this->user->email, $body);
     }
 
+    /**
+     * THE OUTPUT BUDGET IS SENT FROM CONFIG, AND IT IS BIG ENOUGH TO THINK IN.
+     *
+     * This is not a style check on a constant. These models emit reasoning
+     * tokens before the answer and BOTH are billed against `maxOutputTokens`,
+     * so a budget sized to the answer alone truncates the JSON — the live
+     * "success on the API side, no output" report. Measured on a 3-pick reply:
+     * 577 thoughts against 112 answer tokens.
+     *
+     * It asserts the config key is what reaches the wire, so shrinking
+     * `planning.limits.assist_output_tokens` is a deliberate act with a failing
+     * test, not a silent re-break. Falsified by hard-coding 2048 back into the
+     * client: this reads 2048, the assertion wants the config value.
+     */
+    #[Test]
+    public function the_output_budget_reaches_the_wire_from_config(): void
+    {
+        $this->fakeGemini([
+            'picks' => [
+                ['id' => $this->candidates[0]->id, 'why' => 'Budget probe.'],
+            ],
+        ]);
+
+        $this->actingAs($this->user)->post(route('discover.assist'));
+
+        $this->assertCount(1, $this->capturedRequests);
+
+        $sent = json_decode((string) $this->capturedRequests[0]->body(), true);
+
+        $this->assertSame(
+            (int) config('planning.limits.assist_output_tokens'),
+            $sent['generationConfig']['maxOutputTokens'] ?? null,
+        );
+
+        // The floor that makes the number mean anything: the measured thoughts
+        // alone (577) plus a full answer have to fit, or a truncation is
+        // inevitable rather than unlikely.
+        $this->assertGreaterThan(2048, (int) config('planning.limits.assist_output_tokens'));
+    }
+
     #[Test]
     public function a_region_preference_thins_the_candidates_before_the_prompt(): void
     {
@@ -464,6 +504,91 @@ class DiscoveryAssistTest extends TestCase
 
         $this->assertStringContainsString('did not come back in the shape we asked for', $page);
         $this->assertCount(1, $this->capturedRequests);
+    }
+
+    /**
+     * A REPLY THAT RAN OUT OF ROOM IS NOT A REPLY OF THE WRONG SHAPE.
+     *
+     * THE FAILURE THIS EXISTS FOR, reported live as "it's success on the API
+     * side, but doesn't really output anything". These models THINK before they
+     * answer and the thoughts are billed against the SAME `maxOutputTokens`
+     * budget, so a budget too small leaves the JSON cut off mid-string, and
+     * `json_decode()` returns null for exactly the same reason a malformed
+     * reply does. Both were reported as "did not come back in the shape we
+     * asked for" — a false statement about a reply that was in the right
+     * shape. Measured: `maxOutputTokens: 256` yields
+     * `finishReason: MAX_TOKENS`, `thoughtsTokenCount: 243`, and the raw text
+     * `'Here is the JSON requested:\n\`\`\`'`.
+     *
+     * `finishReason` is the ONLY field that tells the two apart, and nothing in
+     * the app read it before this. Falsified by deleting the check: the page
+     * then claims the shape was wrong again.
+     */
+    #[Test]
+    public function a_reply_cut_off_by_the_output_limit_is_its_own_state(): void
+    {
+        // The measured truncation, byte for byte: the model started writing a
+        // fence around its answer and the budget ran out.
+        $this->fakeHttp(Http::response([
+            'candidates' => [
+                [
+                    'content' => ['parts' => [['text' => "Here is the JSON requested:\n```"]]],
+                    'finishReason' => 'MAX_TOKENS',
+                ],
+            ],
+            'usageMetadata' => [
+                'candidatesTokenCount' => 9,
+                'thoughtsTokenCount' => 243,
+            ],
+        ]));
+
+        $page = $this->followRedirects(
+            $this->actingAs($this->user)->post(route('discover.assist'))
+        )->assertOk()->getContent();
+
+        // The honest sentence, and NOT the shape sentence it used to borrow.
+        $this->assertStringContainsString('ran long and was cut off', $page);
+        $this->assertStringNotContainsString('did not come back in the shape we asked for', $page);
+        $this->assertCount(1, $this->capturedRequests);
+    }
+
+    /**
+     * THE TOKEN COUNTS ARE THE PROOF, SO THE LOG CARRIES THEM.
+     *
+     * A truncation has exactly one cause — the thoughts ate the budget — and
+     * `usageMetadata` is the only place that shows it. Without it the log says
+     * "truncated" and leaves the next reader to guess whether the prompt grew
+     * or the budget shrank. `finishReason` alone names the fact; these numbers
+     * explain it.
+     */
+    #[Test]
+    public function a_truncated_reply_logs_the_token_counts_that_explain_it(): void
+    {
+        $this->fakeHttp(Http::response([
+            'candidates' => [
+                [
+                    'content' => ['parts' => [['text' => "Here is the JSON requested:\n```"]]],
+                    'finishReason' => 'MAX_TOKENS',
+                ],
+            ],
+            'usageMetadata' => [
+                'candidatesTokenCount' => 9,
+                'thoughtsTokenCount' => 243,
+            ],
+        ]));
+
+        Log::shouldReceive('warning')
+            ->once()
+            ->withArgs(function (string $channel, array $context) {
+                $this->assertSame('planning.gemini_truncated', $channel);
+                $this->assertSame('MAX_TOKENS', $context['finish_reason']);
+                $this->assertSame(243, $context['usage']['thoughtsTokenCount']);
+                $this->assertSame(9, $context['usage']['candidatesTokenCount']);
+
+                return true;
+            });
+
+        $this->actingAs($this->user)->post(route('discover.assist'));
     }
 
     // ------------------------------------------------------ the diagnosis
