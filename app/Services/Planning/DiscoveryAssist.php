@@ -332,4 +332,43 @@ class DiscoveryAssist
     {
         return 'assist:cooldown:'.$user->id;
     }
+
+    public function recommendLocationsForItinerary(\Illuminate\Database\Eloquent\Model $itinerary, array $context = []): array
+    {
+        $user = $itinerary->user ?? auth()->user();
+        if (!$user) {
+            return [];
+        }
+        $key = (string) config('services.gemini.key');
+        if ($key === '') {
+            return [];
+        }
+        $area = $itinerary->area ?? null;
+        $places = \App\Models\Place::query()
+            ->where('is_active', true)
+            ->when($area, fn($q)=>$q->where('province', $area))
+            ->whereIn('type', ['food','lodging'])
+            ->limit(60)
+            ->get(['id','name','type','province','municipality','price_min','price_max','price_basis']);
+        if ($places->isEmpty()) {
+            return [];
+        }
+        $prompt = 'Recommend nearby restaurants/hotels to add to this itinerary in JSON: {"suggestions":[{"place_id":number,"reason":string}]}.\nArea: '.$area.'\nCandidates: '.$places->map(fn($p)=>['id'=>$p->id,'name'=>$p->name,'type'=>$p->type,'area'=>$p->municipality])->toJson();
+        try {
+            $reply = app(\App\Services\Planning\GeminiClient::class)->ask($prompt);
+            $decoded = json_decode((string)$reply, true);
+            $suggestions = $decoded['suggestions'] ?? [];
+            $map = $places->keyBy('id');
+            $out = [];
+            foreach ($suggestions as $sug) {
+                $pid = $sug['place_id'] ?? $sug['id'] ?? null;
+                if (!$pid || !isset($map[$pid])) { continue; }
+                $out[] = ['place' => $map[$pid], 'reason' => $sug['reason'] ?? 'Suggested by assistant'];
+            }
+            return $out;
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
 }

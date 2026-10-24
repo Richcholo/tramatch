@@ -25,6 +25,7 @@ use Illuminate\Support\Str;
 use Illuminate\View\View;
 use RuntimeException;
 use Throwable;
+use App\Services\Planning\DiscoveryAssist;
 
 class ItineraryController extends Controller
 {
@@ -676,4 +677,12 @@ class ItineraryController extends Controller
             403
         );
     }
+
+    public function llmSuggest(\Illuminate\Http\Request $request, Itinerary $itinerary, \App\Services\Planning\DiscoveryAssist $assist): \Illuminate\Http\JsonResponse
+    {
+        $this->ensureOwner($itinerary);
+        $suggestions = $assist->recommendLocationsForItinerary($itinerary);
+        return response()->json(['suggestions' => $suggestions]);
+    }
+
 }

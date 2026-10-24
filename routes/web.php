@@ -243,35 +243,7 @@ Route::middleware(['auth', 'admin'])
         Route::get('/', AdminController::class)
             ->name('dashboard');
 
-        Route::get('/sources', [AdminSourceController::class, 'index'])
-            ->name('sources.index');
-
-        Route::get('/sources/status', [AdminSourceController::class, 'status'])
-            ->name('sources.status');
-
-        Route::get('/sources/{source}', [AdminSourceController::class, 'show'])
-            ->name('sources.show');
-
-        Route::patch('/sources/{source}', [AdminSourceController::class, 'update'])
-            ->name('sources.update');
-
-        Route::post('/sources/bulk-crawl', [AdminSourceController::class, 'bulkCrawl'])
-            ->name('sources.bulk-crawl');
-
-        Route::post('/sources/{source}/crawl', [AdminSourceController::class, 'crawl'])
-            ->name('sources.crawl');
-
-        Route::get('/proposals', [AdminProposalController::class, 'index'])
-            ->name('proposals.index');
-
-        Route::patch('/proposals/bulk', [AdminProposalController::class, 'bulk'])
-            ->name('proposals.bulk');
-
-        Route::patch('/proposals/{proposal}/approve', [AdminProposalController::class, 'approve'])
-            ->name('proposals.approve');
-
-        Route::patch('/proposals/{proposal}/reject', [AdminProposalController::class, 'reject'])
-            ->name('proposals.reject');
+        // Crawling replaced by LLM discovery; routes disabled.
 
         Route::patch(
             '/destinations/{destination}/archive',

@@ -60,6 +60,11 @@
                         Delete itinerary
                     </button>
                 </form>
+    <div class="mt-4">
+        <button type="button" id="llm-suggest-btn" class="inline-flex items-center rounded-md bg-volcanic-teal px-3 py-2 text-sm font-semibold text-white shadow hover:bg-boracay-dark">Suggest restaurants/hotels with AI</button>
+        <div id="llm-suggest-results" class="mt-2 space-y-2"></div>
+    </div>
+
             </div>
         </dialog>
 
@@ -793,4 +798,17 @@
             </dialog>
         </section>
     </div>
-</x-app-layout>
+</x-app-layout><script>
+document.getElementById('llm-suggest-btn')?.addEventListener('click', async function(){
+  const res = await fetch('{{ route('itineraries.llm-suggest', $itinerary) }}', {method:'POST', headers:{'X-CSRF-TOKEN':document.querySelector('meta[name=csrf-token]')?.content || '{{ csrf_token() }}','Accept':'application/json'}});
+  const data = await res.json();
+  const div = document.getElementById('llm-suggest-results');
+  div.innerHTML='';
+  (data.suggestions||[]).forEach(s=>{
+    const el = document.createElement('div');
+    el.className='rounded border p-2 flex justify-between';
+    el.innerHTML='<div><div class="font-semibold">'+s.place.name+' ('+s.place.type+')</div><div class="text-sm text-gray-600">'+(s.reason||'')+'</div></div>';
+    div.appendChild(el);
+  });
+});
+</script>

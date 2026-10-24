@@ -126,4 +126,26 @@ class OsrmClient
 
         return new RouteLeg($meters, $minutes, 'osrm');
     }
+
+    public function vicinity(float $lng, float $lat, int $limit = 10): array
+    {
+        $base = rtrim((string) config('routing.base_url'), '/');
+        $url = $base.'/nearest/v1/driving/'.$lng.','.$lat;
+        try {
+            $response = Http::withHeaders([
+                'User-Agent' => (string) config('crawling.user_agent', 'TraMatch/1.0'),
+            ])->timeout((int) config('routing.timeouts.request_seconds', 10))->get($url, [
+                'number' => $limit,
+                'geometries' => 'geojson',
+            ]);
+            if (!$response->ok()) {
+                return [];
+            }
+            $json = $response->json();
+            return data_get($json, 'waypoints', []);
+        } catch (Throwable) {
+            return [];
+        }
+    }
+
 }
