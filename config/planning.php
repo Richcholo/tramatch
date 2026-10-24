@@ -7,10 +7,9 @@ return [
     | Itinerary planning
     |--------------------------------------------------------------------------
     |
-    | Limits for the two calls Day 8-9 (planning) and Day 6-7 (routing) will
-    | make. Nothing reads this file yet. It exists because both numbers are load-
-    | bearing and neither can be picked later without measuring them, and because
-    | one of them has already bitten this project once.
+    | Limits for the calls the planner and the router make. Both numbers are
+    | load-bearing and neither can be picked later without measuring them,
+    | and one of them has already bitten this project once.
     |
     */
 
@@ -19,39 +18,25 @@ return [
     | HTTP timeouts
     |--------------------------------------------------------------------------
     |
-    | EXPLICIT, AND THE ROUTING TIMEOUT IS DELIBERATELY SHORTER THAN THE PLANNING
-    | ONE. Neither call may inherit PHP's default_socket_timeout, which on shared
-    | hosting is often 60 seconds and on some hosts is 0, meaning no limit at
-    | all: one unresponsive upstream then holds a worker for as long as the host
-    | tolerates.
+    | EXPLICIT, AND THE ROUTING TIMEOUT IS DELIBERATELY SHORTER THAN THE
+    | PLANNING ONE. Neither call may inherit PHP's default_socket_timeout,
+    | which on shared hosting is often 60 seconds and on some hosts is 0,
+    | meaning no limit at all: one unresponsive upstream then holds the
+    | request for as long as the host tolerates.
     |
-    | Routing resolves a single pair of coordinates and has to answer well under
-    | three seconds or the traveller is waiting on a number. `Route::optimize()`
-    | fans out one call per leg and runs them concurrently, so a day of five stops
-    | must not be five times this.
-    |
-    | Planning makes ONE Gemini request plus the routing calls the plan needs, and
-    | must finish inside the queue worker's budget. See the arithmetic below.
+    | Routing resolves a single pair of coordinates and has to answer well
+    | under three seconds or the traveller is waiting on a number. Legs are
+    | fetched concurrently, so a day of five stops is not five times this.
     |
     */
     'timeouts' => [
         'routing_seconds' => (int) env('PLANNING_ROUTING_TIMEOUT', 8),
 
-        // Under CrawlSourceJob's 300s and under retry_after by a wide margin.
-        // `queue:drain` calls `$job->fire()` directly, so it does NOT enforce a
-        // job's $timeout the way `queue:work` does -- which is exactly why these
-        // are HTTP-level bounds and not a job property.
-        'planning_seconds' => (int) env('PLANNING_TIMEOUT', 90),
-
-        // THE ASSIST RUNS INSIDE A WEB REQUEST, not a queue job, so its HTTP
-        // timeout is the traveller's patience and not a worker's budget. A
-        // hang of 90s in a POST the traveller actively clicked is a frozen
-        // page; 20s is already the outer edge of "still there".
+        // THE ITINERARY SUGGEST RUNS INSIDE A WEB REQUEST, not a queue job,
+        // so its HTTP timeout is the traveller's patience and not a worker's
+        // budget. A hang of 90s in a POST the traveller actively clicked is
+        // a frozen page; 20s is already the outer edge of "still there".
         'assist_seconds' => (int) env('PLANNING_ASSIST_TIMEOUT', 20),
-
-        // A generation job that has already spent this long on its own retries
-        // gives up and records a failure rather than sitting in the queue.
-        'job_budget_seconds' => (int) env('PLANNING_JOB_BUDGET', 240),
     ],
 
     /*
@@ -60,25 +45,15 @@ return [
     |--------------------------------------------------------------------------
     |
     | The guard against a demo that works on Tuesday and 429s in front of the
-    | panel. ONE request per assist, no repair loop and no retry -- a reply
-    | that fails validation is reported, not re-asked.
+    | panel. ONE request per itinerary suggest, no repair loop and no retry --
+    | a reply that fails validation is reported, not re-asked.
     |
     | Read these as caps, not targets. A trip the traveller opens, edits,
-    | reorders and exports costs NOTHING in calls: routes are cached and the
-    | generated plan is saved. Only the discovery assist's nudge costs one.
+    | reorders and exports costs nothing in calls beyond this: routes are
+    | cached and the generated plan is saved.
     |
     */
     'limits' => [
-        // The candidate list sent to the model in one request. Candidates are
-        // drawn from the deck the traveller is already being dealt, so this
-        // cap bounds the prompt, not the pool.
-        'max_candidates_per_request' => (int) env('PLANNING_MAX_CANDIDATES', 40),
-
-        // How many picks the model is ASKED for. The reply is capped to this
-        // again after parsing -- a model that returns nine is trusted for
-        // nothing.
-        'assist_choices' => (int) env('PLANNING_ASSIST_CHOICES', 3),
-
         // THE OUTPUT BUDGET, AND WHY IT IS NOT A SMALL NUMBER.
         //
         // These models are THINKING models: they emit reasoning tokens before
@@ -88,25 +63,12 @@ return [
         // the JSON mid-string, and the reply is thrown away as malformed when
         // it was in the right shape and simply ran out of room.
         //
-        // 8192 covers a full `max_candidates_per_request` (40) list with room
-        // for the thoughts. It is a ceiling, not a spend -- a model that
-        // answers in 700 tokens is billed for 700. The client reads
-        // `finishReason` and names a truncation separately from a bad shape,
-        // so this number being wrong is now diagnosable rather than invisible.
+        // 8192 covers a full candidate list with room for the thoughts. It is
+        // a ceiling, not a spend -- a model that answers in 700 tokens is
+        // billed for 700. The client reads `finishReason` and names a
+        // truncation separately from a bad shape, so this number being wrong
+        // is now diagnosable rather than invisible.
         'assist_output_tokens' => (int) env('PLANNING_ASSIST_OUTPUT_TOKENS', 8192),
-
-        // ONE request per assist, written as data so the claim the demo makes
-        // is the same claim the HTTP-level test enforces: it reads this value
-        // as the expected request count and fails if the client ever makes
-        // more than it. There is no repair machinery left to cap -- a reply
-        // that fails validation is reported, not re-asked.
-        'assist_attempts' => (int) env('PLANNING_ASSIST_ATTEMPTS', 1),
-
-        // Seconds after one assist before the next is accepted. The free tier
-        // is a handful of requests a MINUTE; a double click must not become a
-        // second call, and this is the honest "you just asked" state rather
-        // than a silent queue-twice.
-        'assist_cooldown' => (int) env('PLANNING_ASSIST_COOLDOWN', 45),
     ],
 
     /*
@@ -134,18 +96,18 @@ return [
     | The split the whole feature rests on, written down as data so the client
     | cannot drift from the claim the demo makes.
     |
-    | THE MODEL CHOOSES AND EXPLAINS. Its whole job in this build is discovery:
-    | given a candidate list that has already been filtered to the traveller's
-    | tier, it selects the places most worth looking at next and says why.
+    | THE MODEL CHOOSES AND EXPLAINS. Its whole job in this build is picking
+    | restaurants and hotels: given the food and lodging rows in the trip's own
+    | province, it selects the ones most worth adding and says why, in one
+    | sentence each.
     |
-    | LARAVEL DECIDES AND CHECKS. Membership of the catalogue, the tier, the
-    | region and the already-swiped set are all decided BEFORE the prompt, and
-    | every id the model returns is verified against that list again after the
-    | reply -- an invented id is dropped by the server, never saved or shown.
-    | Prices, coordinates, hours, distances and times are read back out of the
-    | database when anything is finally displayed. "Only use our sources" in a
-    | prompt is not enforcement -- the id check and the server-side readback
-    | are.
+    | LARAVEL DECIDES AND CHECKS. Membership of the catalogue and the trip's
+    | province are decided BEFORE the prompt, and every id the model returns is
+    | verified against that list again after the reply -- an invented id is
+    | dropped by the server, never saved or shown. Prices, coordinates, hours,
+    | distances and times are read back out of the database when anything is
+    | finally displayed. "Only use our sources" in a prompt is not enforcement
+    | -- the id check and the server-side readback are.
     |
     */
     'authority' => [

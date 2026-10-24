@@ -40,27 +40,41 @@ return [
     | Planning: Gemini and the routing provider
     |--------------------------------------------------------------------------
     |
-    | NOTHING IS CALLED YET. Day 1 added the schema these keys will feed and no
-    | HTTP client, no job and no route reads them. They are here so the shape of
-    | the credential is settled before the code that needs it is written, and so
-    | nobody has to add a key to three env files later.
+    | BOTH CLIENTS ARE LIVE. `GeminiClient` reads `gemini.*` and asks the model
+    | for structured output; `OsrmClient` reads `routing.*` and measures real
+    | road legs. `config/planning.php` holds the timeouts and the free-tier
+    | ceilings they share.
     |
     | `gemini.model` is a DEFAULT, not a pin. Google renames models and retires
     | them, so a hard-coded model id in a PHP array is one more thing to rot. The
     | value here is structurally safe for any current model, because the client
-    | (Day 8-9) will only ask for structured output, which every current model
-    | supports -- it is not a claim that this is the best model.
+    | only asks for structured output, which every current model supports -- it
+    | is not a claim that this is the best model.
     |
     | BOTH KEYS ARE SERVER-SIDE ONLY AND MUST NEVER REACH BLADE. A Gemini key in
     | shipped JavaScript is a public key: it can be lifted, spent against the
     | quota, and billed. Neither appears in a `@vite` entry, a `<meta>` tag or a
     | data attribute, and no endpoint in this app returns config.
     |
-    | SEE config/planning.php for the timeouts and the free-tier ceilings.
-    |
     */
     'gemini' => [
         'key' => env('GEMINI_API_KEY'),
+
+        // NOT OPTIONAL, AND FOR THE SAME REASON AS THE ROUTING USER-AGENT
+        // BELOW. Guzzle 7 sets no User-Agent, and an anonymous request is the
+        // behaviour that gets a service rate-limiting or refusing you. It
+        // names a real mailbox for the same reason: someone who wants the
+        // traffic stopped has to be able to write to somebody.
+        //
+        // It MUST be read through config and never with `env()` in the client.
+        // `env()` outside a config file returns the default under
+        // `config:cache`, which the deployment runs, so a direct call ships
+        // the placeholder address on the one environment where it matters.
+        'user_agent' => env(
+            'GEMINI_USER_AGENT',
+            'TraMatch/1.0 (+mailto:support@tramatch.site)'
+        ),
+
         // A DEFAULT THAT IS ACTUALLY CALLABLE, which is not a detail.
         //
         // This read 'gemini-2.5-flash' and shipped, and the first live assist
@@ -97,7 +111,7 @@ return [
         // and a silent fallback to the flat estimate on every host, measured
         // on 2026-10-15: no UA at all is 403, and any UA at all is 200.
         //
-        // It names a real mailbox for the same reason the crawler's token
+        // It names a real mailbox for the reason every identifiable client
         // does: an anonymous bot hitting somebody's free demo server is the
         // behaviour that gets demo servers switched off for everyone.
         'user_agent' => env('ROUTING_USER_AGENT', 'TraMatch/1.0 (+mailto:support@tramatch.site)'),

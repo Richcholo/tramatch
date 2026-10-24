@@ -3,9 +3,37 @@
 Laravel 13 + Breeze (Blade) travel-itinerary recommender for Luzon destinations.
 Deployment is deliberately on hold (polish/QA phase).
 
-`README.md` covers setup and the product flow, but it predates the
-destination-source crawling feature described below. Where prose and code
-disagree, trust the code and this file.
+`README.md` covers setup and the product flow. Where prose and code disagree,
+trust the code and this file.
+
+## Removed on 2026-10-24 — how to read the sections below
+
+Three subsystems this file still documents at length were **removed**, not
+lost. Their sections are kept as history and for the lessons that outlive the
+code; where a section below describes them as live, the removal wins:
+
+- **Destination-source crawling** — routes, controllers, job, commands,
+  `app/Services/Crawling/*`, the four models, `config/crawling.php`,
+  `DestinationSourceSeeder`, the admin views and their tests are all deleted.
+  The migrations stay (never delete migrations). `CRAWLER_CONTACT` is gone;
+  the outbound User-Agents are `GEMINI_USER_AGENT` / `ROUTING_USER_AGENT`,
+  quoted because dotenv rejects unquoted spaces.
+- **The discovery assist and its suggestion memory** — `discover.assist`,
+  `TripBrief`, `DiscoverySuggestion`, remembered picks and the deck promotion
+  are deleted. `/discover` deals cards with no model in the loop, by decision:
+  the only live Gemini surface is the itinerary location suggest below.
+- **`PLANNING_TIMEOUT` / `JOB_BUDGET` / `MAX_CANDIDATES` / `MAX_ATTEMPTS` /
+  `COOLDOWN`** — dead caps from the abandoned drafting model, removed from
+  `config/planning.php` and the env examples. The live keys are
+  `PLANNING_ROUTING_TIMEOUT`, `PLANNING_ASSIST_TIMEOUT`,
+  `PLANNING_ASSIST_OUTPUT_TOKENS`, `ROUTING_CACHE_DAYS`.
+
+The **itinerary location suggest** (POST `itineraries.llm-suggest`) is the one
+live Gemini surface: one structured-output request per click, candidates are
+`places` rows (food/lodging only) in the trip's own province, every returned
+id is re-read from the catalogue, and any failure is an empty panel rather
+than an error page. `tests/Feature/GeminiClientTest.php` and
+`tests/Feature/ItineraryLocationSuggestTest.php` pin it.
 
 ## Commands
 

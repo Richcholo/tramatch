@@ -554,7 +554,7 @@
         ]);
     @endphp
 
-    <details class="group fixed right-4 top-24 z-40 w-[min(22rem,calc(100vw-2rem))]">
+    <details class="group fixed right-4 top-24 z-40 w-72 sm:w-[22rem]">
         <summary class="ml-auto flex w-fit cursor-pointer list-none items-center gap-2 rounded-full border border-white/20 bg-volcanic-teal px-4 py-3 text-sm font-bold text-island-white shadow-xl transition hover:border-boracay-light focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-philippine-gold [&::-webkit-details-marker]:hidden">
             <span aria-hidden="true">☁</span>
             Weather

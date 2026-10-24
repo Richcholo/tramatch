@@ -435,57 +435,6 @@
     }
 
     /*
-     * THE ASSIST FEEDBACK DIALOG.
-     *
-     * Three marks stacked in one box, and exactly one carries `.is-shown`.
-     * Every mark is `opacity: 0` by default rather than `display: none`,
-     * because the show state arrives as a class the script toggles on plain
-     * page load -- a `display` rule would need a matching one on the other
-     * side of the toggle and the two would drift.
-     *
-     * WHY ALL THREE ARE `position: absolute`. The dialog's height must not
-     * change as the mark changes: the loading mark is a 40px spinner and the
-     * finished ones are 56px ticks, so a stacked-in-flow pair would resize the
-     * dialog under the traveller's eyes the instant the state settles. The
-     * wrapper fixes the box; the marks fill it.
-     */
-    .tm-assist-mark {
-        opacity: 0;
-        transition: opacity 180ms ease-out;
-    }
-
-    .tm-assist-mark.is-shown {
-        opacity: 1;
-    }
-
-    /* The spinner keeps turning even under `prefers-reduced-motion`, for the
-       same reason the navigation loader does: a static mark gives no signal
-       that anything is happening, and that signal is the whole feature. Only
-       the corner sweep is decorative enough to drop. */
-    .tm-assist-spin {
-        transform-box: fill-box;
-        transform-origin: center;
-        animation: tm-loader-spin 900ms linear infinite;
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-        .tm-assist-mark {
-            transition-duration: 1ms;
-        }
-    }
-
-    .tm-gold-badge {
-        display: inline-flex;
-        align-items: center;
-        border-radius: 9999px;
-        background-color: color-mix(in srgb, var(--color-philippine-gold) 22%, transparent);
-        padding: 0.25rem 0.75rem;
-        font-size: 0.875rem;
-        font-weight: 600;
-        color: var(--color-benguet-charcoal);
-    }
-
-    /*
      * The badge is a gold wash with CHARCOAL text, which is right on every light
      * surface and unreadable on the destination page's teal ground -- a 22% gold
      * wash over teal is a dark background, and charcoal on dark is nothing.

@@ -11,7 +11,6 @@ class DatabaseSeeder extends Seeder
         $this->call([
             TagSeeder::class,
             LuzonLocationsCsvSeeder::class,
-            DestinationSourceSeeder::class,
 
             /*
              * PLACES LAST, AND IT DEPENDS ON NOTHING ABOVE.
@@ -22,11 +21,9 @@ class DatabaseSeeder extends Seeder
              * at a time, and inventing rows to fill the table would defeat the
              * only thing this catalogue is for.
              *
-             * It is deliberately NOT run between the CSV and the source seeder
-             * the way a future `places_sources` table might want it to be. Places
-             * carry their own `source_url` column rather than a row in
-             * `destination_sources`, because a restaurant is not a destination
-             * and does not have the destination crawler behind it. See AGENTS.md.
+             * Places carry their own `source_url` column rather than a
+             * separate sources table, because a restaurant is not a
+             * destination. See AGENTS.md.
              *
              * It prints cluster readiness per budget tier when it runs, because
              * "is this cluster big enough to plan a trip in" is the question the

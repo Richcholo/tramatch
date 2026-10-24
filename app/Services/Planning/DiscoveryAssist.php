@@ -2,373 +2,138 @@
 
 namespace App\Services\Planning;
 
-use App\Models\Destination;
-use App\Models\DiscoverySuggestion;
-use App\Models\User;
-use App\Services\SwipeDeckService;
+use App\Models\Itinerary;
+use App\Models\Place;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
 
 /**
- * THE DISCOVERY ASSIST: "stuck? tell me where to look next."
+ * THE ITINERARY LOCATION ADVISER: "where should we eat and sleep on this trip?"
  *
- * The deck answers "what matches you?" by arithmetic; this answers "what is
- * there, in words". One Gemini request takes the candidate list the deck
- * itself deals from — already filtered to the traveller's tier and the
- * decisions they have made — and returns up to `assist_choices` picks with a
- * sentence each.
+ * One Gemini request takes the food and lodging rows from the trip's own
+ * province and returns up to five picks with a sentence each. The model
+ * chooses selection; the catalogue decides membership — every id it names is
+ * checked against the candidate map built here, so an invented id is dropped
+ * rather than rendered.
  *
  * THE BOUNDARIES, WHICH ARE THE FEATURE:
  *
- * - **THE MODEL DECIDES SELECTION, AND NOTHING ELSE.** `candidates()` pool,
- *   prompt, and the deck's own ordering are all ours; the reply is consulted
- *   for ids and one sentence per id and nothing more.
+ * - **THE MODEL DECIDES SELECTION, AND NOTHING ELSE.** The candidate pool,
+ *   the prompt and the ordering are all ours; the reply is consulted for ids
+ *   and one sentence per id and nothing more.
  * - **A PROMPT IS NOT ENFORCEMENT.** Every id in the reply is checked
- *   AGAINST THE CANDIDATE MAP the ids were drawn from, and each surviving pick
- *   is then re-read from the database, because the candidates were sent moments
- *   ago and could have changed. An invented id is counted as rejected and
- *   never displayed.
- * - **ALL FACTS ON SCREEN ARE OURS.** The destination is re-read from the
- *   catalogue before display, so the panel prints name, area and fee from the
- *   database; the only thing that arrives from the model is the sentence,
- *   labelled as the model's reason.
- * - **NO PERSONAL DATA LEAVES.** The prompt carries interest weights, tier,
- *   region and catalogue rows. It carries no traveller name, email, or any
- *   account field — free-tier content is used to improve Google's products.
- * - **ONE REQUEST, NEVER A LOOP.** Failures are returned, not retried; the
- *   only thing repeated is the traveller clicking again after the cooldown.
- * - **A VALIDATED REPLY BECOMES STATE — HERE AND NOWHERE ELSE.** `remember()`
- *   writes the surviving picks to `discovery_suggestions` after every check
- *   has passed, so the deck's next deal promotes them to the front. Nothing
- *   upstream of `validate()` may write: an invented id must not be able to
- *   reach the table, and a failure state must not be remembered as an
- *   opinion. The model's words are state too; the catalogue stays the only
- *   source for every fact beside them.
- * - **THE COOLDOWN RECORDS THE SPENT REQUEST**, success or failure — a 429
- *   means the free tier is out of breath right now and an immediate second
- *   click would make it worse. An unconfigured key or an empty pool reaches
- *   the wire for nothing, so it records nothing.
+ *   AGAINST THE CANDIDATE MAP the ids were drawn from. An invented id is
+ *   silently dropped.
+ * - **ALL FACTS ON SCREEN ARE OURS.** The place is re-read from the
+ *   candidate map before display, so the panel prints name, area and type
+ *   from the database; the only thing that arrives from the model is the
+ *   sentence.
+ * - **NO PERSONAL DATA LEAVES.** The prompt carries the trip's area and the
+ *   candidate rows. It carries no traveller name, email or account field —
+ *   free-tier content is used to improve Google's products.
+ * - **ONE REQUEST, NEVER A LOOP.** Failures are returned empty, not retried.
+ * - **A MISSING KEY OR EMPTY POOL RETURNS EMPTY.** This is a nice-to-have
+ *   panel, not a workflow the trip depends on, and the controller renders
+ *   nothing when it is empty.
  */
 class DiscoveryAssist
 {
     public function __construct(
-        private readonly GeminiClient $gemini,
-        private readonly SwipeDeckService $deck,
-        private readonly TripBrief $brief
+        private readonly GeminiClient $gemini
     ) {
         //
     }
 
-    public function suggest(User $user): array
+    /**
+     * THE MODEL'S RESTAURANT AND HOTEL PICKS FOR A TRIP.
+     *
+     * The Gemini client already decodes the reply to an array, so this
+     * method reads the array instead of re-decoding a JSON string.
+     */
+    public function recommendLocationsForItinerary(Itinerary $itinerary): array
     {
         if (trim((string) config('services.gemini.key')) === '') {
-            return ['status' => 'unconfigured'];
+            return [];
         }
 
-        $retryAfter = $this->cooldownRemaining($user);
+        $places = $this->tripPlaces($itinerary);
 
-        if ($retryAfter > 0) {
-            return ['status' => 'cooldown', 'retry_after' => $retryAfter];
+        if ($places->isEmpty()) {
+            return [];
         }
-
-        $candidates = $this->deck->cards(
-            $user,
-            (int) config('planning.limits.max_candidates_per_request')
-        );
-
-        if ($candidates->isEmpty()) {
-            // The deck dealt from an empty pool. Reaching the wire for a
-            // suggestion of nothing would be a request pretending one was
-            // possible.
-            return ['status' => 'no_pool'];
-        }
-
-        $thrown = null;
-        $decoded = [];
 
         try {
-            $decoded = $this->gemini->ask($this->prompt($user, $candidates));
-        } catch (GeminiError $error) {
-            $thrown = $error;
-        } finally {
-            // Spent is spent: the attempt went out unless the pool or the key
-            // stopped it before the transport did.
-            $this->recordCooldown($user);
+            $decoded = $this->gemini->ask(
+                $this->recommendationPrompt($itinerary, $places)
+            );
+        } catch (GeminiError) {
+            return [];
         }
 
-        if ($thrown !== null) {
-            return ['status' => $thrown->kind()];
+        $map = $places->keyBy('id');
+        $out = [];
+
+        foreach ($decoded['suggestions'] ?? [] as $pick) {
+            if (! is_array($pick)) {
+                continue;
+            }
+
+            $id = $pick['place_id'] ?? $pick['id'] ?? null;
+            $reason = $pick['reason'] ?? $pick['why'] ?? null;
+
+            if (! is_numeric($id) || ! isset($map[(int) $id]) || ! is_string($reason)) {
+                continue;
+            }
+
+            $reason = trim(preg_replace('/\s+/', ' ', $reason));
+
+            if ($reason === '' || mb_strlen($reason) > 280) {
+                continue;
+            }
+
+            $out[] = ['place' => $map[(int) $id], 'reason' => $reason];
         }
 
-        $picks = $this->decodePicks(
-            is_array($decoded['picks'] ?? null) ? $decoded['picks'] : []
-        );
-
-        // EVERYTHING THE REPLY NAMED, COUNTED BEFORE ANYTHING WAS FILTERED —
-        // invented ids, dupes it was told not to repeat, entries with no
-        // usable reason, valid rows past the asked-for cap. Rejected is
-        // `named - shown`, so a short suggestion list can never read as the
-        // whole reply.
-        $named = is_array($decoded['picks'] ?? null) ? count($decoded['picks']) : 0;
-
-        $valid = $this->validate($picks, $candidates, $user);
-
-        if ($valid->isEmpty()) {
-            return [
-                'status' => 'no_picks',
-                'rejected' => $named,
-            ];
-        }
-
-        // THE NUDGE BECOMES STATE. Only here — past decode, past membership,
-        // past the catalogue re-read — is the reply something the system may
-        // act on. A failure above returns before this line, so a throttled or
-        // unparseable attempt is never remembered as a pick.
-        $this->remember($user, $valid);
-
-        return [
-            'status' => 'ok',
-            'suggestions' => $valid,
-            'asked_over' => $candidates->count(),
-            'rejected' => $named - $valid->count(),
-        ];
+        return $out;
     }
 
     /**
-     * THE REPLY, REDUCED TO THE SHAPE WE ACCEPT.
+     * Food and lodging rows in the trip's own province, ready to send.
      *
-     * Deduped to its first mention — the model was told for distinct ids and
-     * a repeat is noise, not a second pick — and each remaining entry
-     * sanitised to one line. A pick that carries no usable reason is dropped
-     * whole: a recommendation with no stated reason is exactly what the
-     * traveller asked for when they asked WHY. The cap lives in validate(),
-     * after the membership check, so the model's own ranking is what fills
-     * the asked-for seats. Nothing here is counted; `named - shown` in
-     * suggest() is the honest arithmetic over the entries the reply actually
-     * carried.
+     * Scoped to the trip's province so the model never suggests a place the
+     * traveller would have to leave the area to reach, and trimmed to a
+     * candidate list the prompt can carry without blowing the token budget.
      */
-    private function decodePicks(array $raw): Collection
+    private function tripPlaces(Itinerary $itinerary): Collection
     {
-        $seen = [];
-        $picks = collect();
-
-        foreach ($raw as $entry) {
-            if (! is_array($entry)) {
-                continue;
-            }
-
-            $id = $entry['id'] ?? null;
-            $why = $entry['why'] ?? null;
-
-            if (! is_numeric($id) || ! is_string($why)) {
-                continue;
-            }
-
-            $id = (int) $id;
-
-            if (isset($seen[$id])) {
-                continue;
-            }
-
-            $seen[$id] = true;
-
-            $why = trim(preg_replace('/\s+/', ' ', $why));
-
-            if ($why === '' || mb_strlen($why) > 280) {
-                continue;
-            }
-
-            $picks->push(['id' => $id, 'why' => $why]);
-        }
-
-        return $picks;
-    }
-
-    /**
-     * THE ID CHECK, BOTH PLACES THE PLAN DEMANDS IT.
-     *
-     * "Validated against the catalogue" — every surviving pick is re-read
-     * from the destinations table, active and in this traveller's tier, so
-     * the panel can only ever name a real, currently published row in the
-     * right budget band. "Validated against the traveller's tier" — the
-     * candidates were tier-filtered before the prompt, so the id must be one
-     * of THEM: membership in the deck's own list is what makes "in the
-     * catalogue" and "in my tier" the same sentence.
-     *
-     * THE TIER IS DELIBERATELY ENFORCED THREE TIMES, and the falsification
-     * work recorded why: the deck filter (first), the membership check
-     * (second) and this re-read's WHERE (third). Dropping the WHERE alone
-     * changes nothing reachable — membership already refuses an out-of-tier
-     * id — so it is not the layer any test reads; it is kept because THIS
-     * method should refuse an out-of-scope id on its own terms, without
-     * borrowing the caller's guarantees. A redundant guard on an honesty
-     * boundary is not a second copy of a rule; it is the rule stated where
-     * the decision is made.
-     *
-     * The reply's own order is kept — that ranking is the one decision the
-     * model owns — and the cap bites at the end, so a well-behaved reply
-     * loses nothing and a chatty one is cut to the asked-for number.
-     */
-    private function validate(Collection $picks, Collection $candidates, User $user): Collection
-    {
-        $known = $candidates->keyBy(fn (Destination $candidate) => $candidate->id);
-
-        $suggestions = collect();
-
-        foreach ($picks as $pick) {
-            if ($suggestions->count() >= (int) config('planning.limits.assist_choices')) {
-                break;
-            }
-
-            if (! $known->has($pick['id'])) {
-                continue;
-            }
-
-            $destination = Destination::query()
-                ->where('id', $pick['id'])
-                ->where('is_active', true)
-                ->where('budget_level', $user->travelProfile->budget_level)
-                ->first();
-
-            if (! $destination) {
-                continue;
-            }
-
-            $suggestions->push([
-                'destination' => $destination,
-                'why' => $pick['why'],
-            ]);
-        }
-
-        return $suggestions;
-    }
-
-    /**
-     * THE BATCH, REPLACED WHOLESALE.
-     *
-     * One active batch per traveller: a fresh nudge supersedes the previous
-     * one rather than appending, so the front of the deck is always the LAST
-     * thing the model was asked — a stack of old batches would promote picks
-     * from three opinions ago and the rank column would have no single order
-     * to replay.
-     *
-     * THE REPLACEMENT IS TRANSACTIONAL with the insert, because a traveller
-     * left with half a batch — old picks deleted, new ones only partly in —
-     * would be dealt a front half nobody chose.
-     *
-     * Rank is the reply's own position after validation: the model's ranking
-     * is the one decision it owns, so promotion replays it instead of
-     * re-sorting by score, which is our arithmetic and was already applied
-     * when the candidates were built.
-     */
-    private function remember(User $user, Collection $suggestions): void
-    {
-        DB::transaction(function () use ($user, $suggestions) {
-            $user->discoverySuggestions()->delete();
-
-            foreach ($suggestions->values() as $index => $suggestion) {
-                DiscoverySuggestion::create([
-                    'user_id' => $user->id,
-                    'destination_id' => $suggestion['destination']->id,
-                    'rank' => $index + 1,
-                    'why' => $suggestion['why'],
-                ]);
-            }
-        });
+        return Place::query()
+            ->where('is_active', true)
+            ->where('province', $itinerary->area)
+            ->whereIn('type', ['food', 'lodging'])
+            ->limit(60)
+            ->get(['id', 'name', 'type', 'province', 'municipality']);
     }
 
     /**
      * THE PROMPT, AND WHAT IT DELIBERATELY LEAVES OUT.
      *
-     * Facts travel one way only: the model is given the candidate rows as
-     * they stand in the catalogue and is told not to state anything else,
-     * because there is nowhere for its own arithmetic to be corrected from.
-     * No name, no account, no booking — a free-tier request is improving
-     * Google's products, and this traveller is not a field test.
+     * The candidate rows are the only facts the model sees; it is told to
+     * state nothing else, because there is nowhere for its own arithmetic to
+     * be corrected from. No traveller name, email or account field leaves —
+     * a free-tier request is improving Google's products.
      */
-    private function prompt(User $user, Collection $candidates): string
+    private function recommendationPrompt(Itinerary $itinerary, Collection $places): string
     {
-        $rows = $this->brief->candidateRows($candidates);
+        $rows = $places->map(fn (Place $place) => [
+            'id' => $place->id,
+            'name' => $place->name,
+            'type' => $place->type,
+            'area' => $place->municipality,
+        ])->toJson();
 
-        $preface = "A traveller using a Luzon travel catalogue wants help deciding where to look next. This is a discovery suggestion, not an itinerary.\n\n"
-            ."Traveller profile, with no personal details: ".$this->brief->profileClause($user).".\n\n"
-            ."Candidate catalogue rows, already filtered to their tier and to places they have not decided on:\n$rows\n\n"
-            ."Choose at most ".(int) config('planning.limits.assist_choices')." distinct ids from the candidate rows "
-            ."— the places most worth this traveller's time next, ranked best first. Each pick carries one sentence "
-            ."on why it suits this profile.\n\n"
-            ."Reply with JSON only, in this exact shape: {\"picks\":[{\"id\":123,\"why\":\"...\"}]}\n"
-            ."Every id must be one of the candidate ids above. Never state hours, prices or any fact that is not "
-            ."in the candidate rows — the app reads all facts from its own catalogue.\n";
-
-        return $preface;
+        return "A traveller is planning a trip in {$itinerary->area} and wants to add restaurants and hotels to it.\n\n"
+            ."Candidate food and lodging rows in that province:\n$rows\n\n"
+            ."Choose up to 5 distinct ids worth adding, ranked best first. Each pick carries one sentence on why it suits the trip.\n\n"
+            ."Reply with JSON only, in this exact shape: {\"suggestions\":[{\"place_id\":123,\"reason\":\"...\"}]}\n"
+            ."Every place_id must be one of the candidate ids above. Never state prices, hours or any fact that is not in the candidate rows.\n";
     }
-
-    /**
-     * HOW LONG UNTIL THIS TRAVELLER MAY ASK AGAIN, in whole seconds.
-     *
-     * The cooldown is recorded on failure too (see `assist()`), so the number
-     * below is read after a 429 as well as after a success.
-     */
-    private function cooldownRemaining(User $user): int
-    {
-        $endsAt = (int) Cache::get($this->cooldownKey($user), 0);
-
-        return max(0, $endsAt - now()->timestamp);
-    }
-
-    private function recordCooldown(User $user): void
-    {
-        $seconds = max(1, (int) config('planning.limits.assist_cooldown'));
-
-        Cache::put(
-            $this->cooldownKey($user),
-            now()->timestamp + $seconds,
-            $seconds
-        );
-    }
-
-    private function cooldownKey(User $user): string
-    {
-        return 'assist:cooldown:'.$user->id;
-    }
-
-    public function recommendLocationsForItinerary(\Illuminate\Database\Eloquent\Model $itinerary, array $context = []): array
-    {
-        $user = $itinerary->user ?? auth()->user();
-        if (!$user) {
-            return [];
-        }
-        $key = (string) config('services.gemini.key');
-        if ($key === '') {
-            return [];
-        }
-        $area = $itinerary->area ?? null;
-        $places = \App\Models\Place::query()
-            ->where('is_active', true)
-            ->when($area, fn($q)=>$q->where('province', $area))
-            ->whereIn('type', ['food','lodging'])
-            ->limit(60)
-            ->get(['id','name','type','province','municipality','price_min','price_max','price_basis']);
-        if ($places->isEmpty()) {
-            return [];
-        }
-        $prompt = 'Recommend nearby restaurants/hotels to add to this itinerary in JSON: {"suggestions":[{"place_id":number,"reason":string}]}.\nArea: '.$area.'\nCandidates: '.$places->map(fn($p)=>['id'=>$p->id,'name'=>$p->name,'type'=>$p->type,'area'=>$p->municipality])->toJson();
-        try {
-            $reply = app(\App\Services\Planning\GeminiClient::class)->ask($prompt);
-            $decoded = json_decode((string)$reply, true);
-            $suggestions = $decoded['suggestions'] ?? [];
-            $map = $places->keyBy('id');
-            $out = [];
-            foreach ($suggestions as $sug) {
-                $pid = $sug['place_id'] ?? $sug['id'] ?? null;
-                if (!$pid || !isset($map[$pid])) { continue; }
-                $out[] = ['place' => $map[$pid], 'reason' => $sug['reason'] ?? 'Suggested by assistant'];
-            }
-            return $out;
-        } catch (\Throwable) {
-            return [];
-        }
-    }
-
 }

@@ -2,9 +2,6 @@
 
 namespace Tests\Feature\Admin;
 
-use App\Jobs\CrawlSourceJob;
-use App\Models\Destination;
-use App\Models\DestinationSource;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -41,41 +38,13 @@ class QueueDrainTest extends TestCase
         config(['queue.default' => 'database']);
     }
 
-    private int $sequence = 0;
-
-    private function source(): DestinationSource
-    {
-        $this->sequence++;
-
-        $destination = Destination::create([
-            'name' => 'Fort Santiago '.$this->sequence,
-            'slug' => 'fort-santiago-'.$this->sequence,
-            'description' => 'A fort.',
-            'province' => 'Manila',
-            'latitude' => 14.6,
-            'longitude' => 120.9,
-            'budget_level' => 'economy',
-            'estimated_cost' => 500,
-            'recommended_minutes' => 120,
-        ]);
-
-        return DestinationSource::create([
-            'destination_id' => $destination->id,
-            'source_name' => 'Intramuros Administration',
-            'source_url' => 'https://intramuros.gov.ph/fs/'.$this->sequence,
-            'source_type' => 'official_lgu',
-            'status' => 'pending',
-        ]);
-    }
-
     /**
-     * A no-op job rather than a real CrawlSourceJob.
+     * A NO-OP JOB, NOT THE REAL ONE.
      *
-     * These assertions are about the drain, not the crawler, and the crawler
-     * fires the fetcher: with the real job these three tests took 13 seconds
-     * each and 38 in total, all of it spent on outbound HTTP requests whose
-     * result nothing here reads. CRAWLER_MIN_DELAY is already 0 in phpunit.xml,
-     * so this was not politeness -- it was network latency.
+     * These assertions are about the drain, not about what any particular job
+     * does, so the fixture jobs keep the suite fast: with a real network-bound
+     * job these tests took seconds each, all of it spent on outbound requests
+     * whose result nothing here reads.
      */
     #[Test]
     public function it_drains_a_queued_job(): void
@@ -91,33 +60,6 @@ class QueueDrainTest extends TestCase
             $this->pendingJobCount(),
             'the drain finished with the job still on the queue'
         );
-    }
-
-    /**
-     * The real crawl job, dispatched but not executed.
-     *
-     * Queue::fake() asserts the dispatch and stops there, which is what the
-     * dispatch path is for. This pins the other half: that a genuine
-     * CrawlSourceJob serialises onto the database queue and can be popped, so
-     * the thing the admin button produces is a thing the drain can pick up.
-     */
-    #[Test]
-    public function a_real_crawl_job_lands_on_the_queue_the_drain_reads(): void
-    {
-        $source = $this->source();
-
-        CrawlSourceJob::dispatch($source->id);
-
-        $this->assertSame(
-            1,
-            $this->pendingJobCount(),
-            'a dispatched CrawlSourceJob should be a row on the jobs table'
-        );
-
-        $payload = (string) DB::table('jobs')->value('payload');
-
-        $this->assertStringContainsString('CrawlSourceJob', $payload);
-        $this->assertStringContainsString((string) $source->id, $payload);
     }
 
     #[Test]
@@ -190,7 +132,7 @@ class QueueDrainTest extends TestCase
     /**
      * A FAILING JOB IS RETIRED, NOT PUT BACK ON THE QUEUE.
      *
-     * This is the reported bug, and the fix is that there is no retry at all.
+     * A reported bug, and the fix is that there is no retry at all.
      *
      * The command used to `release()` a failing job and `break`. Measured while
      * fixing it, because the obvious explanation was wrong twice:
@@ -204,12 +146,11 @@ class QueueDrainTest extends TestCase
      *    nothing.
      *  - So the released job came straight back on the next cron tick, threw
      *    again, and the `break` meant the jobs behind it were never reached.
-     *    One Cloudflare-challenged host looping on itself, with 64 sources
-     *    never attempted: "the crawler only crawls Camp John Hay".
+     *    One failing job owned the whole queue, with everything behind it
+     *    never attempted.
      *
-     * Retrying the job would add nothing anyway — `EthicalSourceFetcher` already
-     * makes its own transport attempts and records the failure before
-     * rethrowing.
+     * A job-level retry adds nothing anyway: a job that needs three attempts
+     * should record its own failure and let an operator re-run it.
      */
     #[Test]
     public function a_failing_job_is_retired_rather_than_released_back(): void
@@ -258,12 +199,9 @@ class QueueDrainTest extends TestCase
      * `failedJobProvider?->log(...)` silently does nothing: `$job->fail()` runs
      * the job's own `failed()` hook and deletes the row, and that is all.
      * Measured with a probe that called `fail()` on a real popped job.
-     *
-     * The record of a failed crawl is `destination_source_crawls` plus the
-     * source's own status, not this table.
      */
     #[Test]
-    public function retiring_a_job_is_recorded_in_the_crawl_log_not_failed_jobs(): void
+    public function retiring_a_job_writes_no_failed_jobs_row(): void
     {
         config(['queue.default' => 'database']);
 

@@ -1,5 +1,57 @@
 @push('scripts')
     @vite(['resources/js/itinerary-editor.js'])
+
+    <script>
+    document.getElementById('llm-suggest-btn')?.addEventListener('click', async function () {
+        const results = document.getElementById('llm-suggest-results');
+        const button = this;
+        button.disabled = true;
+        results.innerHTML = '<p class="text-sm text-benguet-charcoal/60">Asking for suggestions&hellip;</p>';
+
+        try {
+            const response = await fetch('{{ route('itineraries.llm-suggest', $itinerary) }}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '{{ csrf_token() }}',
+                    'Accept': 'application/json',
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error('Request failed');
+            }
+
+            const data = await response.json();
+            results.innerHTML = '';
+
+            if (!Array.isArray(data.suggestions) || data.suggestions.length === 0) {
+                results.innerHTML = '<p class="text-sm text-benguet-charcoal/60">No suggestions came back. Try again later.</p>';
+                return;
+            }
+
+            data.suggestions.forEach(function (suggestion) {
+                const card = document.createElement('div');
+                card.className = 'rounded-xl border border-boracay-light bg-white p-4 shadow-sm';
+
+                const title = document.createElement('div');
+                title.className = 'font-semibold text-volcanic-teal';
+                title.textContent = (suggestion.place?.name || 'Unknown place') + ' (' + (suggestion.place?.type || '') + ')';
+
+                const reason = document.createElement('div');
+                reason.className = 'mt-1 text-sm text-benguet-charcoal/70';
+                reason.textContent = suggestion.reason || '';
+
+                card.appendChild(title);
+                card.appendChild(reason);
+                results.appendChild(card);
+            });
+        } catch (error) {
+            results.innerHTML = '<p class="text-sm text-red-700">Suggestions could not be loaded. Please try again.</p>';
+        } finally {
+            button.disabled = false;
+        }
+    });
+    </script>
 @endpush
 
 <x-app-layout>
@@ -60,10 +112,6 @@
                         Delete itinerary
                     </button>
                 </form>
-    <div class="mt-4">
-        <button type="button" id="llm-suggest-btn" class="inline-flex items-center rounded-md bg-volcanic-teal px-3 py-2 text-sm font-semibold text-white shadow hover:bg-boracay-dark">Suggest restaurants/hotels with AI</button>
-        <div id="llm-suggest-results" class="mt-2 space-y-2"></div>
-    </div>
 
             </div>
         </dialog>
@@ -110,6 +158,15 @@
                         class="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-boracay px-5 py-3 text-sm font-semibold text-volcanic-teal transition hover:bg-boracay hover:text-white"
                     >
                         Edit itinerary
+                    </button>
+
+                    {{-- The LLM restaurant/hotel picker. --}}
+                    <button
+                        type="button"
+                        id="llm-suggest-btn"
+                        class="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-volcanic-teal px-5 py-3 text-sm font-semibold text-white transition hover:bg-boracay-dark"
+                    >
+                        Suggest restaurants/hotels with AI
                     </button>
 
                     {{--
@@ -171,6 +228,10 @@
                     </a>
                 </div>
             </div>
+
+            {{-- The AI's restaurant and hotel picks render here once the
+                 llm-suggest call has answered. --}}
+            <div id="llm-suggest-results" class="mb-8 space-y-3"></div>
 
             {{-- One row shape, cloned by the editor when a stop is added. Keeping
                  the markup here rather than in JS means a field added later
@@ -798,17 +859,4 @@
             </dialog>
         </section>
     </div>
-</x-app-layout><script>
-document.getElementById('llm-suggest-btn')?.addEventListener('click', async function(){
-  const res = await fetch('{{ route('itineraries.llm-suggest', $itinerary) }}', {method:'POST', headers:{'X-CSRF-TOKEN':document.querySelector('meta[name=csrf-token]')?.content || '{{ csrf_token() }}','Accept':'application/json'}});
-  const data = await res.json();
-  const div = document.getElementById('llm-suggest-results');
-  div.innerHTML='';
-  (data.suggestions||[]).forEach(s=>{
-    const el = document.createElement('div');
-    el.className='rounded border p-2 flex justify-between';
-    el.innerHTML='<div><div class="font-semibold">'+s.place.name+' ('+s.place.type+')</div><div class="text-sm text-gray-600">'+(s.reason||'')+'</div></div>';
-    div.appendChild(el);
-  });
-});
-</script>
+</x-app-layout>

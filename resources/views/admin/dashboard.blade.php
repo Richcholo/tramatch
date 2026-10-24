@@ -32,7 +32,7 @@
                 </h2>
 
 <p class="mt-6 max-w-2xl leading-7 text-white/70">
-                    Maintain destinations, review fresh source information, and keep the discovery experience accurate.
+                    Maintain destinations, review traveler feedback, and keep the discovery experience accurate.
                 </p>
 
                 <div class="mt-8 flex flex-wrap gap-3">
@@ -42,24 +42,6 @@
                             class="inline-flex rounded-full bg-philippine-gold px-6 py-3 font-bold text-benguet-charcoal transition hover:bg-white"
                         >
                             Manage destinations →
-                        </a>
-                    @endif
-
-                    @if (Route::has('admin.sources.index'))
-                        <a
-                            href="{{ route('admin.sources.index') }}"
-                            class="inline-flex rounded-full border border-white/30 px-6 py-3 font-bold text-white transition hover:bg-white hover:text-volcanic-teal"
-                        >
-                            Manage sources
-                        </a>
-                    @endif
-
-                    @if (Route::has('admin.proposals.index'))
-                        <a
-                            href="{{ route('admin.proposals.index') }}"
-                            class="inline-flex rounded-full border border-white/30 px-6 py-3 font-bold text-white transition hover:bg-white hover:text-volcanic-teal"
-                        >
-                            Review updates
                         </a>
                     @endif
 
@@ -93,7 +75,7 @@
             </div>
         </section>
 
-        <section class="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        <section class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             <div class="rounded-[2rem] bg-island-white p-6 shadow-sm ring-1 ring-boracay-light">
                 <p class="text-xs font-bold uppercase tracking-[0.2em] text-boracay-dark">
                     Destinations
@@ -133,20 +115,6 @@
 
                 <p class="mt-3 text-sm text-benguet-charcoal/55">
                     Traveler feedback entries
-                </p>
-            </div>
-
-            <div class="rounded-[2rem] bg-philippine-gold/20 p-6 ring-1 ring-philippine-gold/40">
-                <p class="text-xs font-bold uppercase tracking-[0.2em] text-boracay-dark">
-                    Pending proposals
-                </p>
-
-                <p class="mt-8 text-5xl font-semibold text-volcanic-teal">
-                    {{ $pendingProposalCount }}
-                </p>
-
-                <p class="mt-3 text-sm text-benguet-charcoal/65">
-                    Crawled updates waiting for review
                 </p>
             </div>
         </section>
@@ -205,85 +173,27 @@
                     </p>
                 @endforelse
             </div>
-    </section>
-
-        <section class="grid gap-5 lg:grid-cols-3">
-            <a
-                href="{{ route('admin.destinations.index') }}"
-                class="group rounded-[2rem] bg-island-white p-6 ring-1 ring-boracay-light transition hover:-translate-y-1 hover:shadow-xl"
-            >
-                <p class="text-xs font-bold uppercase tracking-[0.2em] text-boracay-dark">
-                    Catalog
-                </p>
-
-                <h2 class="mt-6 font-display text-3xl font-semibold text-volcanic-teal">
-                    Manage destinations
-                </h2>
-
-                <p class="mt-3 text-sm leading-6 text-benguet-charcoal/65">
-                    Add, edit, archive, restore, or permanently remove locations.
-                </p>
-
-                <span class="mt-8 inline-block font-bold text-boracay-dark group-hover:text-volcanic-teal">
-                    Open catalog →
-                </span>
-            </a>
-
-            @if (Route::has('admin.sources.index'))
-                <a
-                    href="{{ route('admin.sources.index') }}"
-                    class="group rounded-[2rem] bg-island-white p-6 ring-1 ring-boracay-light transition hover:-translate-y-1 hover:shadow-xl"
-                >
-                    <p class="text-xs font-bold uppercase tracking-[0.2em] text-boracay-dark">
-                        Freshness
-                    </p>
-
-                    <h2 class="mt-6 font-display text-3xl font-semibold text-volcanic-teal">
-                        Manage sources
-                    </h2>
-
-                    <p class="mt-3 text-sm leading-6 text-benguet-charcoal/65">
-                        Crawl approved official sources and monitor their status.
-                    </p>
-
-                    <div class="mt-8 flex flex-wrap gap-2 text-xs font-semibold">
-                        <span class="rounded-full bg-boracay-light px-3 py-1 text-boracay-dark">
-                            {{ $sourceCount }} registered
-                        </span>
-
-                        <span class="rounded-full bg-emerald-100 px-3 py-1 text-emerald-700">
-                            {{ $successfulSourceCount }} successful
-                        </span>
-
-                        <span class="rounded-full bg-red-100 px-3 py-1 text-red-700">
-                            {{ $failedSourceCount }} failed
-                        </span>
-                    </div>
-                </a>
-            @endif
-
-            @if (Route::has('admin.proposals.index'))
-                <a
-                    href="{{ route('admin.proposals.index') }}"
-                    class="group rounded-[2rem] bg-island-white p-6 ring-1 ring-boracay-light transition hover:-translate-y-1 hover:shadow-xl"
-                >
-                    <p class="text-xs font-bold uppercase tracking-[0.2em] text-boracay-dark">
-                        Verification
-                    </p>
-
-                    <h2 class="mt-6 font-display text-3xl font-semibold text-volcanic-teal">
-                        Review updates
-                    </h2>
-
-                    <p class="mt-3 text-sm leading-6 text-benguet-charcoal/65">
-                        Compare current destination data with proposed source updates before publishing.
-                    </p>
-
-                    <span class="mt-8 inline-block font-bold text-boracay-dark group-hover:text-volcanic-teal">
-                        Open review queue →
-                    </span>
-                </a>
-            @endif
         </section>
+
+        <a
+            href="{{ route('admin.destinations.index') }}"
+            class="group block rounded-[2rem] bg-island-white p-6 ring-1 ring-boracay-light transition hover:-translate-y-1 hover:shadow-xl"
+        >
+            <p class="text-xs font-bold uppercase tracking-[0.2em] text-boracay-dark">
+                Catalog
+            </p>
+
+            <h2 class="mt-6 font-display text-3xl font-semibold text-volcanic-teal">
+                Manage destinations
+            </h2>
+
+            <p class="mt-3 text-sm leading-6 text-benguet-charcoal/65">
+                Add, edit, archive, restore, or permanently remove locations.
+            </p>
+
+            <span class="mt-8 inline-block font-bold text-boracay-dark group-hover:text-volcanic-teal">
+                Open catalog →
+            </span>
+        </a>
     </div>
 </x-app-layout>

@@ -127,25 +127,45 @@ class OsrmClient
         return new RouteLeg($meters, $minutes, 'osrm');
     }
 
-    public function vicinity(float $lng, float $lat, int $limit = 10): array
+    /**
+     * The nearest routable waypoints around a pin, or an empty list.
+     *
+     * Shares the class's own configured base URL, profile, timeout and
+     * User-Agent rather than reaching back into config: the transport rules
+     * (which endpoint, which profile, which header) live in `fromConfig()`
+     * and this method obeys them like `route()` does. Failures are logged and
+     * return an empty list — an empty list is this method's `null`.
+     */
+    public function vicinity(float $latitude, float $longitude, int $limit = 10): array
     {
-        $base = rtrim((string) config('routing.base_url'), '/');
-        $url = $base.'/nearest/v1/driving/'.$lng.','.$lat;
         try {
-            $response = Http::withHeaders([
-                'User-Agent' => (string) config('crawling.user_agent', 'TraMatch/1.0'),
-            ])->timeout((int) config('routing.timeouts.request_seconds', 10))->get($url, [
-                'number' => $limit,
-                'geometries' => 'geojson',
+            $response = Http::timeout($this->timeoutSeconds)
+                ->withHeaders(['User-Agent' => $this->userAgent])
+                ->get(
+                    $this->baseUrl.'/nearest/v1/'.$this->profile.'/'.$longitude.','.$latitude,
+                    ['number' => $limit, 'geometries' => 'geojson']
+                );
+        } catch (Throwable $e) {
+            Log::warning('routing.transport_failed', [
+                'url' => $this->baseUrl,
+                'error' => $e->getMessage(),
             ]);
-            if (!$response->ok()) {
-                return [];
-            }
-            $json = $response->json();
-            return data_get($json, 'waypoints', []);
-        } catch (Throwable) {
+
             return [];
         }
-    }
 
+        if (! $response->successful()) {
+            Log::warning('routing.refused', [
+                'url' => $this->baseUrl,
+                'status' => $response->status(),
+                'user_agent' => $this->userAgent,
+            ]);
+
+            return [];
+        }
+
+        $waypoints = $response->json('waypoints');
+
+        return is_array($waypoints) ? $waypoints : [];
+    }
 }

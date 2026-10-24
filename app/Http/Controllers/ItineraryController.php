@@ -14,6 +14,7 @@ use App\Services\ItineraryCalendar;
 use App\Services\ItineraryEditor;
 use App\Services\ItineraryGenerator;
 use App\Services\Pdf\ItineraryPdf;
+use App\Services\Planning\DiscoveryAssist;
 use App\Services\RecommendationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -25,7 +26,6 @@ use Illuminate\Support\Str;
 use Illuminate\View\View;
 use RuntimeException;
 use Throwable;
-use App\Services\Planning\DiscoveryAssist;
 
 class ItineraryController extends Controller
 {
@@ -678,11 +678,22 @@ class ItineraryController extends Controller
         );
     }
 
-    public function llmSuggest(\Illuminate\Http\Request $request, Itinerary $itinerary, \App\Services\Planning\DiscoveryAssist $assist): \Illuminate\Http\JsonResponse
-    {
+    /**
+     * The model's restaurant and hotel picks for this trip, as JSON.
+     *
+     * The model chooses; the catalogue decides membership — the picks are
+     * validated against the trip's own province and type inside the assist
+     * service, so an invented id never reaches this response. Owner-only, like
+     * every other write surface on a trip.
+     */
+    public function llmSuggest(
+        Itinerary $itinerary,
+        DiscoveryAssist $assist
+    ): JsonResponse {
         $this->ensureOwner($itinerary);
-        $suggestions = $assist->recommendLocationsForItinerary($itinerary);
-        return response()->json(['suggestions' => $suggestions]);
-    }
 
+        return response()->json([
+            'suggestions' => $assist->recommendLocationsForItinerary($itinerary),
+        ]);
+    }
 }

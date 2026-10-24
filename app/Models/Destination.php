@@ -217,11 +217,6 @@ class Destination extends Model
         return $this->hasMany(DestinationSwipe::class);
     }
 
-    public function sources(): HasMany
-    {
-        return $this->hasMany(DestinationSource::class);
-    }
-
     /**
      * The carousel photos on this destination's page.
      *

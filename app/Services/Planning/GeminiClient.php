@@ -50,7 +50,7 @@ class GeminiClient
                 ->timeout((int) config('planning.timeouts.assist_seconds'))
                 ->withHeaders([
                     'x-goog-api-key' => $key,
-                    'User-Agent' => 'TraMatch/1.0 (+mailto:'.env('CRAWLER_CONTACT', 'admin@example.com').')',
+                    'User-Agent' => (string) config('services.gemini.user_agent'),
                 ])
                 ->post((string) config('services.gemini.model').':generateContent', [
                     'contents' => [

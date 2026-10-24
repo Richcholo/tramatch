@@ -4,8 +4,6 @@ use App\Http\Controllers\Admin\DestinationController as AdminDestinationControll
 use App\Http\Controllers\Admin\PlaceController as AdminPlaceController;
 use App\Http\Controllers\Admin\ReviewController as AdminReviewController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
-use App\Http\Controllers\Admin\ProposalController as AdminProposalController;
-use App\Http\Controllers\Admin\SourceController as AdminSourceController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DestinationController;
@@ -46,8 +44,9 @@ Route::get('/destinations', [
  * declared after it this route would never be reached: route-model binding
  * would resolve "quickhop" as a slug, fail to find it, and 404 -- and the
  * failure reads as a broken search box rather than as an ordering mistake.
- * The same trap `admin/sources/status` is declared before
- * `admin/sources/{source}` for.
+ * The same trap is why the old (now removed) `admin/sources/status` route was
+ * declared before `admin/sources/{source}`: a literal segment must never be
+ * declared after a model-bound one on the same controller.
  */
 Route::get('/destinations/quickhop', [
     DestinationController::class,
@@ -123,11 +122,6 @@ Route::middleware('auth')->group(function () {
         'reset',
     ])->name('discover.reset');
 
-    Route::post('/discover/assist', [
-        SwipeDiscoveryController::class,
-        'assist',
-    ])->name('discover.assist');
-
     Route::post('/destinations/{destination:slug}/reviews', [
         ReviewController::class,
         'store',
@@ -141,8 +135,8 @@ Route::middleware('auth')->group(function () {
      * Declared AFTER the reviews route and never before the show route, because
      * this is a three-segment POST and `/destinations/{destination:slug}` is a
      * two-segment GET. Nothing here can be swallowed by route-model binding —
-     * the trap `admin/sources/status` fell into is a single extra segment on the
-     * same method, which this is not.
+     * the historical `admin/sources/status` trap (that route is removed) was a
+     * single extra segment on the same method, which this is not.
      */
     Route::post('/destinations/{destination:slug}/add-to-trip', [
         DestinationController::class,
@@ -163,6 +157,16 @@ Route::middleware('auth')->group(function () {
         ItineraryController::class,
         'addDay',
     ])->name('itineraries.days.store');
+
+    /*
+     * The LLM restaurant and hotel picker. A POST like the other itinerary
+     * actions, declared with the rest of them and never before the resource,
+     * so `itineraries/{itinerary}` cannot swallow it.
+     */
+    Route::post('/itineraries/{itinerary}/llm-suggest', [
+        ItineraryController::class,
+        'llmSuggest',
+    ])->name('itineraries.llm-suggest');
 
     /*
      * The PDF export. Declared AFTER the resource so `itineraries/{itinerary}`
@@ -243,8 +247,6 @@ Route::middleware(['auth', 'admin'])
         Route::get('/', AdminController::class)
             ->name('dashboard');
 
-        // Crawling replaced by LLM discovery; routes disabled.
-
         Route::patch(
             '/destinations/{destination}/archive',
             [
@@ -264,8 +266,8 @@ Route::middleware(['auth', 'admin'])
         /*
          * BULK EDIT. Declared BEFORE the resource, so `POST
          * /admin/destinations/bulk` is never read as a resource route — the
-         * `admin/sources/status` trap, which is one extra segment on the same
-         * method and cost a real bug.
+         * same one-extra-segment trap the removed `admin/sources/status` route
+         * fell into, which cost a real bug.
          */
         Route::post('/destinations/bulk', [
             AdminDestinationController::class,

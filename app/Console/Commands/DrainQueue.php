@@ -265,9 +265,9 @@ class DrainQueue extends Command
      * popped job and `failed_jobs` stayed empty while `jobs` went to zero.
      *
      * So do not write a test asserting a `failed_jobs` row here. Assert that
-     * the job left the `jobs` table, which is the behaviour that matters, and
-     * rely on `destination_source_crawls` plus the source's own status for the
-     * record of what went wrong.
+     * the job left the `jobs` table, which is the behaviour that matters. The
+     * job's own `failed()` hook owns whatever record of the failure its
+     * subsystem needs.
      */
     private function retire(Job $job, Throwable $exception): void
     {
