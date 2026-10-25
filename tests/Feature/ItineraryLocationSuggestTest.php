@@ -615,4 +615,88 @@ class ItineraryLocationSuggestTest extends TestCase
     {
         $this->reply = $response;
     }
+
+    // ------------------------------------------------- the road-ranked pool
+
+    /**
+     * CANDIDATES ARE RANKED BY THE ROAD FROM THE TRIP'S OWN STOPS.
+     *
+     * "Worth adding" is judged near where the traveller already is: each
+     * candidate carries its cheapest measured leg from any stop, through the
+     * same 30-day cache every other leg uses. The nearer restaurant leads the
+     * prompt, so the model's picks start from proximity rather than catalogue
+     * order.
+     */
+    #[Test]
+    public function candidates_are_ranked_by_road_distance_from_the_trips_stops(): void
+    {
+        $stop = $this->place(['name' => 'Trip Stop', 'type' => Place::TYPE_FOOD]);
+        $this->trip->days()->create(['day_number' => 1])->items()->create([
+            'item_type' => \App\Models\ItineraryItem::TYPE_MEAL,
+            'place_id' => $stop->id,
+            'sort_order' => 1,
+        ]);
+
+        // Two candidates at DIFFERENT pins, so the stub can answer per pair.
+        $far = $this->place([
+            'name' => 'Far Restaurant',
+            'latitude' => 16.0,
+            'longitude' => 120.0,
+        ]);
+        $near = $this->place([
+            'name' => 'Near Restaurant',
+            'latitude' => 16.5,
+            'longitude' => 120.6,
+        ]);
+
+        $this->stubOsrm(function (\Illuminate\Http\Client\Request $request) use ($stop, $near, $far) {
+            // The from-pin is in the URL; answer 10 min to the near pin and
+            // 90 min to the far one.
+            $url = $request->url();
+
+            if (str_contains($url, (string) $near->latitude) && str_contains($url, (string) $near->longitude)) {
+                return $this->osrmResponse(3000, 600);
+            }
+
+            if (str_contains($url, (string) $far->latitude) && str_contains($url, (string) $far->longitude)) {
+                return $this->osrmResponse(90000, 5400);
+            }
+
+            return $this->osrmResponse(8400, 600);
+        });
+
+        $this->answerWith([]);
+
+        $this->assist()->recommendLocationsForItinerary($this->trip);
+
+        $prompt = (string) json_decode((string) $this->captured[0]->body(), true)
+            ['contents'][0]['parts'][0]['text'];
+
+        $this->assertLessThan(
+            strpos($prompt, 'Far Restaurant'),
+            strpos($prompt, 'Near Restaurant'),
+            'the candidate nearer the trip\'s own stop must lead the prompt'
+        );
+    }
+
+    /**
+     * THE EMPTY POOL IS NAMED AS A COVERAGE GAP, NOT AN OUTAGE.
+     *
+     * The controller checks the pool before spending the key, and the panel
+     * prints the honest sentence for the province with no curated places.
+     */
+    #[Test]
+    public function an_empty_pool_is_reported_as_a_coverage_gap(): void
+    {
+        $this->actingAs($this->owner)
+            ->postJson(route('itineraries.llm-suggest', $this->trip))
+            ->assertOk()
+            ->assertJson([
+                'suggestions' => [],
+                'empty_reason' => 'no_pool',
+            ]);
+
+        // The empty pool never reached the wire.
+        $this->assertCount(0, $this->captured);
+    }
 }

@@ -15,7 +15,10 @@ abstract class TestCase extends BaseTestCase
      * standing stub delegates to it. Reset on every setUp, so one test's road
      * can never leak into the next.
      *
-     * @var callable|null Receives nothing, returns an Http stub response.
+     * @var callable|null Receives the OSRM Request, returns an Http stub
+     *                    response. PHP ignores extra arguments, so existing
+     *                    single-answer closures with no parameters keep
+     *                    working unchanged.
      */
     public static $osrmResponder = null;
 
@@ -33,14 +36,17 @@ abstract class TestCase extends BaseTestCase
          * is also what makes routed assertions deterministic.
          */
         Http::fake([
-            'router.project-osrm.org*' => function () {
+            'router.project-osrm.org*' => function (\Illuminate\Http\Client\Request $request) {
                 $responder = static::$osrmResponder
                     ?? fn () => Http::response([
                         'code' => 'Ok',
                         'routes' => [['distance' => 8400, 'duration' => 600]],
                     ], 200);
 
-                return $responder();
+                // The responder MAY ignore the request (every existing stub
+                // does); one that needs to see the pair — a test ranking by
+                // road, for instance — reads the from/to query off it.
+                return $responder($request);
             },
         ]);
     }

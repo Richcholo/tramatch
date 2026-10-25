@@ -4,6 +4,7 @@ namespace App\Services\Planning;
 
 use App\Models\Itinerary;
 use App\Models\Place;
+use App\Services\Routing\RouteService;
 use Illuminate\Support\Collection;
 
 /**
@@ -69,8 +70,7 @@ class DiscoveryAssist
             return [];
         }
 
-        $map = $places->keyBy('id');
-        $out = [];
+        $map = $places->keyBy('id');        $out = [];
 
         foreach ($decoded['suggestions'] ?? [] as $pick) {
             if (! is_array($pick)) {
@@ -97,20 +97,78 @@ class DiscoveryAssist
     }
 
     /**
-     * Food and lodging rows in the trip's own province, ready to send.
+     * THE CANDIDATE POOL, VISIBLE TO THE CALLER.
+     *
+     * The controller checks it before spending the key, so an empty pool is
+     * reported as a coverage gap rather than as "the assistant didn't
+     * answer" — the two are different truths about the world.
+     */
+    public function candidatePoolFor(Itinerary $itinerary): Collection
+    {
+        return $this->tripPlaces($itinerary);
+    }
+
+    /**
+     * Food and lodging rows in the trip's own province, ranked by road.
      *
      * Scoped to the trip's province so the model never suggests a place the
      * traveller would have to leave the area to reach, and trimmed to a
      * candidate list the prompt can carry without blowing the token budget.
+     *
+     * THE ORDER IS THE ROAD, NOT THE CATALOGUE. Each candidate carries its
+     * cheapest measured leg from any of the trip's own stops, through the
+     * same 30-day cache every other leg uses — so "worth adding" is judged
+     * near where the traveller already is, at no marginal API cost. A leg the
+     * road cannot answer is not a disqualification: it sorts after the
+     * measured ones, exactly like an unresolved route elsewhere in the app.
      */
     private function tripPlaces(Itinerary $itinerary): Collection
     {
-        return Place::query()
+        $places = Place::query()
             ->where('is_active', true)
             ->where('province', $itinerary->area)
             ->whereIn('type', ['food', 'lodging'])
             ->limit(60)
-            ->get(['id', 'name', 'type', 'province', 'municipality']);
+            ->get(['id', 'name', 'type', 'province', 'municipality', 'latitude', 'longitude']);
+
+        $stops = $itinerary->days()
+            ->with('items')
+            ->get()
+            ->flatMap(fn ($day) => $day->items)
+            ->filter(fn ($item) => $item->hasKnownLocation());
+
+        if ($stops->isEmpty()) {
+            return $places;
+        }
+
+        $routing = RouteService::fromConfig();
+
+        foreach ($places as $place) {
+            $best = null;
+
+            foreach ($stops as $stop) {
+                // One leg per pair, each through the 30-day cache — and the
+                // cache is the point: a candidate near a popular stop is
+                // usually already memoised from the trip's own save.
+                $leg = $routing->leg(
+                    (float) $stop->latitude(),
+                    (float) $stop->longitude(),
+                    (float) $place->latitude,
+                    (float) $place->longitude
+                );
+
+                if ($leg !== null && ($best === null || $leg->durationMinutes < $best)) {
+                    $best = $leg->durationMinutes;
+                }
+            }
+
+            $place->nearest_leg_minutes = $best;
+        }
+
+        return $places->sortBy(
+            fn ($place) => $place->nearest_leg_minutes ?? PHP_INT_MAX,
+            SORT_NUMERIC
+        )->values();
     }
 
     /**

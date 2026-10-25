@@ -692,6 +692,18 @@ class ItineraryController extends Controller
     ): JsonResponse {
         $this->ensureOwner($itinerary);
 
+        // An empty pool (no curated food/lodging rows in the trip's province)
+        // and a failed ask are different truths about the world; the panel
+        // prints which, so a coverage gap never reads as an outage.
+        $places = $assist->candidatePoolFor($itinerary);
+
+        if ($places->isEmpty()) {
+            return response()->json([
+                'suggestions' => [],
+                'empty_reason' => 'no_pool',
+            ]);
+        }
+
         return response()->json([
             'suggestions' => $assist->recommendLocationsForItinerary($itinerary),
         ]);

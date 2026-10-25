@@ -25,7 +25,12 @@
             results.innerHTML = '';
 
             if (!Array.isArray(data.suggestions) || data.suggestions.length === 0) {
-                results.innerHTML = '<p class="text-sm text-benguet-charcoal/60">No suggestions came back. Try again later.</p>';
+                // Two different empties: a coverage gap in the curated places
+                // catalogue and a failed ask are different truths, and the
+                // panel says which one happened.
+                results.innerHTML = data.empty_reason === 'no_pool'
+                    ? '<p class="text-sm text-benguet-charcoal/60">No curated restaurants or hotels for this trip\'s province yet. More are being added to the catalogue.</p>'
+                    : '<p class="text-sm text-benguet-charcoal/60">No suggestions came back. Try again later.</p>';
                 return;
             }
 
