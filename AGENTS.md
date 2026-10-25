@@ -2896,12 +2896,18 @@ carries.
 
 ### The per-province propagation (2026-10-25)
 
-The catalogue was topped up to **10–13 rows per province for the provinces near
-the band**: Metro Manila +4 (13), Rizal +2 (10), Ilocos Norte +3 (10), Cavite +3
-(10) — 100 → 112 rows. Metro Manila now ties Benguet at 13. Provinces below 10
-(Aurora 5, Batangas 5, Zambales 4,
-Cagayan 4, Laguna 4, Ilocos Sur 4, and the one-and-two-row provinces) were NOT
-topped up this round — that is the remaining propagation work, not an oversight.
+The catalogue was topped up toward **10–13 rows per province in two rounds on
+the same day**, 100 → 160 rows:
+
+- **Round 1 (112)** — Metro Manila +4 (13, tying Benguet), Rizal +2 (10),
+  Ilocos Norte +3 (10), Cavite +3 (10).
+- **Round 2 (160)** — Aurora +5, Batangas +5, Zambales +6, Cagayan +6,
+  Laguna +6, Ilocos Sur +6, Quezon +7, Batanes +7 — all eight now at 10.
+
+Thirteen provinces sit at 10–13 rows. Still below (the remaining propagation
+work, not an oversight): Mountain Province 4, Bataan 2, Ifugao 2, La Union 2,
+Tarlac 2, Pangasinan 2, Pampanga 2, Bulacan 2, Albay 2, Kalinga 2,
+Nueva Ecija 1, Abra 1.
 
 Every new row follows the house rules the catalogue was built on: blank hours
 cells wherever no authority publishes a window (the seeder renders "Hours not
@@ -2909,15 +2915,35 @@ listed", which beats a wrong number), fees quoted only where one is actually
 charged, tags drawn from the existing vocabulary (no new tag rows), sources on
 official `.gov.ph` pages where one exists and a named guide page where it does
 not. No hours kind is invented — ungated public places ship with blank hours and
-a note, never a fabricated 24h window.
+a note, never a fabricated 24h window. Rows whose pins were set from general
+knowledge rather than a measured coordinate carry "Pin approximate — verify on
+map" in their notes.
 
-- **Metro Manila +4** — Quezon Memorial Circle, Manila Zoological and Botanical
-  Garden, SM Mall of Asia Bay Area, Manila Baywalk Dolomite Beach.
-- **Rizal +2** — Wawa Dam (Montalban Gorge), Avilon Zoo.
-- **Ilocos Norte +3** — Sarrat Church, Batac Riverside Empanada Lane, Paoay
-  Lake National Park.
-- **Cavite +3** — Imus Cathedral, Cavite City Waterfront (Julian Felipe
-  Monument), Kaybiang Tunnel.
+- **Round 1** — Metro Manila: Quezon Memorial Circle, Manila Zoological and
+  Botanical Garden, SM Mall of Asia Bay Area, Manila Baywalk Dolomite Beach;
+  Rizal: Wawa Dam (Montalban Gorge), Avilon Zoo; Ilocos Norte: Sarrat Church,
+  Batac Riverside Empanada Lane, Paoay Lake National Park; Cavite: Imus
+  Cathedral, Cavite City Waterfront (Julian Felipe Monument), Kaybiang Tunnel.
+- **Round 2, Aurora** — Ermita Hill, Diguisit Bay Rock Formations, Ampere
+  Beach, Balete Park and Millennium Tree, Baler Church.
+- **Round 2, Batangas** — Mt. Maculot, Masasa Beach, The Farm at San Benito,
+  Casa Villavicencio, Mt. Daguldol.
+- **Round 2, Zambales** — Pundaquit Beach, Capones Island Lighthouse, Crystal
+  Beach, Ocean Adventure, JEST Camp, Liwliwa Beach.
+- **Round 2, Cagayan** — Share and Care Nature Park, St. Peter Metropolitan
+  Cathedral, Cagayan Provincial Museum, Sierra Madre (Cagayan side),
+  Camalanugas Falls, Palaui Island Marine Trail.
+- **Round 2, Laguna** — Caliraya Ecoville, Luljetta's Hanging Gardens Spa,
+  Enchanted Cave, Duck and Sugarcamp Islands, Japanese Garden, Panguil River
+  Eco Park.
+- **Round 2, Ilocos Sur** — Santa Maria Church, Baluarte Watchtower, Vigan
+  Cathedral, Pagburnayan Jar Factory, Bessang Pass Monument, Quirino Bridge.
+- **Round 2, Quezon** — Quezon National Forest Park, Cagbalete Island, Baluti
+  Island, Boruangan Falls, Malagonlong Bridge, St. Michael Basilica, Borawan
+  Island.
+- **Round 2, Batanes** — Chawa Viewdeck, Songsong Ruins, Alapad Pass,
+  Huhmurun Stone Beach, San Jose de Obrero Church, Savidug Stone Houses and
+  Idjang, Chamantad-Tiñan Viewpoint.
 
 ### The 100-row expansion (2026-10-14)
 

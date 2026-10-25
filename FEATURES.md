@@ -8,14 +8,16 @@ unmarked rests on markup/server tests only.
 
 ## Catalogue
 
-- [x] 112-destination Luzon catalogue from `database/data/luzon-locations-clean.csv`
-      (65 curated → 100 famous-spots expansion → 112 after the 2026-10-25
-      per-province propagation)
+- [x] 160-destination Luzon catalogue from `database/data/luzon-locations-clean.csv`
+      (65 curated → 100 famous-spots expansion → 160 after the 2026-10-25
+      per-province propagation, rounds 1+2)
 - [x] Per-province propagation round 1: Metro Manila 13 (ties Benguet), Rizal 10,
       Ilocos Norte 10, Cavite 10
-- [ ] Provinces still below 10 rows (remaining propagation work): Aurora 5,
-      Batangas 5, Zambales 4, Cagayan 4, Laguna 4, Ilocos Sur 4, Quezon 3,
-      Batanes 3, and the two-row and one-row provinces
+- [x] Per-province propagation round 2: Aurora, Batangas, Zambales, Cagayan,
+      Laguna, Ilocos Sur, Quezon, Batanes all to 10 — 13 provinces now at 10–13
+- [ ] Provinces still below 10 rows (remaining propagation work): Mountain
+      Province 4, Bataan 2, Ifugao 2, La Union 2, Tarlac 2, Pangasinan 2,
+      Pampanga 2, Bulacan 2, Albay 2, Kalinga 2, Nueva Ecija 1, Abra 1
 - [x] Honesty policy: "Hours not listed" beats a wrong number; blank hours
       cells clear stale values on every reseed
 - [x] `hours_kind` disambiguation (`always_open`, `per_day`,

@@ -250,11 +250,13 @@ class DestinationHoursTest extends TestCase
         $names = Destination::pluck('name');
 
         // 65 rows at curation, 100 after the famous-spots expansion, 112 after
-        // the per-province propagation (10-13 per province, four provinces
-        // topped up: Metro Manila, Rizal, Ilocos Norte, Cavite). If this count
+        // propagation round 1 (Metro Manila, Rizal, Ilocos Norte, Cavite), 160
+        // after round 2 (Aurora, Batangas, Zambales, Cagayan, Laguna, Ilocos
+        // Sur, Quezon, Batanes all to 10). Thirteen provinces now sit at 10-13
+        // rows; the rest are the remaining propagation work. If this count
         // changed, a row was added or removed — check the CSV diff, not
         // just this number.
-        $this->assertCount(112, $names);
+        $this->assertCount(160, $names);
 
         foreach ($names as $name) {
             $this->assertDoesNotMatchRegularExpression(
