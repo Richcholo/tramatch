@@ -18,7 +18,8 @@ use Tests\TestCase;
  * The defect this file exists for was measured, not imagined. Generation drew
  * from `recommend()`, which is liked-only, so the reachable trip length was
  * "liked destinations in one province divided by three". Benguet — the densest
- * province in a 100-row catalogue — has thirteen rows, so a traveller who liked
+ * province in the catalogue (tied with Metro Manila after the 2026-10-25
+ * per-province propagation) — has thirteen rows, so a traveller who liked
  * ALL THIRTEEN and asked for seven days got five of them, with days six and
  * seven empty. Doing everything right was not enough.
  *

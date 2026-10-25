@@ -249,10 +249,12 @@ class DestinationHoursTest extends TestCase
 
         $names = Destination::pluck('name');
 
-        // 65 rows at curation, 100 after the famous-spots expansion. If this
-        // count changed, a row was added or removed — check the CSV diff, not
+        // 65 rows at curation, 100 after the famous-spots expansion, 112 after
+        // the per-province propagation (10-13 per province, four provinces
+        // topped up: Metro Manila, Rizal, Ilocos Norte, Cavite). If this count
+        // changed, a row was added or removed — check the CSV diff, not
         // just this number.
-        $this->assertCount(100, $names);
+        $this->assertCount(112, $names);
 
         foreach ($names as $name) {
             $this->assertDoesNotMatchRegularExpression(

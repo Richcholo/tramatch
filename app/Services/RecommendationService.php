@@ -103,7 +103,8 @@ class RecommendationService
      * ceiling nobody could design around. Generation used to draw from
      * `recommend()`, which is liked-only, which made the reachable trip length
      * "liked destinations in one province divided by three". Benguet — the
-     * densest province in a 100-row catalogue — has thirteen rows, so a
+     * densest province in the catalogue (tied with Metro Manila after the
+     * 2026-10-25 per-province propagation) — has thirteen rows, so a
      * traveller who liked all thirteen and asked for seven days got five of
      * them. Verified, not inferred.
      *

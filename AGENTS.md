@@ -2894,6 +2894,31 @@ If any of these comes back, re-add the row to the CSV *first* — the seeder's
 `firstOrNew(['slug' => ...])` will create it, but only with the columns the CSV
 carries.
 
+### The per-province propagation (2026-10-25)
+
+The catalogue was topped up to **10–13 rows per province for the provinces near
+the band**: Metro Manila +4 (13), Rizal +2 (10), Ilocos Norte +3 (10), Cavite +3
+(10) — 100 → 112 rows. Metro Manila now ties Benguet at 13. Provinces below 10
+(Aurora 5, Batangas 5, Zambales 4,
+Cagayan 4, Laguna 4, Ilocos Sur 4, and the one-and-two-row provinces) were NOT
+topped up this round — that is the remaining propagation work, not an oversight.
+
+Every new row follows the house rules the catalogue was built on: blank hours
+cells wherever no authority publishes a window (the seeder renders "Hours not
+listed", which beats a wrong number), fees quoted only where one is actually
+charged, tags drawn from the existing vocabulary (no new tag rows), sources on
+official `.gov.ph` pages where one exists and a named guide page where it does
+not. No hours kind is invented — ungated public places ship with blank hours and
+a note, never a fabricated 24h window.
+
+- **Metro Manila +4** — Quezon Memorial Circle, Manila Zoological and Botanical
+  Garden, SM Mall of Asia Bay Area, Manila Baywalk Dolomite Beach.
+- **Rizal +2** — Wawa Dam (Montalban Gorge), Avilon Zoo.
+- **Ilocos Norte +3** — Sarrat Church, Batac Riverside Empanada Lane, Paoay
+  Lake National Park.
+- **Cavite +3** — Imus Cathedral, Cavite City Waterfront (Julian Felipe
+  Monument), Kaybiang Tunnel.
+
 ### The 100-row expansion (2026-10-14)
 
 A panel review said the catalogue was too small, so 35 famous spots were added:

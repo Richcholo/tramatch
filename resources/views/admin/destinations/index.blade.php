@@ -81,7 +81,8 @@
             this repo keeps paying for — and a first version of this action was
             about to do exactly that. Selection is therefore scoped to the
             page, and the cost of that choice is honest: fixing a tier split
-            across 100 destinations means applying the change page by page.
+            across a 112-destination catalogue means applying the change page
+            by page.
             If cross-page selection is wanted here, EXTRACT the sources script
             into a shared partial first; do not paste it twice.
 
