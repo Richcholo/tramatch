@@ -98,7 +98,7 @@ unmarked rests on markup/server tests only.
       ("per room, per night" is never multiplied by group size)
 - [x] Per-tier cluster coverage report (`Place::clusterCoverage()`),
       readiness gaps vs CLUSTER_MINIMUMS (6 food / 3 lodging)
-- [x] Three pilot clusters: baguio, antipolo, paoay
+- [x] Four clusters: baguio, antipolo, paoay (2026-10-14), vigan (2026-10-25)
 
 ## Routing (OSRM)
 

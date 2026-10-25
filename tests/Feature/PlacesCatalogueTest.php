@@ -522,8 +522,8 @@ class PlacesCatalogueTest extends TestCase
      */
 
     /**
-     * THE PANEL SAID "THE LOCATIONS ARE TOO SMALL", and the answer is three dense
-     * areas rather than more scattered ones. This pins WHICH three, and the reason
+     * THE PANEL SAID "THE LOCATIONS ARE TOO SMALL", and the answer is dense
+     * areas rather than scattered ones. This pins WHICH ones, and the reason
      * for each is in `Place::CLUSTERS`.
      *
      * It reads the CSV, NOT the database. The catalogue's source of truth is
@@ -538,7 +538,7 @@ class PlacesCatalogueTest extends TestCase
     public function test_the_three_pilot_clusters_point_at_provinces_the_catalogue_actually_has(): void
     {
         $this->assertSame(
-            ['baguio', 'antipolo', 'paoay'],
+            ['baguio', 'antipolo', 'paoay', 'vigan'],
             array_keys(Place::CLUSTERS),
             'The pilot cluster set changed. Re-read the CLUSTERS docblock: it argues for '
             .'these three on grounds of density, and that argument has to be '

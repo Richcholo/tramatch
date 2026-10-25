@@ -1646,10 +1646,11 @@ missing". `CLUSTER_MINIMUMS` is 6 food / 3 lodging; lodging is the binding
 constraint, because food can be left unpriced and a cluster with nowhere to sleep
 cannot be planned at all.
 
-#### The three pilot clusters, and why those three
+#### The four clusters, and why those
 
 `Place::CLUSTERS` is **baguio** (Benguet), **antipolo** (Rizal), **paoay**
-(Ilocos Norte). Chosen on **density**, because "the locations are too small" is a
+(Ilocos Norte), **vigan** (Ilocos Sur, added 2026-10-25). Chosen on
+**density**, because "the locations are too small" is a
 complaint about coverage and coverage is not a count: sixty attractions scattered
 across Luzon raises the number and leaves every trip unable to answer "where do I
 eat?".
@@ -1663,6 +1664,10 @@ eat?".
 - **Paoay** — Paoay (Sand Dunes, San Agustin Church) and Burgos (Cape
   Bojeador, Kapurpurawan) are one coastal run. Six is the smallest of the three
   and it is the best coastal test case.
+- **Vigan** — added 2026-10-25 as the fourth. Five destinations inside Vigan
+  City itself (Calle Crisologo, the Heritage Site, Baluarte Watchtower, the
+  Cathedral, the Jar Factory) plus Bantay Bell Tower at its edge: the whole
+  cluster walks, and the heritage inns face the plaza rather than a highway.
 
 Deliberately **not** Aurora or Cagayan: five and four destinations but no second
 municipality worth driving to, so a trip there is one day out and one day back.
@@ -2433,7 +2438,7 @@ by markup assertions — re-click `/discover` after touching
 #### What is NOT verified yet
 
 **Nothing here has been clicked in a browser or rendered on a page except by
-the suite.** The admin manages 36 researched places, and the itinerary renders
+the suite.** The admin manages 57 researched places, and the itinerary renders
 meals, hotels and custom entries through the editor — but no hand has dragged a
 meal row, opened the custom-stop form, or watched the incomplete-total notice
 appear. The models, the schema and the markup contracts are exercised by
@@ -2443,12 +2448,59 @@ appear. The models, the schema and the markup contracts are exercised by
 proven against a throwaway **MySQL** database, because the two disagree about
 dropping a column in a foreign key and about nullability introspection.
 
-#### The places catalogue (36 rows, 2026-10-14)
+#### The places catalogue (57 rows: 36 on 2026-10-14, 21 on 2026-10-25)
 
-Researched in three parallel batches, one per cluster: 12 Baguio + 11
-Antipolo/Tanay + 12 Paoay, plus A Hotel Baguio added afterwards for the economy
-lodging gap. Every row carries a real, non-Wikipedia `source_url`, and the
-seeder imports 36 with zero rejected.
+The first round was researched in three parallel batches, one per cluster:
+12 Baguio + 11 Antipolo/Tanay + 12 Paoay, plus A Hotel Baguio added afterwards
+for the economy lodging gap. Every row carries a real, non-Wikipedia
+`source_url`, and the seeder imports the file with zero rejected.
+
+The second round (2026-10-25) added the **Vigan cluster** — 8 Calle
+Crisologo-area restaurants (Cafe Leona, Irene's Empanada, BarTech, 1995 Studio
+Cafe, Calle Brewery, Kusina Felicitas, Lilong and Lilang at Hidden Garden,
+Angkong Seafood) and 4 inns (Grandpa's Inn, Hotel Salcedo, Vigan Plaza Hotel,
+Hotel Luna) — plus economy top-ups for the three pilots: Arca's Yard Cafe +
+Olive Town Center and Hotel (the renamed Hotel 99) for Baguio, Cloud 9 Antipolo
+Hotel + Seven Suites + Mount Purro Nature Reserve + Cafe Dionysus for
+Antipolo, and Eagle's Nest Laoag + Terra Rika + Pannzian for Paoay. The
+21 rows were appended by a throwaway `fputcsv` script (keyed by column name,
+never positional) and the file re-verified: 26 cells per row, no slug
+collisions, 57 imported with zero rejected.
+
+**The tier vocabulary is about a traveller's spend, and lodging rows are judged
+against the cluster's own cheapest band, not the ₱500 destination boundary.**
+CSV precedent: A Hotel Baguio (₱1,500–1,700) and Citylight (₱2,500–4,500) are
+both filed economy. On that scale Cloud 9 Antipolo's ₱1,900–2,100 (an official
+FB post) is an economy row for Rizal, while Terra Rika (~USD 58 on aggregators,
+unverified) and the Vigan hotels sit at the honest mid-range/premium bands
+their cluster actually has. Never file a rate down to hit a coverage number —
+the readiness report is allowed to say "short".
+
+**Where the official domain is dead or squatted, the official Facebook page is
+the source of record.** `hiddengardenvigan.com` is casino spam; Hidden Garden's
+FB page (19.8k followers) is the row's source. The same rule covers Grandpa's
+Inn, Hotel Salcedo, Vigan Plaza, Pannzian and Terra Rika. Real domains that
+answer: `www.hotelluna.ph`, `viganplazahotel.com.ph`,
+`cloud9antipolohotel.com`, `mountpurronaturereserve.com`, `arcasyardcafe.com`.
+
+**Coverage per tier after the second round** (the seeder prints it on every
+run): Baguio economy **6 food / 3 lodging — ready**; Antipolo economy 6 food /
+3 lodging (counts met, but no food place carries a verified price yet); Vigan
+economy 7 food / 2 lodging (short 1 lodging); Paoay economy 6 food / 1 lodging
+(short 2 lodging). The remaining binding constraint is still **economy
+lodging**: Saud and Vigan homestays publish rates only in Facebook groups,
+which is not a citable per-row source. Antipolo's was closed with Cloud 9 (an
+official `per_room_night` band) and Mount Purro (reservation-by-inquiry, blank
+price) — the honest shapes, not two more invented rates.
+
+**Hours on the new rows follow the standing rule**: blank with a note wherever
+official and third-party sources conflict (BarTech's official FB post says
+2PM–10PM while a 2023 guide says 6PM–2AM) or nothing official exists. The one
+exception is Arca's Yard, whose official Instagram bio publishes a full split
+week — stored as `daily_hours` JSON with a `'closed' => true` Wednesday, the
+exact shape `normalizeDailyHours()` handles. Price bands quoted from a
+third-party guide (thelist.ph, 2023) are stored UNCERTAIN-noted with
+`price_verified` blank, matching the Good Taste precedent.
 
 **Four candidates were replaced rather than invented**, and the replacements are
 the evidence the process works: Go Hotels Baguio (no Baguio branch exists —
@@ -3737,7 +3789,7 @@ the runtime never executes it.
   on slug, so re-running is safe):
   `php artisan db:seed --class=LuzonLocationsCsvSeeder --force` (100
   destinations) and `php artisan db:seed --class=PlacesCsvSeeder --force`
-  (36 places). Skipping this leaves the new tables empty with no error
+  (57 places). Skipping this leaves the new tables empty with no error
   anywhere — the app renders "nothing planned" states, not failures.
 - **The queue worker is `deploy/queue-worker.sh`, registered as an hPanel cron
   job every minute.** Shared hosting will not run `queue:work` as a daemon.

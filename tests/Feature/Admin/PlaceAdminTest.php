@@ -75,7 +75,7 @@ class PlaceAdminTest extends TestCase
             ->assertOk()
             ->getContent();
 
-        foreach (['Baguio', 'Antipolo', 'Paoay', 'economy', 'mid-range', 'premium'] as $word) {
+        foreach (['Baguio', 'Antipolo', 'Paoay', 'Vigan', 'economy', 'mid-range', 'premium'] as $word) {
             $this->assertStringContainsString($word, $html);
         }
 

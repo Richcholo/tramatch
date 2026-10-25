@@ -124,6 +124,13 @@ class Place extends Model
      *            Burgos (Cape Bojeador, Kapurpurawan) are one coastal run, and
      *            Bangui and Pagudpud extend it north. Six destinations is the
      *            smallest of the three and it is the best coastal test case.
+     *   vigan    Ilocos Sur. Added 2026-10-25 as the fourth cluster: five
+     *            destinations inside Vigan City itself (Calle Crisologo, the
+     *            Heritage Site, Baluarte Watchtower, the Cathedral, the Jar
+     *            Factory) plus Bantay Bell Tower at its edge, so the whole
+     *            cluster walks. The heritage-core restaurants and inns face the
+     *            same sourcing reality as everywhere else: most publish no rates,
+     *            so the rows are honest blanks rather than invented figures.
      *
      * Deliberately NOT chosen: Aurora and Cagayan, which have five and four
      * destinations but no second municipality worth driving to, so a trip there
@@ -148,6 +155,10 @@ class Place extends Model
         'paoay' => [
             'province' => 'Ilocos Norte',
             'label' => 'Paoay and Burgos',
+        ],
+        'vigan' => [
+            'province' => 'Ilocos Sur',
+            'label' => 'Vigan',
         ],
     ];
 
