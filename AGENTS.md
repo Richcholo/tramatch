@@ -21,19 +21,43 @@ code; where a section below describes them as live, the removal wins:
 - **The discovery assist and its suggestion memory** — `discover.assist`,
   `TripBrief`, `DiscoverySuggestion`, remembered picks and the deck promotion
   are deleted. `/discover` deals cards with no model in the loop, by decision:
-  the only live Gemini surface is the itinerary location suggest below.
+  the only live Gemini surfaces are the itinerary location suggest and the
+  generation-form assist, described below.
 - **`PLANNING_TIMEOUT` / `JOB_BUDGET` / `MAX_CANDIDATES` / `MAX_ATTEMPTS` /
   `COOLDOWN`** — dead caps from the abandoned drafting model, removed from
   `config/planning.php` and the env examples. The live keys are
   `PLANNING_ROUTING_TIMEOUT`, `PLANNING_ASSIST_TIMEOUT`,
   `PLANNING_ASSIST_OUTPUT_TOKENS`, `ROUTING_CACHE_DAYS`.
 
-The **itinerary location suggest** (POST `itineraries.llm-suggest`) is the one
-live Gemini surface: one structured-output request per click, candidates are
-`places` rows (food/lodging only) in the trip's own province, every returned
-id is re-read from the catalogue, and any failure is an empty panel rather
-than an error page. `tests/Feature/GeminiClientTest.php` and
-`tests/Feature/ItineraryLocationSuggestTest.php` pin it.
+There are now **two** live Gemini surfaces, both the same authority split —
+the model chooses selection and one sentence, the server owns membership and
+every fact:
+
+- **The itinerary location suggest** (POST `itineraries.llm-suggest`): one
+  structured-output request per click, candidates are `places` rows
+  (food/lodging only) in the trip's own province, every returned id re-read
+  from the catalogue, and any failure is an empty panel rather than an error
+  page. Its picks render as cards with a day picker and a one-click hot-add
+  (POST `itineraries.places.add` → `ItineraryEditor::addPlaceTo()`, the same
+  negative-key shim as `addDestinationTo()` — a place stop has no swipes, so
+  the liked rule does not apply, but duplicates, province and day ownership
+  are all refused server-side).
+- **The generation-form assist** (POST `itineraries.generation-assist`): the
+  model ranks the traveller's OWN shortlist on the create form. The
+  controller re-filters the posted ids against the same `candidates()` query
+  the form renders from, so a crafted id is refused before the model is
+  asked, and an empty pool never reaches the wire.
+
+`tests/Feature/GeminiClientTest.php`,
+`tests/Feature/ItineraryLocationSuggestTest.php` (which also holds the
+generation-assist HTTP tests) and `tests/Feature/ItineraryPlaceAddTest.php`
+pin them. Two more editor features from the same fine-tuning round: the
+**live reflow preview** (debounced calls to the existing reflow endpoint fill
+only EMPTY time fields with the suggestion — a typed time always wins,
+nothing is written until save, and the schedule rules stay server-side), and
+**honest stop prices** (`ItineraryItem::costLabel()` is the one formatter: a
+place quotes `Place::priceLabel()`, a free attraction says "Free", a custom
+stop owns its cost — no stop prints a bare `₱0.00` any more).
 
 ## Commands
 

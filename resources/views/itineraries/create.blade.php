@@ -234,6 +234,34 @@
                     </div>
                 </section>
 
+                <section class="rounded-[2rem] bg-island-white p-6 shadow-sm ring-1 ring-boracay-light sm:p-10">
+                    <div class="flex flex-wrap items-end justify-between gap-4">
+                        <div>
+                            <p class="text-xs font-bold uppercase tracking-[0.2em] text-boracay-dark">
+                                Not sure which to keep?
+                            </p>
+
+                            <h2 class="mt-3 font-display text-3xl font-semibold tracking-[-0.04em] text-volcanic-teal">
+                                Ask for a second opinion.
+                            </h2>
+
+                            <p class="mt-3 text-sm leading-6 text-benguet-charcoal/65">
+                                The assistant ranks YOUR shortlist and gives one sentence per pick. It suggests — you decide; every fact on a card comes from our catalogue, and its words are its own.
+                            </p>
+                        </div>
+
+                        <button
+                            type="button"
+                            id="generation-assist-btn"
+                            class="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-volcanic-teal px-5 py-3 text-sm font-semibold text-white transition hover:bg-boracay-dark disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                            Suggest my best picks
+                        </button>
+                    </div>
+
+                    <div id="generation-assist-results" class="mt-6 grid gap-3 sm:grid-cols-2"></div>
+                </section>
+
                 <section class="rounded-[2rem] bg-volcanic-teal p-6 text-white shadow-xl sm:p-10">
                     <div class="flex flex-wrap items-end justify-between gap-4">
                         <div>
@@ -464,5 +492,102 @@
         });
 
         renderSelectedDestinations();
+
+        /* ------- the generation assist: the model ranks OUR candidate list */
+
+        const assistBtn = document.getElementById('generation-assist-btn');
+        const assistResults = document.getElementById('generation-assist-results');
+
+        const areaInput = document.querySelector('select[name="area"]');
+
+        const areaValue = () => areaInput?.value?.trim() ?? '';
+
+        assistBtn?.addEventListener('click', async function () {
+            const area = areaValue();
+            const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '{{ csrf_token() }}';
+
+            if (area === '' || selectedOrder.length === 0) {
+                assistResults.innerHTML =
+                    '<p class="rounded-xl bg-palawan-sand p-4 text-sm text-benguet-charcoal/65 sm:col-span-2">Choose an area and at least one destination first.</p>';
+
+                return;
+            }
+
+            assistBtn.disabled = true;
+            assistResults.innerHTML =
+                '<p class="text-sm text-benguet-charcoal/60 sm:col-span-2">Ranking your shortlist&hellip;</p>';
+
+            try {
+                const response = await fetch('{{ route('itineraries.generation-assist') }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN': csrf,
+                    },
+                    body: JSON.stringify({
+                        area,
+                        destination_ids: selectedOrder.map(Number),
+                    }),
+                });
+
+                if (!response.ok) {
+                    throw new Error('Request failed');
+                }
+
+                const data = await response.json();
+                const picks = Array.isArray(data.suggestions) ? data.suggestions : [];
+
+                assistResults.innerHTML = '';
+
+                if (picks.length === 0) {
+                    assistResults.innerHTML =
+                        '<p class="text-sm text-benguet-charcoal/60 sm:col-span-2">No suggestions came back. Try again later.</p>';
+
+                    return;
+                }
+
+                picks.forEach((pick) => {
+                    const id = String(pick.destination?.id ?? '');
+                    const card = document.createElement('div');
+                    card.className = 'rounded-xl border border-boracay-light bg-palawan-sand p-4';
+
+                    const title = document.createElement('button');
+                    title.type = 'button';
+                    title.className = 'text-left font-semibold text-volcanic-teal hover:text-boracay-dark';
+                    title.textContent = pick.destination?.name || 'Unknown place';
+
+                    // Clicking a card ticks or unticks that destination in the
+                    // shortlist above — the suggestion acts on the form, never
+                    // on its own.
+                    title.addEventListener('click', () => {
+                        const checkbox = destinationCheckboxes.find(
+                            (box) => String(box.value) === id
+                        );
+
+                        if (checkbox) {
+                            checkbox.checked = !checkbox.checked;
+                            checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+                    });
+
+                    const reason = document.createElement('p');
+                    reason.className = 'mt-1 text-sm text-benguet-charcoal/70';
+                    reason.textContent = pick.reason || '';
+
+                    const label = document.createElement('p');
+                    label.className = 'mt-2 text-xs font-semibold uppercase tracking-wide text-benguet-charcoal/50';
+                    label.textContent = "The model's own words, unchecked";
+
+                    card.append(title, reason, label);
+                    assistResults.appendChild(card);
+                });
+            } catch (error) {
+                assistResults.innerHTML =
+                    '<p class="text-sm text-red-700 sm:col-span-2">Suggestions could not be loaded. Please try again.</p>';
+            } finally {
+                assistBtn.disabled = false;
+            }
+        });
     </script>
 </x-app-layout>

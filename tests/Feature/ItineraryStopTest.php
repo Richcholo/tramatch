@@ -205,6 +205,56 @@ class ItineraryStopTest extends TestCase
         $this->assertSame($place->id, $places->get($place->id)->id);
     }
 
+    /**
+     * NO STOP EVER PRINTS ₱0.00 AS ITS PRICE.
+     *
+     * An unpriced meal stores 0 because the column cannot hold null, and the
+     * read view used to print that stored zero as `₱0.00` — a figure nobody
+     * published, read as "free". `costLabel()` is the one formatter: a place
+     * quotes its verified band or "Price not listed"; a free attraction says
+     * "Free"; a custom entry owns its cost; a priced attraction keeps the
+     * curated estimate.
+     */
+    public function test_cost_label_is_honest_about_every_kind_of_price(): void
+    {
+        // An unpriced place stop: "Price not listed", never ₱0.00.
+        $unpriced = $this->item([
+            'item_type' => ItineraryItem::TYPE_MEAL,
+            'destination_id' => null,
+            'place_id' => $this->place(['price_min' => null, 'price_max' => null])->id,
+        ]);
+
+        $this->assertSame('Price not listed', $unpriced->costLabel());
+
+        // A priced place stop quotes the place's own band.
+        $priced = $this->item([
+            'item_type' => ItineraryItem::TYPE_MEAL,
+            'destination_id' => null,
+            'place_id' => $this->place(['price_min' => 250, 'price_max' => 950, 'price_basis' => 'per_person_meal'])->id,
+        ]);
+
+        $this->assertSame('₱250–₱950 a head, per meal', $priced->costLabel());
+
+        // A free attraction says "Free" rather than ₱0.00.
+        $free = $this->item(['estimated_cost' => 0]);
+
+        $this->assertSame('Free', $free->costLabel());
+
+        // A priced attraction keeps the curated estimate.
+        $pricedAttraction = $this->item(['estimated_cost' => 150]);
+
+        $this->assertSame('₱150.00', $pricedAttraction->costLabel());
+
+        // The traveller's own entry owns its cost.
+        $custom = $this->item([
+            'item_type' => ItineraryItem::TYPE_CUSTOM,
+            'destination_id' => null,
+            'custom_name' => 'Our booking',
+        ]);
+
+        $this->assertSame('Your own cost', $custom->costLabel());
+    }
+
     // -------------------------------------------------------------- helpers
 
     private function destination(array $overrides = []): Destination

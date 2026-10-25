@@ -169,6 +169,27 @@ Route::middleware('auth')->group(function () {
     ])->name('itineraries.llm-suggest');
 
     /*
+     * HOT-ADD a curated place (restaurant, hotel) to one day. The suggestion
+     * panel's Add button posts here; three segments, so route-model binding
+     * cannot swallow it, and the day ownership check lives in the editor shim
+     * the same way add-to-trip's does.
+     */
+    Route::post('/itineraries/{itinerary}/places/{place}/add', [
+        ItineraryController::class,
+        'addPlace',
+    ])->name('itineraries.places.add');
+
+    /*
+     * The generation-form assist: the model ranks the traveller's own
+     * candidate list before the trip exists. Named for what it does, never
+     * for the vendor (see PlacesCatalogueTest's endpoint guard).
+     */
+    Route::post('/itineraries/generation-assist', [
+        ItineraryController::class,
+        'generationAssist',
+    ])->name('itineraries.generation-assist');
+
+    /*
      * The PDF export. Declared AFTER the resource so `itineraries/{itinerary}`
      * cannot swallow it -- `download` would otherwise resolve as a show request
      * for an itinerary whose slug is "download", the same route-ordering trap

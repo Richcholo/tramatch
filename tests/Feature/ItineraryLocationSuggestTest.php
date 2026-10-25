@@ -71,6 +71,16 @@ class ItineraryLocationSuggestTest extends TestCase
 
         $this->owner = User::factory()->create();
 
+        // candidates() requires a travel profile with a budget tier, so the
+        // fixture carries one matching the destinations it creates.
+        \App\Models\TravelProfile::create([
+            'user_id' => $this->owner->id,
+            'budget_level' => 'economy',
+            'group_size' => 2,
+            'trip_duration_days' => 3,
+            'preferred_region' => null,
+        ]);
+
         $this->trip = Itinerary::create([
             'user_id' => $this->owner->id,
             'title' => 'A Baguio weekend',
@@ -430,7 +440,126 @@ class ItineraryLocationSuggestTest extends TestCase
         $this->assertSame([], $response['suggestions']);
     }
 
+    // ------------------------------------------------ the generation assist
+
+    /**
+     * THE GENERATION-FORM ASSIST IS THE SAME AUTHORITY SPLIT, ONE STEP EARLIER.
+     *
+     * The model ranks the traveller's OWN shortlist; the candidate map the
+     * controller built from the same query the create form renders decides
+     * membership. Asserted at the HTTP boundary, because that is where a
+     * crafted id would actually arrive.
+     */
+    #[Test]
+    public function the_generation_assist_ranks_only_the_travellers_own_shortlist(): void
+    {
+        $picked = $this->destination(['name' => 'Burnham Park']);
+        $unticked = $this->destination(['name' => 'Mine View Park']);
+
+        $this->answerWith([
+            ['destination_id' => $picked->id, 'reason' => 'Central and walkable.'],
+            // An id the traveller never ticked: a real row, but not offered.
+            ['destination_id' => $unticked->id, 'reason' => 'Also lovely.'],
+            // An id that does not exist at all.
+            ['destination_id' => 987654, 'reason' => 'Invented.'],
+        ]);
+
+        $response = $this->actingAs($this->owner)
+            ->postJson(route('itineraries.generation-assist'), [
+                'area' => 'Benguet',
+                'destination_ids' => [$picked->id],
+            ])
+            ->assertOk()
+            ->json();
+
+        $this->assertCount(1, $response['suggestions']);
+        $this->assertSame($picked->id, $response['suggestions'][0]['destination']['id']);
+        $this->assertSame('Central and walkable.', $response['suggestions'][0]['reason']);
+    }
+
+    /**
+     * A CANDIDATE OUTSIDE THE AREA IS REFUSED BEFORE THE MODEL IS ASKED.
+     *
+     * The create form filters by province; a crafted request naming a real id
+     * from another province must not get past the same filter, and the wire
+     * count is the proof the model never saw it.
+     */
+    #[Test]
+    public function the_generation_assist_refuses_candidates_outside_the_area(): void
+    {
+        $elsewhere = $this->destination([
+            'name' => 'Cape Bojeador',
+            'province' => 'Ilocos Norte',
+        ]);
+
+        $this->actingAs($this->owner)
+            ->postJson(route('itineraries.generation-assist'), [
+                'area' => 'Benguet',
+                'destination_ids' => [$elsewhere->id],
+            ])
+            ->assertOk()
+            ->assertJson(['suggestions' => []]);
+
+        $this->assertCount(0, $this->captured, 'an empty pool must not spend the key');
+    }
+
+    /**
+     * NO KEY, NO WIRE CALL — the same rule as the itinerary suggest.
+     */
+    #[Test]
+    public function the_generation_assist_needs_a_key(): void
+    {
+        $picked = $this->destination(['name' => 'Burnham Park']);
+
+        config(['services.gemini.key' => '']);
+
+        $this->actingAs($this->owner)
+            ->postJson(route('itineraries.generation-assist'), [
+                'area' => 'Benguet',
+                'destination_ids' => [$picked->id],
+            ])
+            ->assertOk()
+            ->assertJson(['suggestions' => []]);
+
+        $this->assertCount(0, $this->captured);
+    }
+
+    /**
+     * A GUEST GETS A VALIDATION ERROR, NOT A PANEL.
+     */
+    #[Test]
+    public function the_generation_assist_is_authenticated(): void
+    {
+        $this->postJson(route('itineraries.generation-assist'), [
+            'area' => 'Benguet',
+            'destination_ids' => [1],
+        ])->assertUnauthorized();
+
+        $this->assertCount(0, $this->captured);
+    }
+
     // -------------------------------------------------------------- helpers
+
+    private function destination(array $overrides = [])
+    {
+        static $sequence = 0;
+
+        $sequence++;
+
+        return \App\Models\Destination::create(array_merge([
+            'name' => 'Assist Destination '.$sequence,
+            'slug' => 'assist-destination-'.$sequence,
+            'description' => 'A destination used by an assist test.',
+            'province' => 'Benguet',
+            'municipality' => 'Baguio City',
+            'latitude' => 16.4120,
+            'longitude' => 120.5960,
+            'budget_level' => 'economy',
+            'entrance_fee' => 0,
+            'estimated_cost' => 0,
+            'recommended_minutes' => 60,
+        ], $overrides));
+    }
 
     private function assist(): DiscoveryAssist
     {

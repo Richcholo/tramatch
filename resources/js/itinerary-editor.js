@@ -171,6 +171,7 @@ function initItineraryEditor(root) {
         renumber(list);
         playFlip(before);
         markDirty();
+        schedulePreview();
 
         // Stay on the arrow the traveller pressed, so holding space or Enter
         // walks the row down the day. Only hand over to the handle when that
@@ -331,6 +332,100 @@ function initItineraryEditor(root) {
         });
     }
 
+    /* -------------------------------------------------------- live preview */
+
+    /**
+     * LIVE REFLOW PREVIEW, DEBOUNCED.
+     *
+     * While editing, layout changes (add, remove, reorder, re-day) ask the
+     * reflow endpoint what the day WOULD look like and fill every row whose
+     * typed times are still EMPTY with a suggested window, marked by
+     * data-preview so the traveller can tell it from what they typed. A
+     * preview is never written to the inputs — the saved trip only changes
+     * when the traveller saves or presses Reflow — and a preview never
+     * overwrites a typed time. Times the traveller typed win, always.
+     *
+     * This is preview-only on purpose: silently rewriting the draft would
+     * make "what did I actually set?" unanswerable, and Reflow (which does
+     * write) stays the explicit escape hatch.
+     */
+    let previewTimer = null;
+
+    function schedulePreview() {
+        if (!editing) {
+            return;
+        }
+
+        clearTimeout(previewTimer);
+        previewTimer = setTimeout(runPreview, 600);
+    }
+
+    function runPreview() {
+        fetch(scheduleUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                'X-CSRF-TOKEN': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: JSON.stringify(draftPayload()),
+        })
+            .then((response) => (response.ok ? response.json() : null))
+            .then((body) => {
+                if (!body) {
+                    return;
+                }
+
+                for (const [dayId, slots] of Object.entries(body.days ?? {})) {
+                    const list = editView.querySelector(`[data-stop-list][data-day-id="${dayId}"]`);
+
+                    if (!list) {
+                        continue;
+                    }
+
+                    Object.entries(slots).forEach(([key, slot]) => {
+                        const row = list.querySelector(`[data-stop][data-key="${key}"]`);
+
+                        if (!row) {
+                            return;
+                        }
+
+                        const startField = rowFields(row, 'start-time');
+                        const endField = rowFields(row, 'end-time');
+
+                        // A typed time is never touched. Only a blank pair
+                        // receives the suggestion, and the preview flag is
+                        // what lets a later edit clear it.
+                        if (startField.value === '' && endField.value === '') {
+                            startField.value = slot.start_time;
+                            endField.value = slot.end_time;
+                            startField.dataset.preview = 'true';
+                            endField.dataset.preview = 'true';
+                        }
+                    });
+
+                    refreshTravel(list);
+                }
+            })
+            .catch(() => {
+                // A failed preview costs nothing: the fields stay blank and
+                // Reflow remains the explicit path.
+            });
+    }
+
+    /** Clear any preview values on the fields the traveller is taking over. */
+    function clearPreview(row) {
+        for (const field of ['start-time', 'end-time']) {
+            const input = rowFields(row, field);
+
+            if (input.dataset.preview === 'true') {
+                input.value = '';
+                delete input.dataset.preview;
+            }
+        }
+    }
+
     /* ----------------------------------------------------------------- add */
 
     /**
@@ -425,6 +520,7 @@ function initItineraryEditor(root) {
         renumber(list);
         refreshTravel(list);
         markDirty();
+        schedulePreview();
     }
 
     /* ---------------------------------------------------------------- drag */
@@ -621,6 +717,7 @@ function initItineraryEditor(root) {
                  */
                 renumber(destination);
                 refreshTravel(destination);
+                schedulePreview();
 
                 if (destination !== source) {
                     renumber(source);
@@ -657,6 +754,7 @@ function initItineraryEditor(root) {
             renumber(list);
             refreshTravel(list);
             markDirty();
+            schedulePreview();
         } else if (target.matches('[data-reflow]')) {
             applyTimes(target.closest('[data-day-card]').dataset.dayId);
         } else if (target.matches('[data-add]')) {
@@ -815,6 +913,16 @@ function initItineraryEditor(root) {
     editView.addEventListener('input', (event) => {
         if (event.target.matches('[data-field="start-time"], [data-field="end-time"]')) {
             refreshTravel(event.target.closest('[data-stop-list]'));
+
+            // The traveller is taking this field over: any preview value in
+            // the pair goes with it, so a typed time can never be silently
+            // replaced by a stale suggestion.
+            const row = event.target.closest('[data-stop]');
+
+            if (row) {
+                clearPreview(row);
+                refreshTravel(event.target.closest('[data-stop-list]'));
+            }
         }
 
         markDirty();

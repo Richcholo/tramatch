@@ -79,6 +79,17 @@ unmarked rests on markup/server tests only.
       qualified totals, final page never dropped
 - [x] Map with Leaflet + OSRM driving line (dashed fallback on failure)
 - [x] Destination weather widget (Windy embed, `w-[22rem]` cap)
+- [x] Live reflow preview while editing: debounced, preview-only — fills only
+      EMPTY time fields with the reflow suggestion, a typed time always wins,
+      nothing written until save (Reflow stays the explicit write)
+- [x] Hot-add of curated places: suggestion panel's Add button posts
+      `itineraries.places.add` → `ItineraryEditor::addPlaceTo()` (same
+      negative-key shim as add-to-trip; duplicates, province and day
+      ownership all refused server-side)
+- [x] Honest stop prices: `ItineraryItem::costLabel()` — place stops quote
+      `Place::priceLabel()` ("Price not listed" over a bare ₱0.00), free
+      attractions say "Free", custom stops own their cost; add-dialog rows
+      are cards with fee + location visible
 
 ## Places (meals & lodging)
 
@@ -103,11 +114,16 @@ unmarked rests on markup/server tests only.
 - [x] Generation routes legs too (`WritesLegs` is the one implementation),
       bounded by `MAX_ROUTED_LEGS`
 
-## Gemini (the one live surface)
+## Gemini (two live surfaces, same authority split)
 
 - [x] `POST itineraries.llm-suggest`: one structured-output request per click,
       candidates are food/lodging `places` rows in the trip's own province,
-      every returned id re-read from the catalogue
+      every returned id re-read from the catalogue; picks render as cards with
+      a day picker and a one-click hot-add (`POST itineraries.places.add`)
+- [x] `POST itineraries.generation-assist`: the model ranks the traveller's
+      OWN shortlist on the create form (area + ticked ids re-filtered against
+      the same `candidates()` query the form renders from); cards tick the
+      matching checkbox on click
 - [x] Every failure is an empty panel, never an error page; truncated replies
       named as their own kind (`MAX_TOKENS`), thinking budget covered by
       `PLANNING_ASSIST_OUTPUT_TOKENS` (8192)

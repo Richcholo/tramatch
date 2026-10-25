@@ -7,6 +7,7 @@ use App\Models\DestinationSwipe;
 use App\Models\Itinerary;
 use App\Models\ItineraryDay;
 use App\Models\ItineraryItem;
+use App\Models\Place;
 use App\Models\User;
 use App\Services\Routing\RouteLeg;
 use App\Services\Routing\RouteService;
@@ -543,6 +544,70 @@ class ItineraryEditor
         if ($added === null) {
             throw new RuntimeException(
                 $destination->name.' could not be added to this trip.'
+            );
+        }
+
+        return $added;
+    }
+
+    /**
+     * ADD ONE CURATED PLACE (a restaurant, a hotel) TO A DAY, HOT.
+     *
+     * A shim over `apply()` for the same reason `addDestinationTo()` is: the
+     * liked rule does not apply to places (they have no swipes), but the
+     * duplicate rule, the province rule, a real start slot and the written leg
+     * are all the one implementation. The stop arrives under a NEGATIVE key,
+     * exactly as the browser's add dialog does, so `resolveNewStops()` judges
+     * it with no special case.
+     */
+    public function addPlaceTo(
+        Itinerary $itinerary,
+        Place $place,
+        ItineraryDay $day
+    ): ItineraryItem {
+        abort_unless($day->itinerary_id === $itinerary->id, 404);
+
+        $draft = [];
+
+        foreach ($itinerary->days()->with('items')->get() as $existingDay) {
+            foreach ($existingDay->items as $item) {
+                $draft[$item->id] = [
+                    'day_id' => $existingDay->id,
+                    'sort_order' => $item->sort_order,
+                    'item_type' => $item->item_type,
+                    'destination_id' => $item->destination_id,
+                    'place_id' => $item->place_id,
+                    'custom_name' => $item->custom_name,
+                    'custom_address' => $item->custom_address,
+                    'custom_latitude' => $item->custom_latitude,
+                    'custom_longitude' => $item->custom_longitude,
+                    'start_time' => $item->start_time,
+                    'end_time' => $item->end_time,
+                    'note' => $item->note,
+                ];
+            }
+        }
+
+        $draft[-1] = [
+            'day_id' => $day->id,
+            'sort_order' => $day->items()->count() + 1,
+            'item_type' => $place->isLodging()
+                ? ItineraryItem::TYPE_LODGING
+                : ItineraryItem::TYPE_MEAL,
+            'place_id' => $place->id,
+        ];
+
+        $this->apply($itinerary, $draft);
+
+        $added = $itinerary->days()
+            ->with('items')
+            ->get()
+            ->flatMap(fn ($existing) => $existing->items)
+            ->first(fn ($item) => $item->place_id === $place->id);
+
+        if ($added === null) {
+            throw new RuntimeException(
+                $place->name.' could not be added to this trip.'
             );
         }
 

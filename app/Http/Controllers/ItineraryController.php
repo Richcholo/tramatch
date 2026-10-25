@@ -696,4 +696,77 @@ class ItineraryController extends Controller
             'suggestions' => $assist->recommendLocationsForItinerary($itinerary),
         ]);
     }
+
+    /**
+     * HOT-ADD ONE CURATED PLACE (a restaurant, a hotel) TO ONE DAY.
+     *
+     * The suggestion panel's "Add" button posts here. The editor's own dialog
+     * cannot add a saved stop — its payload is a full draft, and a panel pick
+     * is a one-row write — so this is the same one-stop shim the destination
+     * page's add-to-trip uses, pointed at the place branch.
+     */
+    public function addPlace(
+        Request $request,
+        Itinerary $itinerary,
+        Place $place,
+        ItineraryEditor $editor
+    ): RedirectResponse {
+        $this->ensureOwner($itinerary);
+
+        $validated = $request->validate([
+            'day_id' => ['required', 'integer'],
+        ]);
+
+        $day = $itinerary->days()->findOrFail($validated['day_id']);
+
+        try {
+            $editor->addPlaceTo($itinerary, $place, $day);
+        } catch (RuntimeException $exception) {
+            return back()->withErrors(['day_id' => $exception->getMessage()]);
+        }
+
+        return back()->with('status', $place->name.' added to Day '.$day->day_number.'.');
+    }
+
+    /**
+     * THE GENERATION-FORM ASSIST: "which of these should I pick?"
+     *
+     * The traveller has a candidate list on the create form; the model ranks
+     * THEIR list and gives one sentence each. The same authority split as the
+     * itinerary suggest: candidates are ours, membership is checked against
+     * the candidate map, an invented id is dropped, and every fact shown is
+     * ours. ONE request per click, no loop.
+     */
+    public function generationAssist(
+        Request $request,
+        RecommendationService $recommendations,
+        DiscoveryAssist $assist
+    ): JsonResponse {
+        $validated = $request->validate([
+            'area' => ['required', 'string', 'max:100'],
+            'destination_ids' => ['required', 'array', 'min:1'],
+            'destination_ids.*' => ['integer'],
+        ]);
+
+        $user = Auth::user();
+
+        // Membership against OUR candidate list, not against the table: the
+        // same query the create form renders from, so a crafted id the form
+        // never offered is refused here before the model is asked for it.
+        $candidates = $recommendations
+            ->candidates($user, $validated['area'])
+            ->whereIn('id', $validated['destination_ids'])
+            ->values();
+
+        if ($candidates->isEmpty()) {
+            return response()->json(['suggestions' => []]);
+        }
+
+        return response()->json([
+            'suggestions' => $assist->recommendCandidatesForGeneration(
+                $validated['area'],
+                $candidates
+            ),
+        ]);
+    }
 }

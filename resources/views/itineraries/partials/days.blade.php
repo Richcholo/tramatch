@@ -87,9 +87,11 @@
                                         </p>
 
                                         <div class="mt-3 flex flex-wrap gap-3 text-xs font-semibold text-benguet-charcoal/60">
-                                            <span>
-                                                ₱{{ number_format($item->estimated_cost, 2) }}
-                                            </span>
+                                            {{-- costLabel(), not a bare number: an unpriced
+                                                 meal stores 0, and ₱0.00 read as "free".
+                                                 A place quotes its verified band or says
+                                                 "Price not listed". --}}
+                                            <span>{{ $item->costLabel() }}</span>
 
                                             {{--
                                                 DIRECTIONS FOR THE DRIVE INTO THIS STOP.

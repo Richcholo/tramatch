@@ -30,19 +30,90 @@
             }
 
             data.suggestions.forEach(function (suggestion) {
+                const place = suggestion.place || {};
                 const card = document.createElement('div');
                 card.className = 'rounded-xl border border-boracay-light bg-white p-4 shadow-sm';
 
+                const header = document.createElement('div');
+                header.className = 'flex items-start justify-between gap-3';
+
                 const title = document.createElement('div');
                 title.className = 'font-semibold text-volcanic-teal';
-                title.textContent = (suggestion.place?.name || 'Unknown place') + ' (' + (suggestion.place?.type || '') + ')';
+                title.textContent = place.name || 'Unknown place';
 
-                const reason = document.createElement('div');
-                reason.className = 'mt-1 text-sm text-benguet-charcoal/70';
+                const kind = document.createElement('span');
+                kind.className = 'shrink-0 rounded-full bg-boracay-light px-2 py-1 text-xs font-semibold text-boracay-dark';
+                kind.textContent = place.type === 'lodging' ? 'Stay' : 'Eat';
+
+                header.append(title, kind);
+
+                const area = document.createElement('div');
+                area.className = 'mt-0.5 text-xs text-benguet-charcoal/55';
+                area.textContent = [place.municipality, place.province].filter(Boolean).join(', ');
+
+                const reason = document.createElement('p');
+                reason.className = 'mt-2 text-sm text-benguet-charcoal/70';
                 reason.textContent = suggestion.reason || '';
 
-                card.appendChild(title);
-                card.appendChild(reason);
+                const label = document.createElement('p');
+                label.className = 'mt-2 text-xs font-semibold uppercase tracking-wide text-benguet-charcoal/45';
+                label.textContent = "The model's own words, unchecked";
+
+                const actions = document.createElement('div');
+                actions.className = 'mt-3 flex flex-wrap items-center gap-2';
+
+                // One day-select per suggestion card: the trip's own days,
+                // posted with the place id to the hot-add endpoint. The server
+                // re-validates everything (owner, day, duplicates, province).
+                const daySelect = document.createElement('select');
+                daySelect.className = 'min-h-9 rounded-md border border-boracay-light bg-palawan-sand px-2 py-1 text-sm';
+                daySelect.setAttribute('aria-label', 'Day to add ' + (place.name || 'this place') + ' to');
+
+                @foreach ($itinerary->days as $day)
+                    const day{{ $day->id }} = document.createElement('option');
+                    day{{ $day->id }}.value = '{{ $day->id }}';
+                    day{{ $day->id }}.textContent = 'Day {{ $day->day_number }}';
+                    daySelect.appendChild(day{{ $day->id }});
+                @endforeach
+
+                const add = document.createElement('button');
+                add.type = 'button';
+                add.className = 'inline-flex min-h-9 items-center rounded-md bg-boracay px-3 py-1 text-sm font-bold text-benguet-charcoal transition hover:bg-boracay-dark hover:text-white disabled:cursor-not-allowed disabled:opacity-40';
+                add.textContent = 'Add';
+
+                const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '{{ csrf_token() }}';
+
+                add.addEventListener('click', async function () {
+                    add.disabled = true;
+
+                    const body = new FormData();
+                    body.append('day_id', daySelect.value);
+                    body.append('_token', csrf);
+
+                    try {
+                        const response = await fetch('/itineraries/{{ $itinerary->id }}/places/' + encodeURIComponent(place.id) + '/add', {
+                            method: 'POST',
+                            body,
+                        });
+
+                        if (response.ok) {
+                            window.location.reload();
+
+                            return;
+                        }
+
+                        const errors = await response.json().catch(() => null);
+                        const message = errors?.message || errors?.errors?.day_id?.[0] || 'Could not be added.';
+                        add.textContent = message;
+                    } catch (error) {
+                        add.textContent = 'Could not be added.';
+                        add.disabled = false;
+                    }
+                });
+
+                actions.append(daySelect, add);
+
+                card.append(header, area, reason, label, actions);
                 results.appendChild(card);
             });
         } catch (error) {
@@ -502,8 +573,12 @@
                                                         </span>
                                                     @endif
 
+                                                    {{-- costLabel(), not a bare ₱0.00: a
+                                                         place with no verified band prints
+                                                         "Price not listed" and a free one
+                                                         says "Free". --}}
                                                     <span data-stop-cost class="text-xs font-semibold text-benguet-charcoal/60">
-                                                        ₱{{ number_format($item->estimated_cost, 2) }}
+                                                        {{ $item->costLabel() }}
                                                     </span>
                                                 </div>
 
@@ -688,41 +763,46 @@
                             Attractions you liked
                         </p>
 
-                        <div class="mt-2">
+                        {{-- Cards, not rows: two per row on desktop, each with
+                             its fee and location visible without scanning a
+                             single column. --}}
+                        <div class="mt-2 grid gap-2 sm:grid-cols-2">
                             @forelse ($addableDestinations as $destination)
-                            <label class="flex cursor-pointer items-start gap-3 rounded-lg border border-transparent px-3 py-3 transition hover:border-boracay-light hover:bg-white has-checked:border-boracay has-checked:bg-white">
-                                <input
-                                    type="checkbox"
-                                    data-destination="{{ $destination->id }}"
-                                    data-name="{{ $destination->name }}"
-                                    {{-- data-location, NOT data-place. A place's
-                                         checkbox uses data-place for its ID, and
-                                         an attraction used to use data-place
-                                         for this location string — so the
-                                         script could not tell the two sets
-                                         apart except by which other
-                                         attributes were present. Same
-                                         attribute name, two incompatible
-                                         meanings, on sibling elements. --}}
-                                    data-location="{{ $destination->municipality }}, {{ $destination->province }}"
-                                    data-fee="₱{{ number_format((float) $destination->estimated_cost, 2) }}"
-                                    data-url="{{ route('destinations.show', $destination) }}"
-                                    class="mt-1 h-5 w-5 shrink-0 accent-boracay"
-                                >
+                            <label class="flex cursor-pointer flex-col gap-2 rounded-xl border border-transparent bg-white p-4 shadow-sm transition hover:border-boracay hover:shadow has-checked:border-boracay has-checked:ring-2 has-checked:ring-boracay">
+                                <span class="flex items-start gap-3">
+                                    <input
+                                        type="checkbox"
+                                        data-destination="{{ $destination->id }}"
+                                        data-name="{{ $destination->name }}"
+                                        {{-- data-location, NOT data-place. A place's
+                                             checkbox uses data-place for its ID, and
+                                             an attraction used to use data-place
+                                             for this location string — so the
+                                             script could not tell the two sets
+                                             apart except by which other
+                                             attributes were present. Same
+                                             attribute name, two incompatible
+                                             meanings, on sibling elements. --}}
+                                        data-location="{{ $destination->municipality }}, {{ $destination->province }}"
+                                        data-fee="₱{{ number_format((float) $destination->estimated_cost, 2) }}"
+                                        data-url="{{ route('destinations.show', $destination) }}"
+                                        class="mt-1 h-5 w-5 shrink-0 accent-boracay"
+                                    >
 
-                                <span class="min-w-0 flex-1">
-                                    <span class="block font-bold text-volcanic-teal">{{ $destination->name }}</span>
-                                    <span class="mt-0.5 block text-sm text-benguet-charcoal/60">
-                                        {{ $destination->municipality }}, {{ $destination->province }}
+                                    <span class="min-w-0 flex-1">
+                                        <span class="block font-bold text-volcanic-teal">{{ $destination->name }}</span>
+                                        <span class="mt-0.5 block text-sm text-benguet-charcoal/60">
+                                            {{ $destination->municipality }}, {{ $destination->province }}
+                                        </span>
                                     </span>
                                 </span>
 
-                                <span class="shrink-0 text-sm font-semibold text-benguet-charcoal/70">
+                                <span class="pl-8 text-sm font-semibold text-benguet-charcoal/70">
                                     ₱{{ number_format((float) $destination->estimated_cost, 2) }}
                                 </span>
                             </label>
                         @empty
-                            <p class="rounded-lg bg-white p-6 text-sm leading-6 text-benguet-charcoal/70">
+                            <p class="rounded-lg bg-white p-6 text-sm leading-6 text-benguet-charcoal/70 sm:col-span-2">
                                 Every place you liked is already on this trip. Swipe a few more in Discover to add somewhere new.
                             </p>
                         @endforelse
@@ -735,33 +815,38 @@
                             Where to eat and stay
                         </p>
 
-                        <div class="mt-2">
+                        <div class="mt-2 grid gap-2 sm:grid-cols-2">
                             @forelse ($addablePlaces as $place)
-                                <label class="flex cursor-pointer items-start gap-3 rounded-lg border border-transparent px-3 py-3 transition hover:border-boracay-light hover:bg-white has-checked:border-boracay has-checked:bg-white">
-                                    <input
-                                        type="checkbox"
-                                        data-place="{{ $place->id }}"
-                                        data-kind="{{ $place->isLodging() ? 'lodging' : 'meal' }}"
-                                        data-name="{{ $place->name }}"
-                                        data-place-label="{{ $place->municipality }}, {{ $place->province }}"
-                                        data-fee="{{ $place->priceLabel() }}"
-                                        data-url="{{ $place->source_url }}"
-                                        class="mt-1 h-5 w-5 shrink-0 accent-boracay"
-                                    >
+                                <label class="flex cursor-pointer flex-col gap-2 rounded-xl border border-transparent bg-white p-4 shadow-sm transition hover:border-boracay hover:shadow has-checked:border-boracay has-checked:ring-2 has-checked:ring-boracay">
+                                    <span class="flex items-start gap-3">
+                                        <input
+                                            type="checkbox"
+                                            data-place="{{ $place->id }}"
+                                            data-kind="{{ $place->isLodging() ? 'lodging' : 'meal' }}"
+                                            data-name="{{ $place->name }}"
+                                            data-place-label="{{ $place->municipality }}, {{ $place->province }}"
+                                            data-fee="{{ $place->priceLabel() }}"
+                                            data-url="{{ $place->source_url }}"
+                                            class="mt-1 h-5 w-5 shrink-0 accent-boracay"
+                                        >
 
-                                    <span class="min-w-0 flex-1">
-                                        <span class="block font-bold text-volcanic-teal">{{ $place->name }}</span>
-                                        <span class="mt-0.5 block text-sm text-benguet-charcoal/60">
-                                            {{ $place->typeLabel() }} · {{ $place->municipality }}, {{ $place->province }}
+                                        <span class="min-w-0 flex-1">
+                                            <span class="block font-bold text-volcanic-teal">{{ $place->name }}</span>
+                                            <span class="mt-0.5 block text-sm text-benguet-charcoal/60">
+                                                {{ $place->typeLabel() }} · {{ $place->municipality }}, {{ $place->province }}
+                                            </span>
                                         </span>
                                     </span>
 
-                                    <span class="shrink-0 text-sm font-semibold text-benguet-charcoal/70">
+                                    {{-- priceLabel(), never a bare number: "Price
+                                         not listed" is a real answer, and a
+                                         band always carries its unit. --}}
+                                    <span class="pl-8 text-sm font-semibold text-benguet-charcoal/70">
                                         {{ $place->priceLabel() }}
                                     </span>
                                 </label>
                             @empty
-                                <p class="rounded-lg bg-white p-6 text-sm leading-6 text-benguet-charcoal/70">
+                                <p class="rounded-lg bg-white p-6 text-sm leading-6 text-benguet-charcoal/70 sm:col-span-2">
                                     Nothing curated here yet. Add your own booking below instead.
                                 </p>
                             @endforelse

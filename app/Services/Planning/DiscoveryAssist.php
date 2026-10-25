@@ -136,4 +136,75 @@ class DiscoveryAssist
             ."Reply with JSON only, in this exact shape: {\"suggestions\":[{\"place_id\":123,\"reason\":\"...\"}]}\n"
             ."Every place_id must be one of the candidate ids above. Never state prices, hours or any fact that is not in the candidate rows.\n";
     }
+
+    /**
+     * THE GENERATION-FORM PICKS: which of the traveller's own candidate list
+     * to visit, and one sentence on why each.
+     *
+     * Same boundaries as the location suggest: the model chooses selection
+     * and one sentence, the caller's candidate map decides membership, and an
+     * invented id is dropped rather than rendered. The controller has already
+     * filtered the candidates to the traveller's chosen area and ticked ids —
+     * this method is pure selection over what it was handed.
+     */
+    public function recommendCandidatesForGeneration(string $area, Collection $candidates): array
+    {
+        if (trim((string) config('services.gemini.key')) === '') {
+            return [];
+        }
+
+        try {
+            $decoded = $this->gemini->ask(
+                $this->generationPrompt($area, $candidates)
+            );
+        } catch (GeminiError) {
+            return [];
+        }
+
+        $map = $candidates->keyBy('id');
+        $out = [];
+
+        foreach ($decoded['suggestions'] ?? [] as $pick) {
+            if (! is_array($pick)) {
+                continue;
+            }
+
+            $id = $pick['destination_id'] ?? $pick['place_id'] ?? $pick['id'] ?? null;
+            $reason = $pick['reason'] ?? $pick['why'] ?? null;
+
+            if (! is_numeric($id) || ! isset($map[(int) $id]) || ! is_string($reason)) {
+                continue;
+            }
+
+            $reason = trim(preg_replace('/\s+/', ' ', $reason));
+
+            if ($reason === '' || mb_strlen($reason) > 280) {
+                continue;
+            }
+
+            $out[] = ['destination' => $map[(int) $id], 'reason' => $reason];
+        }
+
+        return $out;
+    }
+
+    /**
+     * The generation prompt, and what it deliberately leaves out: the
+     * candidate rows are the only facts the model sees, and no traveller
+     * name, email or account field leaves the server.
+     */
+    private function generationPrompt(string $area, Collection $candidates): string
+    {
+        $rows = $candidates->map(fn ($destination) => [
+            'id' => $destination->id,
+            'name' => $destination->name,
+            'area' => $destination->municipality,
+        ])->toJson();
+
+        return "A traveller is planning a trip in {$area} and is choosing which places to visit from a shortlist.\n\n"
+            ."Their shortlist:\n$rows\n\n"
+            ."Choose up to 5 distinct ids worth visiting, ranked best first. Each pick carries one sentence on why it suits the trip.\n\n"
+            ."Reply with JSON only, in this exact shape: {\"suggestions\":[{\"destination_id\":123,\"reason\":\"...\"}]}\n"
+            ."Every destination_id must be one of the shortlist ids above. Never state prices, hours or any fact that is not in the shortlist.\n";
+    }
 }

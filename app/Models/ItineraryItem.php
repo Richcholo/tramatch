@@ -266,6 +266,36 @@ class ItineraryItem extends Model
     }
 
     /**
+     * WHAT THIS STOP COSTS, AS WORDS A TRAVELLER CAN ACT ON.
+     *
+     * The read view and the editor rows print this instead of a bare
+     `₱{{ number_format($item->estimated_cost, 2) }}`, which printed
+     * `₱0.00` for every unpriced meal and hotel — a figure nobody published,
+     * read as "free". A place stop quotes `Place::priceLabel()` ("Price not
+     * listed" when nothing is verified); a free attraction says "Free" rather
+     * than `₱0.00`; everything else keeps the curated estimate.
+     */
+    public function costLabel(): string
+    {
+        if ($this->isCustom()) {
+            return 'Your own cost';
+        }
+
+        // A place stop quotes its own row: the verified band with its unit,
+        // or "Price not listed" — never the stored midpoint dressed as a
+        // published figure, and never ₱0.00 for an unpriced one.
+        if ($this->place) {
+            return $this->place->priceLabel();
+        }
+
+        if ((float) $this->estimated_cost === 0.0) {
+            return 'Free';
+        }
+
+        return '₱'.number_format((float) $this->estimated_cost, 2);
+    }
+
+    /**
      * Whether this stop can be routed from and mapped.
      *
      * Both coordinates or neither: half a position is not a position, and a
