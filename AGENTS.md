@@ -2172,6 +2172,35 @@ Two harness lessons from writing it, both the checker being wrong first:
   `DestinationCarousel::__construct`) — a failure that looks nothing like the
   cache being tested.
 
+#### **WHY OBJECTS COME BACK `__PHP_Incomplete_Class` — AND IT WAS NEVER AUTOLOADING**
+
+Found 2026-10-26, and it corrects the theory two sections up: the RouteLeg
+incident was blamed on "a payload whose class would not autoload" after a
+deploy. **The real mechanism is `config/cache.php`'s
+`serializable_classes => false`** — Laravel's gadget-chain default. The
+database store unserialises with `['allowed_classes' => false]`, so **every
+object read back from the cache is `__PHP_Incomplete_Class`, on every read,
+in every environment** — not only after a deploy, and not only for classes
+that moved.
+
+The recommendations cache (dfc748f) stored a Collection of Eloquent models
+and 500'd every destination page for a logged-in traveller **on the first
+cache hit** — the miss that wrote it returned a live object and rendered
+fine, which is why the page worked once and then never again. The suite
+never saw any of the three cache incidents because **the array driver the
+tests run never unserialises anything**; the layer that cannot fail in a
+test is the layer that breaks on the host. (Also measured while
+prosecuting it: on SQLite/Postgres `DatabaseStore::serialize()`
+base64-encodes any serialised value containing NUL bytes — Eloquent
+models always contain them — so `unserialize`-ing the raw table bytes
+returns false. Read through the store, never through the table.)
+
+The rule, now written at all three caches: **cache arrays of scalars only;
+shape-check the read and treat anything that is not the expected array as a
+miss** — `DestinationCarousel::payload()`, `RouteService::leg()`, and
+`RecommendationService::cachedTuples()`. A fourth cache starts from that
+shape, not from an object.
+
 #### The AI plans; Laravel checks
 
 Written into `config/planning.php` as **data**, so the client cannot drift from

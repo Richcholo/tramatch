@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Domain\Matches\MatchScore;
 use App\Models\Destination;
 use App\Models\DestinationSwipe;
+use App\Models\Tag;
 use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
@@ -57,21 +58,105 @@ class RecommendationService
             return collect();
         }
 
-        /*
-         * Cache the full scored set once; every caller slices its own limit
-         * from it afterwards. The limit is applied below, outside the cache,
-         * so one entry serves the stage (500), the editor (1000) and the
-         * recommendations page (default 20) without three cache keys.
-         */
-        $scored = Cache::remember(
-            self::CACHE_KEY_PREFIX.$user->id,
-            now()->addHour(),
-            function () use ($user, $profile) {
-                return $this->scoredLikedDestinations($user, $profile);
-            }
-        );
+        return $this->hydrateTuples($this->cachedTuples($user, $profile))
+            ->take($limit);
+    }
 
-        return $scored->take($limit);
+    /**
+     * The traveller's scored set, cached as arrays of scalars.
+     *
+     * THE CACHE HOLDS SCALARS, NEVER OBJECTS. `config/cache.php` ships
+     * Laravel's `serializable_classes => false`, so every object read back
+     * from the cache unserialises to `__PHP_Incomplete_Class` — the object
+     * this cache once held took every destination page down on the FIRST
+     * cache hit (RecommendationService.php:74), and the suite never saw it
+     * because the array driver the tests run never unserialises anything.
+     * Same lesson as the stage payload and the route legs; written here
+     * because this is the third cache to pay for it.
+     *
+     * The shape check is also the upgrade path: an entry left by the
+     * object-caching version comes back as an incomplete object, fails the
+     * `is_array` test, and is treated as a MISS — recomputed and overwritten
+     * — rather than a fatal.
+     *
+     * @return array<int, array{id: int, match_score: float, recommendation_reason: string|null, matched_tag_ids: array<int, int>}>
+     */
+    private function cachedTuples(User $user, $profile): array
+    {
+        $cached = Cache::get(self::CACHE_KEY_PREFIX.$user->id);
+
+        if (is_array($cached)) {
+            return $cached;
+        }
+
+        $tuples = $this
+            ->scoredLikedDestinations($user, $profile)
+            ->map(fn (Destination $destination) => [
+                'id' => $destination->id,
+                'match_score' => (float) $destination->match_score,
+                'recommendation_reason' => $destination->recommendation_reason,
+                'matched_tag_ids' => $destination->matched_tags->pluck('id')->all(),
+            ])
+            ->values()
+            ->all();
+
+        Cache::put(self::CACHE_KEY_PREFIX.$user->id, $tuples, now()->addHour());
+
+        return $tuples;
+    }
+
+    /**
+     * Rebuild the models the tuples name, in the cached order.
+     *
+     * Two primary-key queries replace the scoring pass and the per-row
+     * MatchScore::explain() — that is what the cache is for. A destination
+     * archived since the tuple was written has no row and is skipped, so a
+     * stale entry degrades to a shorter list rather than to a deleted model.
+     *
+     * @param  array<int, array{id: int, match_score: float, recommendation_reason: string|null, matched_tag_ids: array<int, int>}>  $tuples
+     * @return Collection<int, Destination>
+     */
+    private function hydrateTuples(array $tuples): Collection
+    {
+        if ($tuples === []) {
+            return collect();
+        }
+
+        $destinations = Destination::query()
+            ->with('tags')
+            ->whereIn('id', collect($tuples)->pluck('id'))
+            ->get()
+            ->keyBy('id');
+
+        $tags = Tag::query()
+            ->whereIn(
+                'id',
+                collect($tuples)
+                    ->flatMap(fn (array $tuple) => $tuple['matched_tag_ids'])
+                    ->unique()
+                    ->values()
+            )
+            ->get()
+            ->keyBy('id');
+
+        return collect($tuples)
+            ->map(function (array $tuple) use ($destinations, $tags) {
+                $destination = $destinations->get($tuple['id']);
+
+                if (!$destination) {
+                    return null;
+                }
+
+                $destination->match_score = $tuple['match_score'];
+                $destination->recommendation_reason = $tuple['recommendation_reason'];
+                $destination->matched_tags = $tags
+                    ->only($tuple['matched_tag_ids'])
+                    ->values();
+
+                return $destination;
+            })
+            ->filter()
+            ->values();
     }
 
     /**
