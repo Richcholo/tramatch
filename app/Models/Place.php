@@ -131,6 +131,17 @@ class Place extends Model
      *            cluster walks. The heritage-core restaurants and inns face the
      *            same sourcing reality as everywhere else: most publish no rates,
      *            so the rows are honest blanks rather than invented figures.
+     *   sagada   Mountain Province. Added 2026-10-26 as the fifth. Sagada town
+     *            is the whole cluster — the Lemon Pie House, Yoghurt House and
+     *            the inns are all a few minutes' walk apart, and Bomod-ok Falls
+     *            plus the Sumaguing and Lumiang caves are one jeepney ride out.
+     *            Rated the same way as the others: the restaurants publish no
+     *            prices and the inns publish no rates, so most rows are honest
+     *            blanks and the readiness report says "short" rather than
+     *            inventing a number. Banaue was assessed and deliberately NOT
+     *            listed: Ifugao has two catalogue destinations, which cannot
+     *            carry a two-day trip however many restaurants are filed there,
+     *            so a cluster row would pad the report and prove nothing.
      *
      * Deliberately NOT chosen: Aurora and Cagayan, which have five and four
      * destinations but no second municipality worth driving to, so a trip there
@@ -159,6 +170,10 @@ class Place extends Model
         'vigan' => [
             'province' => 'Ilocos Sur',
             'label' => 'Vigan',
+        ],
+        'sagada' => [
+            'province' => 'Mountain Province',
+            'label' => 'Sagada',
         ],
     ];
 
@@ -451,12 +466,12 @@ class Place extends Model
      * How many food places and how many hotels a cluster has, PER BUDGET TIER.
      *
      * Per tier and not in total, which is the whole point of returning it this
-     * way. `RecommendationService`, `SwipeDeckService`, `ItineraryGenerator` and
-     * `SwipeDiscoveryController` all filter `where('budget_level', $tier)` for
-     * EQUALITY, so a province with nine places evenly spread across three tiers
-     * has THREE usable places for a given traveller, not nine. A single summed
-     * number would report Benguet as the strongest cluster while hiding the fact
-     * that a mid-range traveller can only eat in three of them.
+     * way. A province with nine places evenly spread across three tiers has
+     * fewer usable places per traveller than the total suggests: an economy
+     * traveller can use only the economy rows, a premium traveller all three
+     * (tiers are a ceiling — see `Destination::affordableTiers()`). A single
+     * summed number would report Benguet as the strongest cluster while hiding
+     * the fact that an economy traveller can only eat in three of them.
      *
      * `$province` rather than the cluster slug on purpose: the counts have to be
      * computable before any row exists, which is the state this report is read in
@@ -485,29 +500,38 @@ class Place extends Model
         }
 
         foreach ($rows as $row) {
-            $tier = $row->budget_level;
-
-            if (! isset($coverage[$tier])) {
+            if (! isset($coverage[$row->budget_level])) {
                 // A tier nobody declared. Counted under nothing rather than
                 // invented into one of the three, so it cannot quietly inflate a
                 // tier that is genuinely short.
                 continue;
             }
 
-            if ($row->type === self::TYPE_FOOD) {
-                $coverage[$tier]['food']++;
-            }
+            // Tiers are a CEILING (ADR 0005), so one place is usable by its own
+            // tier and every dearer one. Counting by exact tier would report
+            // Paoay as having no food for a premium trip while the deck deals
+            // those rows freely — the report would be understating exactly the
+            // travellers it exists to serve.
+            foreach (array_keys($coverage) as $tier) {
+                if (! in_array($row->budget_level, Destination::affordableTiers($tier), true)) {
+                    continue;
+                }
 
-            if ($row->type === self::TYPE_LODGING) {
-                $coverage[$tier]['lodging']++;
-            }
+                if ($row->type === self::TYPE_FOOD) {
+                    $coverage[$tier]['food']++;
+                }
 
-            if (
-                $row->type === self::TYPE_FOOD
-                && $row->price_min !== null
-                && $row->price_basis !== null
-            ) {
-                $coverage[$tier]['priced']++;
+                if ($row->type === self::TYPE_LODGING) {
+                    $coverage[$tier]['lodging']++;
+                }
+
+                if (
+                    $row->type === self::TYPE_FOOD
+                    && $row->price_min !== null
+                    && $row->price_basis !== null
+                ) {
+                    $coverage[$tier]['priced']++;
+                }
             }
         }
 

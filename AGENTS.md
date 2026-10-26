@@ -1634,7 +1634,10 @@ still one room, and the traveller decides how many rooms they need. A meal rate
 `RecommendationService`, `SwipeDeckService`, `ItineraryGenerator` and
 `SwipeDiscoveryController` all filter through `Destination::affordableTiers()`,
 which is a **ceiling** (ADR 0005): an economy traveller sees economy rows only, a
-premium traveller all three.
+premium traveller all three. `clusterCoverage()` counts the same way — one place
+is credited to its own tier and every dearer one — so the report says what each
+tier's travellers can actually plan with rather than counting rows by exact tier
+and understating the two upper tiers.
 
 Measured from the CSV: Benguet has **8** destinations, which reads as the
 strongest province in the catalogue, but the split is 5 economy / 3 mid-range. An
@@ -1649,10 +1652,11 @@ missing". `CLUSTER_MINIMUMS` is 6 food / 3 lodging; lodging is the binding
 constraint, because food can be left unpriced and a cluster with nowhere to sleep
 cannot be planned at all.
 
-#### The four clusters, and why those
+#### The five clusters, and why those
 
 `Place::CLUSTERS` is **baguio** (Benguet), **antipolo** (Rizal), **paoay**
-(Ilocos Norte), **vigan** (Ilocos Sur, added 2026-10-25). Chosen on
+(Ilocos Norte), **vigan** (Ilocos Sur, added 2026-10-25) and **sagada**
+(Mountain Province, added 2026-10-26). Chosen on
 **density**, because "the locations are too small" is a
 complaint about coverage and coverage is not a count: sixty attractions scattered
 across Luzon raises the number and leaves every trip unable to answer "where do I
@@ -1773,7 +1777,7 @@ exists solely to pin that.
   deterministic cannot be reasoned about or tested.
   `distanceFromPin()` is a haversine — free, always available, identical every
   time. Within a province it is also a good proxy for road distance, which is the
-  premise the three pilot clusters were chosen on.
+  premise the pilot clusters were chosen on.
   **It decides the ORDER only.** Every displayed distance is still OSRM's.
 - **EVERY DAY DEPARTS FROM THE HOTEL, NOT ONLY THE FIRST.** The obvious
   implementation anchors day one and lets later days carry on from where the last
@@ -2441,7 +2445,7 @@ by markup assertions — re-click `/discover` after touching
 #### What is NOT verified yet
 
 **Nothing here has been clicked in a browser or rendered on a page except by
-the suite.** The admin manages 57 researched places, and the itinerary renders
+the suite.** The admin manages 64 researched places, and the itinerary renders
 meals, hotels and custom entries through the editor — but no hand has dragged a
 meal row, opened the custom-stop form, or watched the incomplete-total notice
 appear. The models, the schema and the markup contracts are exercised by
@@ -2451,7 +2455,7 @@ appear. The models, the schema and the markup contracts are exercised by
 proven against a throwaway **MySQL** database, because the two disagree about
 dropping a column in a foreign key and about nullability introspection.
 
-#### The places catalogue (57 rows: 36 on 2026-10-14, 21 on 2026-10-25)
+#### The places catalogue (64 rows: 36 on 2026-10-14, 21 on 2026-10-25, 7 on 2026-10-26)
 
 The first round was researched in three parallel batches, one per cluster:
 12 Baguio + 11 Antipolo/Tanay + 12 Paoay, plus A Hotel Baguio added afterwards
@@ -2485,6 +2489,28 @@ FB page (19.8k followers) is the row's source. The same rule covers Grandpa's
 Inn, Hotel Salcedo, Vigan Plaza, Pannzian and Terra Rika. Real domains that
 answer: `www.hotelluna.ph`, `viganplazahotel.com.ph`,
 `cloud9antipolohotel.com`, `mountpurronaturereserve.com`, `arcasyardcafe.com`.
+
+**The third round (2026-10-26)** added the **Sagada cluster** — 4 restaurants
+(Sagada Lemon Pie House, Yoghurt House, Gaia Cafe, Sagada Brew) and 3 inns
+(Bilza Sagada Lodge and Resto, Kanip-aw Pines View Lodge, Isabelo's Inn and
+Cafe). Sagada town is the cluster: everything above is a few minutes' walk
+apart, and Bomod-ok Falls plus the Sumaguing and Lumiang caves are one jeepney
+ride out. Mountain Province has four destinations in the catalogue, enough for a
+two-day trip.
+
+Banaue was **assessed and deliberately left out**. Ifugao has two catalogue
+destinations, which cannot carry a two-day trip however many restaurants are
+filed there, so a `banaue` cluster row would pad the readiness report and prove
+nothing. That is the one judgement in this round that a future agent should
+re-open only by adding destinations first.
+
+Every Sagada row is an honest blank: the restaurants publish no prices and the
+inns no rate table, so `price_min`/`price_max` are empty on all four food rows
+and the three lodging bands are marked UNCERTAIN-from-aggregator (the Citylight
+precedent), with `price_verified` blank throughout. All seven pins are
+approximate and every note says "Pin approximate - verify on map". The seeder's
+report therefore reads **Sagada economy 4 food / 3 lodging (short 2 food, no
+verified price yet)** — a "short" answer is the report doing its job.
 
 **Coverage per tier after the second round** (the seeder prints it on every
 run): Baguio economy **6 food / 3 lodging — ready**; Antipolo economy 6 food /
@@ -3792,7 +3818,7 @@ the runtime never executes it.
   on slug, so re-running is safe):
   `php artisan db:seed --class=LuzonLocationsCsvSeeder --force` (100
   destinations) and `php artisan db:seed --class=PlacesCsvSeeder --force`
-  (57 places). Skipping this leaves the new tables empty with no error
+  (64 places). Skipping this leaves the new tables empty with no error
   anywhere — the app renders "nothing planned" states, not failures.
 - **The queue worker is `deploy/queue-worker.sh`, registered as an hPanel cron
   job every minute.** Shared hosting will not run `queue:work` as a daemon.

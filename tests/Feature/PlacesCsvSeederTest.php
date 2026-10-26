@@ -56,10 +56,10 @@ class PlacesCsvSeederTest extends TestCase
     }
 
     /**
-     * THE SHIPPED FILE CARRIES THE RESEARCHED CATALOGUE: 57 food and lodging
-     * places across the four clusters — 36 added 2026-10-14 (three pilot
+     * THE SHIPPED FILE CARRIES THE RESEARCHED CATALOGUE: 64 food and lodging
+     * places across the five clusters — 36 added 2026-10-14 (three pilot
      * clusters), 21 added 2026-10-25 (the Vigan cluster plus economy top-ups
-     * for Baguio, Antipolo and Paoay).
+     * for Baguio, Antipolo and Paoay), then 7 added 2026-10-26 for Sagada.
      *
      * It used to be a header with no rows, which was the correct state while
      * curation had not started — a seed file full of plausible-looking names
@@ -79,9 +79,9 @@ class PlacesCsvSeederTest extends TestCase
             fn ($line) => trim($line) !== ''
         );
 
-        // Header plus 57 researched rows. If this count changed, a row was added
+        // Header plus 64 researched rows. If this count changed, a row was added
         // or removed — check the CSV diff, not just this number.
-        $this->assertCount(58, $lines);
+        $this->assertCount(65, $lines);
     }
 
     /**

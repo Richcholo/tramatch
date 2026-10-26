@@ -406,14 +406,15 @@ class PlacesCatalogueTest extends TestCase
      * COVERAGE IS COUNTED PER BUDGET TIER, and this is the load-bearing detail of
      * the whole feature.
      *
-     * `RecommendationService`, `SwipeDeckService`, `ItineraryGenerator` and
-     * `SwipeDiscoveryController` all filter `where('budget_level', $tier)` for
-     * EQUALITY. A place filed under the wrong tier is INVISIBLE to a traveller,
-     * not merely ranked lower. So a province with nine places spread across three
-     * tiers has three usable places for any one traveller, and a single summed
-     * coverage number would report the strongest cluster while hiding that.
+     * Each tier's number is what a traveller on that tier can actually plan
+     * with. Tiers are a CEILING (ADR 0005): an economy traveller can use only
+     * economy rows, a premium traveller all three. A single summed coverage
+     * number would report the strongest cluster while hiding that an economy
+     * traveller can eat in far fewer of its places than the total suggests.
      *
-     * Falsified by returning one total per province.
+     * Falsified by returning one total per province, and by counting rows by
+     * exact tier — which would print 1 for premium while the deck deals it all
+     * three.
      */
     public function test_cluster_coverage_is_reported_per_budget_tier_not_as_a_total(): void
     {
@@ -425,11 +426,15 @@ class PlacesCatalogueTest extends TestCase
         $coverage = Place::clusterCoverage('Benguet');
 
         $this->assertSame(2, $coverage['economy']['food']);
-        $this->assertSame(1, $coverage['premium']['food']);
         $this->assertSame(
-            0,
+            2,
             $coverage['mid-range']['food'],
-            'A tier with no places must read as zero, not inherit another tier count.'
+            'Mid-range can afford the economy rows, so it inherits them.'
+        );
+        $this->assertSame(
+            3,
+            $coverage['premium']['food'],
+            'Premium can afford all three tiers, which is what its ceiling means.'
         );
     }
 
@@ -517,7 +522,7 @@ class PlacesCatalogueTest extends TestCase
 
     /**
      * ------------------------------------------------------------------
-     * The three pilot clusters
+     * The pilot clusters
      * ------------------------------------------------------------------
      */
 
@@ -538,7 +543,7 @@ class PlacesCatalogueTest extends TestCase
     public function test_the_three_pilot_clusters_point_at_provinces_the_catalogue_actually_has(): void
     {
         $this->assertSame(
-            ['baguio', 'antipolo', 'paoay', 'vigan'],
+            ['baguio', 'antipolo', 'paoay', 'vigan', 'sagada'],
             array_keys(Place::CLUSTERS),
             'The pilot cluster set changed. Re-read the CLUSTERS docblock: it argues for '
             .'these three on grounds of density, and that argument has to be '
