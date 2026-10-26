@@ -955,6 +955,41 @@ class PlacesCatalogueTest extends TestCase
         $this->assertSame('driving', config('planning.transport.profile'));
     }
 
+    /**
+     * The profile form and the admin guideline promise bands: Economy
+     * Free-₱500, Mid ₱501-999, Premium ₱1,000 and up — and
+     * `Destination::budgetTierForCost()` is the one classifier for them.
+     * A row filed outside the band its own estimated_cost falls into makes
+     * the guideline a lie: an economy traveller is shown spends the legend
+     * says are not economy, and affordable rows are hidden behind a dearer
+     * tier. 32 rows drifted when this was written; it is now pinned per row
+     * so the catalogue cannot drift from the classifier again.
+     */
+    public function test_every_row_files_the_tier_its_own_cost_falls_into(): void
+    {
+        [$header, $rows] = $this->readCatalogueCsv();
+
+        $nameIndex = $this->columnIndex($header, 'name');
+        $costIndex = $this->columnIndex($header, 'estimated_cost');
+        $tierIndex = $this->columnIndex($header, 'budget_level');
+
+        foreach ($rows as $row) {
+            $cost = (float) $row[$costIndex];
+
+            $this->assertSame(
+                Destination::budgetTierForCost($cost),
+                $row[$tierIndex],
+                sprintf(
+                    '%s is filed %s but costs ₱%s, which is %s.',
+                    $row[$nameIndex],
+                    $row[$tierIndex],
+                    $row[$costIndex],
+                    Destination::budgetTierForCost($cost)
+                )
+            );
+        }
+    }
+
     // -------------------------------------------------------------- helpers
 
     /**
