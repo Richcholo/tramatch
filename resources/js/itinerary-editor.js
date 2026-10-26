@@ -523,6 +523,49 @@ function initItineraryEditor(root) {
         schedulePreview();
     }
 
+    /**
+     * Duplicate one stop: the same place, the same type, the same note, the
+     * same day — a second row right below the original, under a browser key
+     * of its own, so the one save path judges it like any other new stop.
+     *
+     * This is the hotel case: check-in on day one, back at the hotel after
+     * the day out, check-out on the last morning. The picker can add a place
+     * again, but only through the dialog; the Duplicate button is one click
+     * on the card the traveller is looking at.
+     *
+     * THE CLONE'S TIMES ARE BLANK, deliberately. A clone carrying the
+     * source's clock times would put the traveller in two places at once;
+     * blank times are this editor's convention for a row that has never been
+     * placed, so the save gives it the next free slot — for a hotel, the end
+     * of the day. Crossing days remains the drag's job, and the picker's day
+     * radios remain for adds from the catalogue.
+     */
+    function cloneStop(sourceRow) {
+        const list = sourceRow.closest('[data-stop-list]');
+        const key = String(nextKey--);
+
+        const clone = sourceRow.cloneNode(true);
+
+        clone.dataset.key = key;
+
+        // A stored row's names carry the item's own id; the clone needs the
+        // browser key, and only the first segment changes.
+        clone.querySelectorAll('[name]').forEach((input) => {
+            input.name = input.name.replace(/^items\[\d+\]/, `items[${key}]`);
+        });
+
+        clone.querySelector('[data-field="start-time"]').value = '';
+        clone.querySelector('[data-field="end-time"]').value = '';
+
+        sourceRow.after(clone);
+
+        draggable(clone);
+        renumber(list);
+        refreshTravel(list);
+        markDirty();
+        schedulePreview();
+    }
+
     /* ---------------------------------------------------------------- drag */
 
     /**
@@ -737,7 +780,7 @@ function initItineraryEditor(root) {
     /* --------------------------------------------------------------- wiring */
 
     editView.addEventListener('click', (event) => {
-        const target = event.target.closest('[data-move], [data-remove], [data-reflow], [data-add]');
+        const target = event.target.closest('[data-move], [data-remove], [data-clone], [data-reflow], [data-add]');
 
         if (!target) {
             return;
@@ -755,6 +798,8 @@ function initItineraryEditor(root) {
             refreshTravel(list);
             markDirty();
             schedulePreview();
+        } else if (target.matches('[data-clone]')) {
+            cloneStop(row);
         } else if (target.matches('[data-reflow]')) {
             applyTimes(target.closest('[data-day-card]').dataset.dayId);
         } else if (target.matches('[data-add]')) {

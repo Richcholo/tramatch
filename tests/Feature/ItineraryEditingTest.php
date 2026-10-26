@@ -1404,6 +1404,7 @@ public function test_the_editor_itself_ignores_a_cost_in_the_draft(): void
             'data-move="up"',
             'data-move="down"',
             'data-remove',
+            'data-clone',
             'data-reflow',
             'data-add',
             'data-add-dialog',
@@ -2367,6 +2368,53 @@ public function test_the_editor_itself_ignores_a_cost_in_the_draft(): void
                 'the row template is missing its '.$field.' field'
             );
         }
+    }
+
+    /**
+     * The Duplicate control is per row, and the script must still recognise
+     * it: renaming either side silently kills the button — the row renders,
+     * the click does nothing, and nothing else in the suite would notice.
+     * The clone itself posts the same payload the repeated-place tests pin,
+     * so the server side is already held; this is the button and its wiring.
+     */
+    public function test_every_stop_row_carries_a_working_duplicate_control(): void
+    {
+        $itinerary = $this->generateItinerary('alpha');
+
+        $html = $this->actingAs($this->user)
+            ->get(route('itineraries.show', $itinerary))
+            ->assertOk()
+            ->getContent();
+
+        $document = new DOMDocument();
+
+        @$document->loadHTML($html);
+
+        libxml_clear_errors();
+
+        $xpath = new DOMXPath($document);
+
+        $rows = $xpath->query('//*[@data-stop][@data-key]');
+
+        $this->assertGreaterThan(0, $rows->length);
+
+        $this->assertSame(
+            $rows->length,
+            $xpath->query('//*[@data-clone][not(ancestor::template)]')->length,
+            'every rendered stop row must carry a Duplicate button'
+        );
+
+        // The template carries one too, so rows the script adds keep the
+        // control instead of losing it until the page reloads.
+        $this->assertSame(
+            1,
+            $xpath->query('//template//*[@data-clone]')->length
+        );
+
+        $script = file_get_contents(resource_path('js/itinerary-editor.js'));
+
+        $this->assertStringContainsString('[data-clone]', $script);
+        $this->assertStringContainsString('cloneStop(', $script);
     }
 
     public function test_the_map_skips_a_stop_without_a_pin(): void

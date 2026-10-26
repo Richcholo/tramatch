@@ -434,6 +434,15 @@
 
                             <button
                                 type="button"
+                                data-clone
+                                aria-label="Duplicate this stop"
+                                class="inline-flex min-h-11 items-center justify-center rounded-md border border-boracay-light px-4 py-2 text-sm font-semibold text-benguet-charcoal/70 transition hover:bg-boracay-light"
+                            >
+                                Duplicate
+                            </button>
+
+                            <button
+                                type="button"
                                 data-remove
                                 class="inline-flex min-h-11 items-center justify-center rounded-md border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50"
                             >
@@ -666,6 +675,15 @@
 
                                             <button
                                                 type="button"
+                                                data-clone
+                                                aria-label="Duplicate {{ $item->placeName() }}"
+                                                class="inline-flex min-h-11 items-center justify-center rounded-md border border-boracay-light px-4 py-2 text-sm font-semibold text-benguet-charcoal/70 transition hover:bg-boracay-light"
+                                            >
+                                                Duplicate
+                                            </button>
+
+                                            <button
+                                                type="button"
                                                 data-remove
                                                 class="inline-flex min-h-11 items-center justify-center rounded-md border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50"
                                             >
@@ -731,10 +749,14 @@
             <dialog
                 data-add-dialog
                 aria-labelledby="add-stop-title"
-                class="m-auto max-h-[85vh] w-[calc(100%-2rem)] max-w-2xl rounded-lg border border-boracay-light bg-palawan-sand p-0 text-benguet-charcoal shadow-2xl backdrop:bg-volcanic-teal/60 backdrop:backdrop-blur-sm"
+                class="m-auto max-h-[85vh] w-[calc(100%-2rem)] max-w-2xl overflow-hidden rounded-lg border border-boracay-light bg-palawan-sand p-0 text-benguet-charcoal shadow-2xl backdrop:bg-volcanic-teal/60 backdrop:backdrop-blur-sm"
             >
+                {{-- The dialog itself never scrolls: the cap lives here and the
+                     body below is the one scroll container, with
+                     overscroll-contain so a wheel or swipe at its edge stops
+                     there instead of scrolling the page behind the modal. --}}
                 <div class="flex max-h-[85vh] flex-col">
-                    <div class="border-b border-boracay-light p-6">
+                    <div class="shrink-0 border-b border-boracay-light p-6">
                         <h2 id="add-stop-title" class="font-display text-2xl font-semibold text-volcanic-teal">
                             Add a place you liked
                         </h2>
@@ -763,7 +785,7 @@
                         </div>
                     </div>
 
-                    <div class="min-h-0 flex-1 overflow-y-auto p-6">
+                    <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain p-6">
                         <p class="text-xs font-bold uppercase tracking-[0.2em] text-benguet-charcoal/55">
                             Attractions you liked
                         </p>
@@ -932,7 +954,7 @@
                         </div>
                     </div>
 
-                    <div class="flex flex-wrap items-center justify-between gap-3 border-t border-boracay-light p-6">
+                    <div class="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-boracay-light p-6">
                         <button
                             type="button"
                             onclick="this.closest('dialog').close()"
