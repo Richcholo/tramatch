@@ -722,7 +722,7 @@ class ItineraryController extends Controller
         Itinerary $itinerary,
         Place $place,
         ItineraryEditor $editor
-    ): RedirectResponse {
+    ) {
         $this->ensureOwner($itinerary);
 
         $validated = $request->validate([
@@ -734,7 +734,20 @@ class ItineraryController extends Controller
         try {
             $editor->addPlaceTo($itinerary, $place, $day);
         } catch (RuntimeException $exception) {
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'errors' => ['day_id' => [$exception->getMessage()]],
+                    'message' => $exception->getMessage(),
+                ], 422);
+            }
+
             return back()->withErrors(['day_id' => $exception->getMessage()]);
+        }
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'status' => $place->name.' added to Day '.$day->day_number.'.',
+            ]);
         }
 
         return back()->with('status', $place->name.' added to Day '.$day->day_number.'.');
