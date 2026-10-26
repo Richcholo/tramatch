@@ -165,7 +165,9 @@ not make `pint --test` a pass/fail gate.
 
 - Controllers are thin; behavior lives in `app/Services`.
   - `RecommendationService` — returns **only** destinations the user liked,
-    requires an exact `budget_level` match, score = `preference * 0.7 + 30`.
+    requires an affordable `budget_level` (a ceiling, not an exact match — see
+    ADR 0005), score = `preference * 0.7 + 30`, and caches the scored set per
+    user (`forgetCacheFor()` is called wherever swipes or weights change).
   - `SwipeDeckService` — excludes already-swiped ids, optional
     `preferred_region` `LIKE` match against province/municipality.
   - `ItineraryGenerator` — every selected destination must already appear in the
@@ -1193,10 +1195,11 @@ filter that emptied the pool, in the order `cards()` applies them:
 
 - **NO FALLBACK CARDS.** The answer under every branch is *why it is empty*
   plus TWO ways out — never a synthetic card pretending there is still work.
-- **THE INTERESTS BRANCH COUNTS ACROSS TIERS.** Budget is an exact match
-  (ADR 0002), so "nothing shares your interests" alone implies the catalogue
-  has nothing — when Romantic places exist at other budgets. It prints the
-  number that DO carry the interests elsewhere. Recovered by the browser
+- **THE INTERESTS BRANCH COUNTS ACROSS TIERS.** Budget is a CEILING now
+  (ADR 0005, superseding ADR 0002's exact match), so "nothing shares your
+  interests" alone still implies the catalogue has nothing *within reach* —
+  when Romantic places exist at dearer budgets. It prints the number that DO
+  carry the interests elsewhere. Recovered by the browser
   honesty spec, which had a `test.fail()` marker held since 2026-10-16
   against exactly this lie; the marker was deleted when the copy became
   honest, per its own instruction.
@@ -1629,13 +1632,13 @@ still one room, and the traveller decides how many rooms they need. A meal rate
 #### Coverage is reported PER BUDGET TIER, and never as a total
 
 `RecommendationService`, `SwipeDeckService`, `ItineraryGenerator` and
-`SwipeDiscoveryController` all filter `where('budget_level', $tier)` for
-**equality**. A place filed under the wrong tier is **invisible** to a traveller
-in the other two, not merely ranked lower.
+`SwipeDiscoveryController` all filter through `Destination::affordableTiers()`,
+which is a **ceiling** (ADR 0005): an economy traveller sees economy rows only, a
+premium traveller all three.
 
 Measured from the CSV: Benguet has **8** destinations, which reads as the
-strongest province in the catalogue, but the split is 5 economy / 3 mid-range. A
-mid-range traveller can see **three** of the eight. A province-wide count
+strongest province in the catalogue, but the split is 5 economy / 3 mid-range. An
+economy traveller can see **five** of the eight. A province-wide count
 therefore overstates what any one traveller can plan with.
 
 `Place::clusterCoverage($province)` returns per-tier counts, skips a tier nobody

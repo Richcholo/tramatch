@@ -72,7 +72,7 @@ class SwipeDeckService
         $destinations = Destination::query()
             ->with('tags')
             ->where('is_active', true)
-            ->where('budget_level', $profile->budget_level)
+            ->whereIn('budget_level', Destination::affordableTiers($profile->budget_level))
             ->whereNotIn('id', $swipedIds)
             ->when($profile->preferred_region, function ($query) use ($profile) {
                 $region = $profile->preferred_region;
@@ -320,7 +320,7 @@ class SwipeDeckService
         $inTier = Destination::query()
             ->with('tags')
             ->where('is_active', true)
-            ->where('budget_level', $profile->budget_level)
+            ->whereIn('budget_level', Destination::affordableTiers($profile->budget_level))
             ->get()
             ->values();
 
@@ -360,7 +360,7 @@ class SwipeDeckService
             $elsewhere = Destination::query()
                 ->with('tags')
                 ->where('is_active', true)
-                ->where('budget_level', '!=', $profile->budget_level)
+                ->whereNotIn('budget_level', Destination::affordableTiers($profile->budget_level))
                 ->get()
                 ->filter($sharesAnInterest)
                 ->count();

@@ -314,7 +314,7 @@ class ItineraryController extends Controller
      */
     public function sharedPreview(Itinerary $itinerary, string $token): View
     {
-        abort_unless($itinerary->hasShareToken() && $itinerary->share_token === $token, 404);
+        abort_unless($itinerary->hasShareToken() && hash_equals((string) $itinerary->share_token, $token), 404);
 
         $itinerary->load('days.items.destination', 'days.items.place', 'user');
 

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Destination;
 use App\Models\DestinationSwipe;
+use App\Services\RecommendationService;
 use App\Services\SwipeDeckService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -44,7 +45,10 @@ class SwipeDiscoveryController extends Controller
         $profile = Auth::user()->travelProfile;
 
         abort_unless($destination->is_active && $profile, 404);
-        abort_unless($destination->budget_level === $profile->budget_level, 422);
+        abort_unless(
+            in_array($destination->budget_level, Destination::affordableTiers($profile->budget_level), true),
+            422
+        );
 
         DestinationSwipe::updateOrCreate(
             [
@@ -53,6 +57,8 @@ class SwipeDiscoveryController extends Controller
             ],
             ['action' => $validated['action']]
         );
+
+        RecommendationService::forgetCacheFor((int) Auth::id());
 
         return response()->json([
             'message' => 'Swipe saved.',
@@ -95,6 +101,8 @@ class SwipeDiscoveryController extends Controller
         $freed = $swipe->destination_id;
         $swipe->delete();
 
+        RecommendationService::forgetCacheFor((int) Auth::id());
+
         return response()->json(['destination_id' => $freed]);
     }
 
@@ -125,6 +133,8 @@ class SwipeDiscoveryController extends Controller
     public function reset(): RedirectResponse
     {
         DestinationSwipe::where('user_id', Auth::id())->delete();
+
+        RecommendationService::forgetCacheFor((int) Auth::id());
 
         return redirect()->route('discover.index')
             ->with('toast_message', 'Your discovery deck was reset.');

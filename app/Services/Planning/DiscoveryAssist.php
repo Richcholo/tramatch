@@ -141,9 +141,47 @@ class DiscoveryAssist
             return $places;
         }
 
+        /*
+         * STRAIGHT-LINE PREFILTER BEFORE THE ROAD. Routing every place x stop
+         * pair cold is up to a few hundred sequential OSRM calls inside one web
+         * request against a 20s timeout — the assist dies on exactly the trips
+         * with no warm cache. So order by haversine first (the same premise the
+         * generator uses: within a province, a straight line is a good proxy),
+         * and measure the road only for the nearest few. The straight line
+         * decides the shortlist; every displayed figure is still OSRM's.
+         */
+        $haversineKm = static function (float $fromLat, float $fromLng, float $toLat, float $toLng): float {
+            $lat1 = deg2rad($fromLat);
+            $lat2 = deg2rad($toLat);
+
+            $a = sin(($lat2 - $lat1) / 2) ** 2
+                + cos($lat1) * cos($lat2) * sin(deg2rad($toLng - $fromLng) / 2) ** 2;
+
+            return 6371.0 * 2 * atan2(sqrt($a), sqrt(1 - $a));
+        };
+
+        $places = $places->sortBy(function (Place $place) use ($stops, $haversineKm) {
+            $best = PHP_FLOAT_MAX;
+
+            foreach ($stops as $stop) {
+                $distance = $haversineKm(
+                    (float) $stop->latitude(),
+                    (float) $stop->longitude(),
+                    (float) $place->latitude,
+                    (float) $place->longitude
+                );
+
+                $best = min($best, $distance);
+            }
+
+            return $best;
+        })->values();
+
+        $routed = $places->take(10);
+
         $routing = RouteService::fromConfig();
 
-        foreach ($places as $place) {
+        foreach ($routed as $place) {
             $best = null;
 
             foreach ($stops as $stop) {
@@ -165,10 +203,15 @@ class DiscoveryAssist
             $place->nearest_leg_minutes = $best;
         }
 
-        return $places->sortBy(
-            fn ($place) => $place->nearest_leg_minutes ?? PHP_INT_MAX,
-            SORT_NUMERIC
-        )->values();
+        $unrouted = $places->slice(10)->values();
+
+        return $routed
+            ->sortBy(
+                fn (Place $place) => $place->nearest_leg_minutes ?? PHP_INT_MAX,
+                SORT_NUMERIC
+            )
+            ->values()
+            ->concat($unrouted);
     }
 
     /**

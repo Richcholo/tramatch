@@ -166,7 +166,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/itineraries/{itinerary}/llm-suggest', [
         ItineraryController::class,
         'llmSuggest',
-    ])->name('itineraries.llm-suggest');
+    ])->name('itineraries.llm-suggest')->middleware('throttle:10,1');
 
     /*
      * HOT-ADD a curated place (restaurant, hotel) to one day. The suggestion
@@ -187,7 +187,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/itineraries/generation-assist', [
         ItineraryController::class,
         'generationAssist',
-    ])->name('itineraries.generation-assist');
+    ])->name('itineraries.generation-assist')->middleware('throttle:10,1');
 
     /*
      * The PDF export. Declared AFTER the resource so `itineraries/{itinerary}`

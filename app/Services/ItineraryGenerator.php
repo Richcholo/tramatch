@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Destination;
 use App\Models\Itinerary;
+use App\Models\ItineraryItem;
 use App\Models\Place;
 use App\Models\TravelProfile;
 use App\Models\User;
@@ -11,6 +12,7 @@ use App\Services\Routing\RouteService;
 use App\Services\Routing\WritesLegs;
 use Carbon\Carbon;
 use DateTimeInterface;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -42,6 +44,18 @@ class ItineraryGenerator
      * Legs still available to this run, spent as days are written.
      */
     private int $routingBudget = self::MAX_ROUTED_LEGS;
+
+    /**
+     * Legs resolved BEFORE the transaction, in plan order.
+     *
+     * Routing used to happen inside the save's DB transaction, so a slow road
+     * held row locks open for the length of an HTTP call — a 500 factory the
+     * first time the provider had a bad day. Every leg is asked for before
+     * `DB::transaction()` begins; the transaction only writes rows.
+     *
+     * @var list<\App\Services\Routing\RouteLeg|null>
+     */
+    private array $preResolvedLegs = [];
 
     public function __construct(
         private RecommendationService $recommendations,
@@ -103,7 +117,7 @@ class ItineraryGenerator
     {
         $places = Place::query()
             ->where('province', $area)
-            ->where('budget_level', $tier)
+            ->whereIn('budget_level', Destination::affordableTiers($tier))
             ->where('is_active', true)
             ->orderBy('id')
             ->get();
@@ -534,7 +548,7 @@ class ItineraryGenerator
             ->with('tags')
             ->where('is_active', true)
             ->where('province', $area)
-            ->where('budget_level', $profile->budget_level)
+            ->whereIn('budget_level', Destination::affordableTiers($profile->budget_level))
             ->whereIn('id', $selectedIds)
             ->get()
             ->keyBy('id');
@@ -787,6 +801,13 @@ class ItineraryGenerator
             );
         }
 
+        // Resolve every leg the plan implies BEFORE the transaction, so a slow
+        // road never holds DB row locks open inside an HTTP call. The same
+        // budget applies; the transaction below only writes rows.
+        $this->resolvePlanLegs($plan, $destinations, collect($tripPlaces['meals'])
+            ->when($tripPlaces['lodging'] !== null, fn ($c) => $c->push($tripPlaces['lodging']))
+            ->keyBy('id'));
+
         return DB::transaction(function () use (
             $user,
             $profile,
@@ -817,20 +838,9 @@ class ItineraryGenerator
                 ),
             ]);
 
-            // Every leg the plan implies, resolved against the road as the rows
-            // are written.
-            //
-            // THIS IS THE CHANGE. Generation used to leave every leg
-            // `unresolved` and every gap at the flat 45, on the recorded
-            // reasoning that routing inside a generation request is the wrong
-            // latency trade -- so a trip the traveller never edited carried a
-            // guessed drive time in the same slot a measured one uses. The trip
-            // is already being built stop by stop here, the road is one more
-            // read per gap, and it is cached for a month and bounded below.
-            //
-            // It happens INSIDE the existing transaction, so a leg that cannot
-            // be resolved costs nothing: `RouteService::leg()` answers null for
-            // every failure and the row is written `unresolved`.
+            // Every leg was already asked for before the transaction began
+            // (see `resolvePlanLegs()`); `writeLegs()` shifts the stored
+            // answers onto the rows and nothing here touches the road.
             $this->routingBudget = self::MAX_ROUTED_LEGS;
 
             foreach ($plan as $plannedDay) {
@@ -845,7 +855,7 @@ class ItineraryGenerator
                     $items[] = $day->items()->create($stop);
                 }
 
-                $this->routingBudget -= $this->writeLegs($items, $this->routingBudget);
+                $this->writeLegs($items);
             }
 
             $itinerary->setAttribute(
@@ -855,6 +865,129 @@ class ItineraryGenerator
 
             return $itinerary->load('days.items.destination');
         });
+    }
+
+    /**
+     * Ask the road about every consecutive pair in the plan, before the
+     * transaction.
+     *
+     * Consecutive pairs only, exactly like `WritesLegs` — no leg into a day's
+     * first stop. The answers land in one flat queue in plan order;
+     * `writeLegs()` shifts from it while the rows are written inside the
+     * transaction, so a slow road never holds DB row locks open inside an HTTP
+     * call — that used to be a 500 factory the first time the provider had a
+     * bad day. Unmeasured legs stay null in the queue and are written
+     * `unresolved`, which is the truth.
+     *
+     * @param  array<int, array{day_number: int, stops: array<int, array<string, mixed>>}>  $plan
+     * @param  array<int, Destination>  $destinations  keyed by id
+     * @param  array<int, Place>  $places  meal and lodging places, keyed by id
+     * @return list<\App\Services\Routing\RouteLeg|null>
+     */
+    private function resolvePlanLegs(array $plan, Collection $destinations, Collection $places): array
+    {
+        $this->preResolvedLegs = [];
+        $this->routingBudget = self::MAX_ROUTED_LEGS;
+
+        foreach ($plan as $plannedDay) {
+            $previousPin = null;
+
+            foreach ($plannedDay['stops'] as $stop) {
+                $pin = $this->planStopPin($stop, $destinations, $places);
+
+                if ($previousPin !== null && $pin !== null && $this->routingBudget > 0) {
+                    $this->preResolvedLegs[] = $this->routes->leg(
+                        $previousPin[0],
+                        $previousPin[1],
+                        $pin[0],
+                        $pin[1]
+                    );
+
+                    $this->routingBudget--;
+                }
+
+                $previousPin = $pin ?? $previousPin;
+            }
+        }
+
+        return $this->preResolvedLegs;
+    }
+
+    /**
+     * A planned stop's pin, before it is a row.
+     *
+     * The plan's stops are plain arrays; a destination stop's pins are on the
+     * loaded destination, a meal or lodging stop's on the loaded place. Null
+     * means unroutable — the same answer `routeBetween()` gives a row with no
+     * coordinates.
+     *
+     * @param  array<string, mixed>  $stop
+     * @param  array<int, Destination>  $destinations  keyed by id
+     * @param  array<int, Place>  $places  keyed by id
+     * @return array{0: float, 1: float}|null
+     */
+    private function planStopPin(array $stop, Collection $destinations, Collection $places): ?array
+    {
+        if (! empty($stop['destination_id'])) {
+            $destination = $destinations->get((int) $stop['destination_id']);
+
+            return $destination && $destination->latitude !== null && $destination->longitude !== null
+                ? [(float) $destination->latitude, (float) $destination->longitude]
+                : null;
+        }
+
+        if (! empty($stop['place_id'])) {
+            $place = $places->get((int) $stop['place_id']);
+
+            return $place && $place->latitude !== null && $place->longitude !== null
+                ? [(float) $place->latitude, (float) $place->longitude]
+                : null;
+        }
+
+        return null;
+    }
+
+    /**
+     * WritesLegs, overridden for the generator: consume the legs that were
+     * resolved BEFORE the transaction instead of asking the road inside it.
+     *
+     * The queue is in plan order and `create()` calls this once per day in the
+     * same order, so a plain shift() stays aligned. The row-writing rules —
+     * consecutive pairs only, `unresolved` for a null, never zero — are the
+     * trait's own and are reproduced here because the class method replaces
+     * the trait's wholesale.
+     *
+     * @param  iterable<ItineraryItem>  $items  consecutive stops of ONE day
+     */
+    protected function writeLegs(iterable $items): int
+    {
+        $previous = null;
+        $written = 0;
+
+        foreach ($items as $item) {
+            $leg = $previous !== null
+                ? array_shift($this->preResolvedLegs)
+                : null;
+
+            $item->update($leg === null
+                ? [
+                    'route_distance_meters' => null,
+                    'route_duration_minutes' => null,
+                    'route_provider' => null,
+                    'route_status' => ItineraryItem::ROUTE_UNRESOLVED,
+                ]
+                : [
+                    'route_distance_meters' => $leg->distanceMeters,
+                    'route_duration_minutes' => $leg->durationMinutes,
+                    'route_provider' => $leg->provider,
+                    'route_status' => ItineraryItem::ROUTE_RESOLVED,
+                ]);
+
+            $written++;
+            $previous = $item;
+        }
+
+        return $written;
     }
 
     /**

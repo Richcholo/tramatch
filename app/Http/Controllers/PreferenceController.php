@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Tag;
 use App\Models\Destination;
+use App\Services\RecommendationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -82,6 +83,10 @@ class PreferenceController extends Controller
         // goes. The cards were chosen for the interest weights that just
         // changed, so keeping them would contradict the new profile.
         $user->destinationSwipes()->delete();
+
+        // The weights just changed, so the cached scored set is about the old
+        // profile. Swipe deletion above changes it too.
+        RecommendationService::forgetCacheFor($user->id);
 
         return redirect()->route('discover.index')
             ->with('status', 'Your travel preferences were saved. Start swiping to personalize your results.');

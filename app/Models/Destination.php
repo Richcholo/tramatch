@@ -28,21 +28,20 @@ class Destination extends Model
     /**
      * What each budget tier means in pesos, and the boundary that decides it.
      *
-     * `budget_level` is not a ranking and not a filter on a score. It is an
-     * **exact match** against the traveller's own profile:
-     * `SwipeDeckService`, `RecommendationService`, `ItineraryGenerator` and
-     * `SwipeDiscoveryController` all do `where('budget_level', $profile->
-     * budget_level)`. So a destination filed under the wrong tier does not rank
-     * lower, it becomes **invisible** to everyone in the other two tiers. That
-     * is why the admin form shows these ranges instead of leaving the choice to
-     * judgement.
+     * `budget_level` is a **ceiling**, not an exact match: every service
+     * filters with `Destination::affordableTiers()` (ADR 0005), so a premium
+     * traveller sees premium, mid-range and economy rows, while an economy
+     * traveller sees economy only. A destination filed under the wrong tier
+     * does not rank lower — it becomes invisible to everyone whose ceiling is
+     * below it. That is why the admin form shows these ranges instead of
+     * leaving the choice to judgement.
      *
      * The boundaries are half-open and do not overlap. An earlier draft of this
      * guideline read "Mid 501-1000" alongside "Premium 1000 and up", which
      * double-counts exactly 1000; mid-range therefore stops at 999.
      *
      * `max` is null for the open-ended top tier. Order matters and is relied on
-     * by budgetTierForCost().
+     * by budgetTierForCost() and affordableTiers().
      *
      * @var array<string, array{label: string, min: int, max: int|null}>
      */
@@ -108,6 +107,34 @@ class Destination extends Model
      * roots at storage/app/private precisely so crawl snapshots are not.
      */
     public const IMAGE_DIRECTORY = 'destination-images';
+
+    /**
+     * The tiers a traveller can afford: their own and every cheaper one.
+     *
+     * A premium budget can pay for an economy attraction — the traveller
+     * simply spends less than they were prepared to. The reverse is false:
+     * an economy traveller cannot be shown a ₱1,200 entry fee. This is a
+     * CEILING, not a band, which is why it is a slice of the ordered
+     * BUDGET_TIERS list and not a hand-written map.
+     *
+     * Used everywhere a profile tier was previously an exact match. Keep the
+     * list derived from BUDGET_TIERS so a fourth tier cannot be forgotten.
+     *
+     * @return list<string>
+     */
+    public static function affordableTiers(string $tier): array
+    {
+        $keys = array_keys(self::BUDGET_TIERS);
+
+        $position = array_search($tier, $keys, true);
+
+        // An unknown tier falls back to itself, which matches the old exact
+        // match rather than inventing behaviour for a value that cannot be
+        // stored (validation only admits the three keys).
+        return $position === false
+            ? [$tier]
+            : array_slice($keys, 0, (int) $position + 1);
+    }
 
     protected $fillable = [
         'name',

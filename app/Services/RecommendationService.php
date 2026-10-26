@@ -7,9 +7,27 @@ use App\Models\Destination;
 use App\Models\DestinationSwipe;
 use App\Models\User;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 
 class RecommendationService
 {
+    /**
+     * Cache key for the traveller's full scored set.
+     *
+     * Scoring the whole catalogue per page view was the slowest thing the app
+     * did per request; the result depends only on the profile's weights and the
+     * user's likes, so it is cached per user and FORGOTTEN at every point that
+     * changes either input: `PreferenceController::update` (weights) and
+     * `SwipeDiscoveryController` store/undo/reset (likes). No TTL safety net
+     * beyond an hour, because a missed invalidation would show a stale "your
+     * liked places" list.
+     */
+    public const CACHE_KEY_PREFIX = 'recommendations:';
+
+    public static function forgetCacheFor(int $userId): void
+    {
+        Cache::forget(self::CACHE_KEY_PREFIX.$userId);
+    }
     /**
      * Why a score is the number it is.
      *
@@ -39,6 +57,30 @@ class RecommendationService
             return collect();
         }
 
+        /*
+         * Cache the full scored set once; every caller slices its own limit
+         * from it afterwards. The limit is applied below, outside the cache,
+         * so one entry serves the stage (500), the editor (1000) and the
+         * recommendations page (default 20) without three cache keys.
+         */
+        $scored = Cache::remember(
+            self::CACHE_KEY_PREFIX.$user->id,
+            now()->addHour(),
+            function () use ($user, $profile) {
+                return $this->scoredLikedDestinations($user, $profile);
+            }
+        );
+
+        return $scored->take($limit);
+    }
+
+    /**
+     * The uncached body of `recommend()`.
+     *
+     * @return Collection<int, Destination>
+     */
+    private function scoredLikedDestinations(User $user, $profile): Collection
+    {
         $weights = $profile->tags
             ->pluck('pivot.weight', 'id')
             ->map(fn ($weight) => (int) $weight);
@@ -67,7 +109,7 @@ class RecommendationService
         return Destination::query()
             ->with('tags')
             ->where('is_active', true)
-            ->where('budget_level', $profile->budget_level)
+            ->whereIn('budget_level', Destination::affordableTiers($profile->budget_level))
             ->whereIn('id', $likedIds)
             ->get()
             ->map(function (
@@ -91,8 +133,7 @@ class RecommendationService
                 return $destination->matched_tags->isNotEmpty();
             })
             ->sortByDesc('match_score')
-            ->values()
-            ->take($limit);
+            ->values();
     }
 
     /**
@@ -159,7 +200,7 @@ class RecommendationService
         return Destination::query()
             ->with('tags')
             ->where('is_active', true)
-            ->where('budget_level', $profile->budget_level)
+            ->whereIn('budget_level', Destination::affordableTiers($profile->budget_level))
             ->whereNotIn('id', $passedIds)
             ->when(
                 $area !== null && $area !== '',

@@ -79,4 +79,59 @@ class ItineraryDay extends Model
 
         return 'That leaves '.ItineraryItem::durationLabel($minutes).' free.';
     }
+
+    /**
+     * Whether the day's attractions are still ordered nearest-first from where
+     * the traveller sleeps.
+     *
+     * THE GENERATOR'S OWN PROMISE, CHECKED BEFORE IT IS PRINTED. Generation
+     * picks each slot's destination nearest-to-the-hotel first, so a generated
+     * day is ascending by distance from the lodging stop. The traveller can drag
+     * any stop anywhere afterwards, which makes the sentence false — so this
+     * measures it rather than trusting it, and the view prints one line only
+     * when it is true.
+     *
+     * Meals, custom entries and a day with no lodging are outside the claim and
+     * return false: the trip may still be perfectly planned, but "nearest-first
+     * from your hotel" is not what it is.
+     */
+    public function stopsOrderedNearestFirst(): bool
+    {
+        $lodging = $this->items->first(
+            fn (ItineraryItem $item) => $item->isLodging() && $item->hasKnownLocation()
+        );
+
+        if ($lodging === null) {
+            return false;
+        }
+
+        $attractions = $this->items
+            ->filter(fn (ItineraryItem $item) => $item->isAttraction() && $item->hasKnownLocation())
+            ->values();
+
+        if ($attractions->count() < 2) {
+            return false;
+        }
+
+        $earthRadiusKm = 6371.0;
+        $previous = null;
+
+        foreach ($attractions as $attraction) {
+            $lat1 = deg2rad((float) $lodging->latitude());
+            $lat2 = deg2rad((float) $attraction->latitude());
+            $a = sin(($lat2 - $lat1) / 2) ** 2
+                + cos($lat1) * cos($lat2)
+                * sin(deg2rad((float) $attraction->longitude() - (float) $lodging->longitude()) / 2) ** 2;
+            $distance = $earthRadiusKm * 2 * atan2(sqrt($a), sqrt(1 - $a));
+
+            // A tiny tolerance for float noise on two stops at the same pin.
+            if ($previous !== null && $distance < $previous - 0.01) {
+                return false;
+            }
+
+            $previous = $distance;
+        }
+
+        return true;
+    }
 }

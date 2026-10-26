@@ -17,11 +17,26 @@
                                     Day {{ $day->day_number }}
                                 </h3>
 
-                                @if ($day->date)
-                                    <span class="text-sm text-benguet-charcoal/60">
-                                        {{ $day->date->format('M d, Y') }}
-                                    </span>
-                                @endif
+                                <div class="flex items-center gap-3">
+                                    {{-- The day's own spend, beside its heading. A
+                                         trip total without a per-day breakdown is a
+                                         number a traveller budgeting a weekend cannot
+                                         act on. Unpriced stops store 0, so this is
+                                         "what is verified so far" like every other
+                                         total in the app. --}}
+                                    @php($dayCost = (float) $day->items->sum('estimated_cost'))
+                                    @if ($dayCost > 0)
+                                        <span class="text-sm font-semibold text-volcanic-teal">
+                                            ₱{{ number_format($dayCost, 2) }}
+                                        </span>
+                                    @endif
+
+                                    @if ($day->date)
+                                        <span class="text-sm text-benguet-charcoal/60">
+                                            {{ $day->date->format('M d, Y') }}
+                                        </span>
+                                    @endif
+                                </div>
                             </div>
 
                             <div class="mt-7 space-y-6">
@@ -178,6 +193,17 @@
                                 @if ($freeTime = $day->freeTimeSentence())
                                     <p data-free-time class="mt-6 text-sm font-semibold text-boracay-dark">
                                         {{ $freeTime }}
+                                    </p>
+                                @endif
+
+                                {{-- Why this order. Printed only when it is still
+                                     true: the generator orders attractions nearest
+                                     to the hotel first, and a traveller who drags
+                                     one is never told otherwise by a stale
+                                     sentence. --}}
+                                @if ($day->stopsOrderedNearestFirst())
+                                    <p data-nearest-first class="mt-2 text-sm text-benguet-charcoal/60">
+                                        Stops are ordered nearest-first from where you stay.
                                     </p>
                                 @endif
                             </div>
