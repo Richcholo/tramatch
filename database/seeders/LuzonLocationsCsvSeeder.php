@@ -3,6 +3,9 @@
 namespace Database\Seeders;
 
 use App\Models\Destination;
+use App\Models\DestinationImage;
+use App\Models\ItineraryItem;
+use App\Models\Review;
 use App\Models\Tag;
 use Database\Seeders\Concerns\ReadsCatalogueRows;
 use Illuminate\Database\Seeder;
@@ -51,6 +54,8 @@ class LuzonLocationsCsvSeeder extends Seeder
             $headers,
             &$imported
         ) {
+            $csvSlugs = [];
+
             while (($values = fgetcsv($handle)) !== false) {
                 if (
                     count($values) === 1
@@ -153,6 +158,7 @@ class LuzonLocationsCsvSeeder extends Seeder
                     ->all();
 
                 $slug = Str::slug($name);
+                $csvSlugs[] = $slug;
 
                 $description = $this->buildDescription(
                     $name,
@@ -248,6 +254,8 @@ class LuzonLocationsCsvSeeder extends Seeder
 
                 $imported++;
             }
+
+            $this->pruneRowsTheCsvNoLongerNames($csvSlugs);
         });
 
         fclose($handle);
@@ -255,6 +263,62 @@ class LuzonLocationsCsvSeeder extends Seeder
         $this->command?->info(
             "Imported {$imported} Luzon destinations."
         );
+    }
+
+    /**
+     * The CSV is the catalogue's source of truth, and a RENAME is how a row
+     * leaves it: the Quezon forest park moved slug on 2026-10-26, and the
+     * firstOrNew above created the new row and left the old one standing —
+     * two rows for one place on every database this seeder ran on.
+     *
+     * Rows the CSV no longer names are deleted here, EXCEPT rows that
+     * traveller or admin content still points at. Every child table
+     * cascades, so deleting a referenced row would silently pull stops out
+     * of trips, delete reviews and throw away uploaded photographs — the
+     * exact loss ItineraryEditor::removeDay() refuses to make. Those rows
+     * are reported, by name, for a hand decision instead.
+     *
+     * A swipe is deliberately NOT content: it is a decision about a row that
+     * no longer exists, and after a rename the traveller should meet the
+     * place again on its new row rather than never see it again.
+     *
+     * @param  array<int, string>  $csvSlugs
+     */
+    private function pruneRowsTheCsvNoLongerNames(array $csvSlugs): void
+    {
+        $abandoned = Destination::query()
+            ->whereNotIn('slug', $csvSlugs)
+            ->orderBy('name')
+            ->get(['id', 'slug', 'name']);
+
+        foreach ($abandoned as $orphan) {
+            $heldBy = collect([
+                'itinerary stops' => ItineraryItem::where('destination_id', $orphan->id)->exists(),
+                'reviews' => Review::where('destination_id', $orphan->id)->exists(),
+                'uploaded photographs' => DestinationImage::where('destination_id', $orphan->id)->exists(),
+            ])
+                ->filter()
+                ->keys();
+
+            if ($heldBy->isNotEmpty()) {
+                $this->command?->warn(sprintf(
+                    'Kept %s (%s): it still has %s. Delete or merge it by hand.',
+                    $orphan->name,
+                    $orphan->slug,
+                    $heldBy->implode(', ')
+                ));
+
+                continue;
+            }
+
+            $orphan->delete();
+
+            $this->command?->warn(sprintf(
+                'Removed %s (%s): the CSV no longer names it.',
+                $orphan->name,
+                $orphan->slug
+            ));
+        }
     }
 
     private function parseNumber(mixed $value): float

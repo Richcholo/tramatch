@@ -281,6 +281,87 @@ class DestinationHoursTest extends TestCase
         );
     }
 
+    /**
+     * A rename leaves a row behind: the Quezon forest park moved slug on
+     * 2026-10-26 and the `firstOrNew` above created the new row while the old
+     * one stood — two rows for one place on every re-seeded database, and the
+     * old one still carried the misidentified pin. The seeder now converges
+     * the table to the CSV for rows nothing references.
+     */
+    public function test_reseeding_removes_a_row_the_csv_no_longer_names(): void
+    {
+        $this->seed(TagSeeder::class);
+        $this->seed(LuzonLocationsCsvSeeder::class);
+
+        $orphan = Destination::create([
+            'name' => 'Quezon National Forest Park (Mt. Manalmon / Madlum ranges)',
+            'slug' => 'quezon-national-forest-park-mt-manalmon-madlum-ranges',
+            'description' => 'The row a rename left behind.',
+            'province' => 'Quezon',
+            'municipality' => 'San Miguel area',
+            'latitude' => 14.7850,
+            'longitude' => 121.1480,
+            'budget_level' => 'economy',
+            'estimated_cost' => 500,
+            'recommended_minutes' => 240,
+        ]);
+
+        $this->seed(LuzonLocationsCsvSeeder::class);
+
+        $this->assertNull(Destination::find($orphan->id));
+        $this->assertCount(160, Destination::pluck('id'));
+    }
+
+    /**
+     * Every child table cascades, so pruning a referenced row would pull
+     * stops out of trips, delete reviews and throw away uploads — the loss
+     * ItineraryEditor::removeDay() refuses to make. The seeder keeps such a
+     * row and names it for a hand decision instead.
+     */
+    public function test_a_stale_row_holding_traveller_content_is_kept_not_pruned(): void
+    {
+        $this->seed(TagSeeder::class);
+        $this->seed(LuzonLocationsCsvSeeder::class);
+
+        $orphan = Destination::create([
+            'name' => 'Quezon National Forest Park (Mt. Manalmon / Madlum ranges)',
+            'slug' => 'quezon-national-forest-park-mt-manalmon-madlum-ranges',
+            'description' => 'The row a rename left behind.',
+            'province' => 'Quezon',
+            'municipality' => 'San Miguel area',
+            'latitude' => 14.7850,
+            'longitude' => 121.1480,
+            'budget_level' => 'economy',
+            'estimated_cost' => 500,
+            'recommended_minutes' => 240,
+        ]);
+
+        $traveller = User::factory()->create();
+        $itinerary = \App\Models\Itinerary::create([
+            'user_id' => $traveller->id,
+            'title' => 'A trip',
+            'area' => 'Quezon',
+            'budget_level' => 'economy',
+            'trip_duration_days' => 2,
+        ]);
+        $day = \App\Models\ItineraryDay::create([
+            'itinerary_id' => $itinerary->id,
+            'day_number' => 1,
+        ]);
+        \App\Models\ItineraryItem::create([
+            'itinerary_day_id' => $day->id,
+            'destination_id' => $orphan->id,
+            'sort_order' => 1,
+        ]);
+
+        $this->seed(LuzonLocationsCsvSeeder::class);
+
+        $this->assertNotNull(Destination::find($orphan->id));
+        $this->assertTrue(
+            \App\Models\ItineraryItem::where('destination_id', $orphan->id)->exists()
+        );
+    }
+
     public function test_the_csv_seeder_infers_per_day_when_daily_hours_are_set(): void
     {
         $this->seed(TagSeeder::class);
