@@ -1998,6 +1998,97 @@ public function test_the_editor_itself_ignores_a_cost_in_the_draft(): void
         $this->assertSame(1, $itinerary->fresh()->days->first()->items()->count());
     }
 
+    public function test_a_custom_stop_pinned_to_another_province_is_refused(): void
+    {
+        $itinerary = $this->generateItinerary('alpha');
+        $day = $itinerary->days->first();
+        $item = $day->items->first();
+
+        // Without a second province in the catalogue there is nothing for this
+        // pin to be nearer than, so the check would pass for the wrong reason.
+        Destination::create([
+            'name' => 'Vigan Cathedral',
+            'slug' => 'vigan-cathedral',
+            'description' => 'A place.',
+            'province' => 'Ilocos Sur',
+            'latitude' => 17.5747,
+            'longitude' => 120.3869,
+            'budget_level' => 'economy',
+            'estimated_cost' => 0,
+            'recommended_minutes' => 60,
+        ]);
+
+        $this->actingAs($this->user)
+            ->from(route('itineraries.show', $itinerary))
+            ->patch(route('itineraries.update', $itinerary), [
+                'items' => [
+                    $item->id => $this->row($item),
+                    '-1' => [
+                        'day_id' => $day->id,
+                        'sort_order' => 2,
+                        'item_type' => 'custom',
+                        'destination_id' => null,
+                        'place_id' => null,
+                        'custom_name' => 'A hotel in Vigan',
+                        'custom_address' => 'Plaza Salcedo',
+                        'custom_latitude' => 17.5747,
+                        'custom_longitude' => 120.3869,
+                        'start_time' => null,
+                        'end_time' => null,
+                    ],
+                ],
+            ])
+            ->assertSessionHasErrors('itinerary');
+
+        $this->assertSame(1, $itinerary->fresh()->days->first()->items()->count());
+    }
+
+    public function test_a_custom_stop_pinned_to_the_trips_own_province_is_saved(): void
+    {
+        $itinerary = $this->generateItinerary('alpha');
+        $day = $itinerary->days->first();
+        $item = $day->items->first();
+
+        Destination::create([
+            'name' => 'Vigan Cathedral',
+            'slug' => 'vigan-cathedral',
+            'description' => 'A place.',
+            'province' => 'Ilocos Sur',
+            'latitude' => 17.5747,
+            'longitude' => 120.3869,
+            'budget_level' => 'economy',
+            'estimated_cost' => 0,
+            'recommended_minutes' => 60,
+        ]);
+
+        $this->actingAs($this->user)
+            ->patch(route('itineraries.update', $itinerary), [
+                'items' => [
+                    $item->id => $this->row($item),
+                    '-1' => [
+                        'day_id' => $day->id,
+                        'sort_order' => 2,
+                        'item_type' => 'custom',
+                        'destination_id' => null,
+                        'place_id' => null,
+                        'custom_name' => 'A hotel by the lake',
+                        'custom_address' => 'Lakeside Road',
+                        'custom_latitude' => 14.301,
+                        'custom_longitude' => 121.401,
+                        'start_time' => null,
+                        'end_time' => null,
+                    ],
+                ],
+            ])
+            ->assertRedirect(route('itineraries.show', $itinerary));
+
+        $custom = $itinerary->fresh()->days->first()->items()
+            ->where('item_type', 'custom')
+            ->firstOrFail();
+
+        $this->assertTrue($custom->hasKnownLocation());
+    }
+
     public function test_an_unpriced_stop_marks_the_header_total_incomplete(): void
     {
         $itinerary = $this->generateItinerary('alpha');

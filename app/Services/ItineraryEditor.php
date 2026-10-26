@@ -694,9 +694,11 @@ class ItineraryEditor
                 continue;
             }
 
-            // Custom entries and rows pointing at catalogue rows that are gone
-            // need nothing: the former is the traveller's own, and the latter
-            // is rejected earlier by the request's exists rules.
+            // Rows pointing at catalogue rows that are gone need nothing: they
+            // are rejected earlier by the request's exists rules.
+            if ($stop) {
+                $this->resolveNewCustom($itinerary, $stop);
+            }
         }
     }
 
@@ -768,6 +770,65 @@ class ItineraryEditor
         // a two-night stay unsavable. Stored rows are what this guards — they
         // were seeded into $usedPlaces above, and a repeat of one of those is
         // still a duplicate.
+    }
+
+    /**
+     * A custom stop's province, inferred from its pin.
+     *
+     * A custom entry has no catalogue row, so nothing on it names a province:
+     * the only place-ness it carries is the pin the traveller typed. The
+     * question a map can answer is "is this point nearer this trip's province
+     * than any other?", so it is answered that way — comparing the nearest
+     * catalogue pin on each side, with no distance threshold to tune and no
+     * geography invented. A pin on a provincial border goes to the nearer side,
+     * which is the best a pin set can do without boundary polygons.
+     *
+     * TWO SILENCES, BOTH DELIBERATE. No pin means no position, and refusing
+     * would delete the feature's whole point — the hotel already booked, typed
+     * off a confirmation email. No destinations in this trip's province means
+     * the catalogue cannot answer at all. Neither is a refusal: the stop saves,
+     * and its legs say they were not measured. Silence is the only honest
+     * answer available, and a guess here would refuse a real booking.
+     */
+    private function resolveNewCustom(Itinerary $itinerary, ItineraryStop $stop): void
+    {
+        $latitude = $stop->latitude();
+        $longitude = $stop->longitude();
+
+        if ($latitude === null || $longitude === null) {
+            return;
+        }
+
+        $nearestKm = Destination::query()
+            ->where('is_active', true)
+            ->get(['province', 'latitude', 'longitude'])
+            ->groupBy('province')
+            ->map(fn (Collection $rows) => $rows->map(
+                fn (Destination $row) => ItineraryGenerator::distanceFromPin(
+                    $latitude,
+                    $longitude,
+                    $row->latitude,
+                    $row->longitude
+                )
+            )->min());
+
+        $here = $nearestKm->get($itinerary->area);
+
+        if ($here === null) {
+            return;
+        }
+
+        $elsewhere = $nearestKm
+            ->except($itinerary->area)
+            ->filter(fn ($km) => $km !== null)
+            ->sort();
+
+        if ($elsewhere->isNotEmpty() && $elsewhere->first() < $here) {
+            throw new RuntimeException(
+                $stop->displayName().' looks like it is in '
+                .$elsewhere->keys()->first().', not on this trip.'
+            );
+        }
     }
 
     /**

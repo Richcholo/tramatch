@@ -287,9 +287,12 @@ class ItineraryGenerator
      * tested. A haversine is free, always available, and identical every time.
      *
      * Within a province it is also a good proxy for road distance, which is the
-     * premise the three pilot clusters were chosen on.
+     * premise the pilot clusters were chosen on.
+     *
+     * Shared with the editor's custom-stop province check, which asks the same
+     * question of a pin that has no catalogue row behind it. Keep it public.
      */
-    private static function distanceFromPin(
+    public static function distanceFromPin(
         ?float $fromLat,
         ?float $fromLng,
         $toLat,
