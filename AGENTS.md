@@ -40,8 +40,9 @@ every fact:
   page. Its picks render as cards with a day picker and a one-click hot-add
   (POST `itineraries.places.add` → `ItineraryEditor::addPlaceTo()`, the same
   negative-key shim as `addDestinationTo()` — a place stop has no swipes, so
-  the liked rule does not apply, but duplicates, province and day ownership
-  are all refused server-side).
+  the liked rule does not apply, but province and day ownership are refused
+  server-side, and a REPEAT of a place already on the trip saves on purpose:
+  the return visit is the feature, and `costFor()` charges the room once).
 - **The generation-form assist** (POST `itineraries.generation-assist`): the
   model ranks the traveller's OWN shortlist on the create form. The
   controller re-filters the posted ids against the same `candidates()` query
@@ -203,7 +204,11 @@ not make `pint --test` a pass/fail gate.
   through: `preload()` reads both catalogue tables once per draft,
   `fromFields()`/`forItem()` resolve one row, and name/position delegate to
   the item's own readers via an unsaved related item — so they cannot drift.
-  Validation (liked-only, active-only, no-repeat) stays in the editor, and
+  Validation (liked-only, active-only, no-repeat-for-attractions) stays in
+  the editor — places are deliberately exempt from no-repeat, because the
+  same hotel returns (check-in, nights, check-out) and the same restaurant
+  can serve dinner twice; `costFor()` keeps the room charge on the first
+  occurrence — and
   `snapshotCost()` returns null for unknown prices rather than zero.
 
 ### Editing a generated itinerary

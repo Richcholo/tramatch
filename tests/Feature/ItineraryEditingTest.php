@@ -1893,6 +1893,137 @@ public function test_the_editor_itself_ignores_a_cost_in_the_draft(): void
         $this->assertSame(5300.0, (float) $itinerary->fresh()->total_estimated_cost);
     }
 
+    /**
+     * The hotel is already on the trip — checked in on day one — and the
+     * traveller adds it again on day two, because after seeing the places
+     * they have to go back: check-in, nights, check-out. A stored repeat used
+     * to be refused ("already on this trip"), which made the return visit
+     * unspeakable. The room is still charged once: the new row stores 0.
+     */
+    public function test_a_place_already_on_the_trip_can_be_added_again_on_another_day(): void
+    {
+        $itinerary = $this->tripOfDays(2, ['alpha']);
+
+        $hotel = $this->place([
+            'name' => 'Return Visit Hotel',
+            'type' => Place::TYPE_LODGING,
+            'price_min' => 4500,
+            'price_max' => 4500,
+            'price_basis' => Place::PRICE_PER_ROOM_NIGHT,
+            'recommended_minutes' => 0,
+        ]);
+
+        $days = $itinerary->fresh()->days;
+        $attraction = $days->first()->items->first();
+
+        // Check-in: the hotel lands on day one.
+        $this->actingAs($this->user)
+            ->patch(route('itineraries.update', $itinerary), [
+                'items' => [
+                    $attraction->id => $this->row($attraction),
+                    '-1' => array_merge(
+                        $this->mealRow($days[0]->id, $hotel->id),
+                        ['item_type' => 'lodging']
+                    ),
+                ],
+            ])
+            ->assertRedirect(route('itineraries.show', $itinerary));
+
+        $stored = $itinerary->fresh()->days->pluck('items')->flatten();
+
+        // A stored place row posts its place back, the way the real form does;
+        // row() alone is the shape an attraction row needs.
+        $storedRows = $stored
+            ->mapWithKeys(function ($item) {
+                $row = $this->row($item);
+
+                if ($item->place_id) {
+                    $row += [
+                        'item_type' => $item->item_type,
+                        'place_id' => $item->place_id,
+                        'custom_name' => null,
+                        'custom_address' => null,
+                        'custom_latitude' => null,
+                        'custom_longitude' => null,
+                    ];
+                }
+
+                return [$item->id => $row];
+            })
+            ->all();
+
+        // The return: the same hotel, already on this trip, on day two.
+        // The keys are item ids, so the payload is merged with + — the array
+        // spread would re-index the integer keys and turn every stored id
+        // into an unrecognised browser key.
+        $this->actingAs($this->user)
+            ->patch(route('itineraries.update', $itinerary), [
+                'items' => $storedRows + [
+                    '-9' => array_merge(
+                        $this->mealRow($days[1]->id, $hotel->id, 1),
+                        ['item_type' => 'lodging']
+                    ),
+                ],
+            ])
+            ->assertRedirect(route('itineraries.show', $itinerary));
+
+        $stays = $itinerary->fresh()->days
+            ->pluck('items')
+            ->flatten()
+            ->where('place_id', $hotel->id)
+            ->sortBy('id')
+            ->values();
+
+        $this->assertCount(2, $stays);
+        $this->assertSame(4500.0, (float) $stays[0]->estimated_cost);
+        // The repeat is a night, not a second room: charged once per trip.
+        $this->assertSame(0.0, (float) $stays[1]->estimated_cost);
+        $this->assertSame(5300.0, (float) $itinerary->fresh()->total_estimated_cost);
+    }
+
+    /**
+     * The picker offers what the editor accepts: a place already on the trip
+     * stays listed, stamped with the days it is on, so adding it again reads
+     * as the deliberate return it is rather than as a near-miss.
+     */
+    public function test_the_add_dialog_offers_a_place_already_on_the_trip(): void
+    {
+        $itinerary = $this->tripOfDays(2, ['alpha']);
+
+        $hotel = $this->place([
+            'name' => 'Dialog Return Hotel',
+            'type' => Place::TYPE_LODGING,
+            'price_basis' => Place::PRICE_PER_ROOM_NIGHT,
+            'recommended_minutes' => 0,
+        ]);
+
+        $days = $itinerary->fresh()->days;
+        $attraction = $days->first()->items->first();
+
+        $this->actingAs($this->user)
+            ->patch(route('itineraries.update', $itinerary), [
+                'items' => [
+                    $attraction->id => $this->row($attraction),
+                    '-1' => array_merge(
+                        $this->mealRow($days[0]->id, $hotel->id),
+                        ['item_type' => 'lodging']
+                    ),
+                ],
+            ])
+            ->assertRedirect(route('itineraries.show', $itinerary));
+
+        $rendered = $this->actingAs($this->user)
+            ->get(route('itineraries.show', $itinerary))
+            ->getContent();
+
+        $this->assertStringContainsString('Dialog Return Hotel', $rendered);
+        $this->assertStringContainsString(
+            'Already on day 1',
+            $rendered,
+            'the dialog must say the place is already on the trip, not hide it'
+        );
+    }
+
     public function test_a_custom_stop_is_saved_from_what_was_typed(): void
     {
         $itinerary = $this->generateItinerary('alpha');

@@ -123,27 +123,50 @@ class ItineraryPlaceAddTest extends TestCase
         $this->assertSame(0, $this->trip->days()->first()->items()->count());
     }
 
-    public function test_a_duplicate_place_is_refused_with_the_reason(): void
+    /**
+     * The same place twice is the feature, not a mistake: the traveller
+     * sleeps at the hotel every night and the plan has to say so — check-in,
+     * the days out, back again, check-out. The second add used to be refused
+     * as a duplicate; now it saves, and the room is still charged once (the
+     * repeat stores 0), so the total reads one stay no matter how many rows
+     * carry it.
+     */
+    public function test_a_place_already_on_the_trip_can_be_added_again(): void
     {
-        $place = $this->place();
+        $hotel = $this->place([
+            'name' => 'Twice Booked Hotel',
+            'type' => Place::TYPE_LODGING,
+            'price_min' => 4500,
+            'price_max' => 4500,
+            'price_basis' => Place::PRICE_PER_ROOM_NIGHT,
+        ]);
 
         $this->actingAs($this->owner)
-            ->post(route('itineraries.places.add', [$this->trip, $place]), [
+            ->post(route('itineraries.places.add', [$this->trip, $hotel]), [
                 'day_id' => $this->trip->days->first()->id,
             ])
             ->assertRedirect();
 
         $this->actingAs($this->owner)
-            ->post(route('itineraries.places.add', [$this->trip, $place]), [
+            ->post(route('itineraries.places.add', [$this->trip, $hotel]), [
                 'day_id' => $this->trip->days->first()->id,
             ])
             ->assertRedirect()
-            ->assertSessionHasErrors('day_id');
+            ->assertSessionHasNoErrors();
 
         $this->assertSame(
-            1,
-            $this->trip->days()->first()->items()->where('place_id', $place->id)->count()
+            2,
+            $this->trip->days()->first()->items()->where('place_id', $hotel->id)->count()
         );
+
+        $stays = $this->trip->days()->first()->items()
+            ->where('place_id', $hotel->id)
+            ->orderBy('id')
+            ->get();
+
+        // One room charge per trip: the repeat stores 0.
+        $this->assertSame(4500.0, (float) $stays[0]->estimated_cost);
+        $this->assertSame(0.0, (float) $stays[1]->estimated_cost);
     }
 
     public function test_a_place_outside_the_trips_province_is_refused(): void

@@ -555,10 +555,11 @@ class ItineraryEditor
      *
      * A shim over `apply()` for the same reason `addDestinationTo()` is: the
      * liked rule does not apply to places (they have no swipes), but the
-     * duplicate rule, the province rule, a real start slot and the written leg
-     * are all the one implementation. The stop arrives under a NEGATIVE key,
-     * exactly as the browser's add dialog does, so `resolveNewStops()` judges
-     * it with no special case.
+     * province rule, a real start slot and the written leg are all the one
+     * implementation. The stop arrives under a NEGATIVE key, exactly as the
+     * browser's add dialog does, so `resolveNewStops()` judges it with no
+     * special case — and a place already on the trip saves fine, because the
+     * return visit is the feature.
      */
     public function addPlaceTo(
         Itinerary $itinerary,
@@ -669,11 +670,6 @@ class ItineraryEditor
             ->pluck('destination_id')
             ->map(fn ($id) => (int) $id);
 
-        $usedPlaces = $stored
-            ->pluck('place_id')
-            ->filter(fn ($id) => $id !== null)
-            ->map(fn ($id) => (int) $id);
-
         foreach ($draft as $key => $fields) {
             if ((int) $key > 0) {
                 continue;
@@ -689,7 +685,7 @@ class ItineraryEditor
             }
 
             if ($stop && $stop->place) {
-                $this->resolveNewPlace($itinerary, $stop, $usedPlaces);
+                $this->resolveNewPlace($itinerary, $stop);
 
                 continue;
             }
@@ -736,15 +732,22 @@ class ItineraryEditor
     }
 
     /**
-     * @param  Collection<int, int>  $usedPlaces
+     * A curated place (a restaurant, a hotel) being added to a day.
+     *
+     * ACTIVE AND IN-PROVINCE, AND THAT IS ALL. A repeat of a place that is
+     * already on the trip is the feature, not a mistake: the traveller sleeps
+     * at the hotel every night and eats where they liked, so the same row
+     * returns — check-in on day one, back again on day two, check-out on the
+     * last morning. Refusing a stored repeat made the return visit
+     * unspeakable. Two new rows for the same hotel in one save are a
+     * multi-night stay, and `costFor()` carries that: the first occurrence in
+     * draft order holds the room charge and every repeat stores 0.
      */
     private function resolveNewPlace(
         Itinerary $itinerary,
-        ItineraryStop $stop,
-        Collection $usedPlaces
+        ItineraryStop $stop
     ): void {
         $place = $stop->place;
-        $placeId = (int) $place?->id;
 
         if (! $place || ! $place->is_active) {
             throw new RuntimeException(
@@ -757,19 +760,6 @@ class ItineraryEditor
                 $place->name.' is in '.$place->province.', not on this trip.'
             );
         }
-
-        if ($usedPlaces->contains($placeId)) {
-            throw new RuntimeException(
-                $place->name.' is already on this trip.'
-            );
-        }
-
-        // Deliberately NOT pushed: two new rows for the same hotel in one save
-        // are a multi-night stay, and the first night carries the charge while
-        // the repeats store 0 (see apply()). Refusing the second row would make
-        // a two-night stay unsavable. Stored rows are what this guards — they
-        // were seeded into $usedPlaces above, and a repeat of one of those is
-        // still a duplicate.
     }
 
     /**

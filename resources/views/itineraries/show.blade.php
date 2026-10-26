@@ -840,6 +840,11 @@
                                             <span class="mt-0.5 block text-sm text-benguet-charcoal/60">
                                                 {{ $place->typeLabel() }} · {{ $place->municipality }}, {{ $place->province }}
                                             </span>
+                                            @if (! empty($place->on_days))
+                                                <span class="mt-0.5 block text-xs font-semibold text-boracay-dark">
+                                                    Already on day {{ implode(', ', $place->on_days) }} — add again for another night or meal.
+                                                </span>
+                                            @endif
                                         </span>
                                     </span>
 

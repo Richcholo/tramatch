@@ -423,32 +423,37 @@ class ItineraryController extends Controller
     }
 
     /**
-     * Food and lodging in this trip's province that it does not visit yet.
+     * Food and lodging in this trip's province, INCLUDING places already on
+     * it.
      *
      * No liked rule: places have no swipes, so the picker and the editor rule
-     * agree on active plus in-province instead. `ItineraryEditor` validates
-     * additions against the same scope, for the same reason the destinations
-     * picker reads the swipes the editor checks.
+     * agree on active plus in-province. Places already visited stay listed —
+     * the same hotel returns (another night, check-out), the same restaurant
+     * serves dinner twice — and each carries the day numbers it is already
+     * on, so the dialog can say so instead of looking like an accident
+     * waiting to happen. `ItineraryEditor` validates additions against the
+     * same scope, for the same reason the destinations picker reads the
+     * swipes the editor checks.
      */
     private function addablePlaces(Itinerary $itinerary): Collection
     {
-        $inItinerary = $itinerary->days
-            ->pluck('items')
-            ->flatten()
-            ->pluck('place_id')
-            ->filter(fn ($id) => $id !== null)
-            ->map(fn ($id) => (int) $id);
+        $onDays = [];
+
+        foreach ($itinerary->days as $day) {
+            foreach ($day->items as $item) {
+                if ($item->place_id !== null) {
+                    $onDays[(int) $item->place_id][] = $day->day_number;
+                }
+            }
+        }
 
         return Place::query()
             ->where('is_active', true)
             ->where('province', $itinerary->area)
-            ->when(
-                $inItinerary->isNotEmpty(),
-                fn ($query) => $query->whereNotIn('id', $inItinerary)
-            )
             ->orderBy('type')
             ->orderBy('name')
-            ->get();
+            ->get()
+            ->each(fn (Place $place) => $place->on_days = $onDays[$place->id] ?? []);
     }
 
     public function update(
