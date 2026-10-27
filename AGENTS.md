@@ -3632,7 +3632,9 @@ standard 14 are WinAnsiEncoded and that encoding has **no peso sign** — `0xA5`
 the yen. A U+20B1 written into the content stream renders as **¥450** on the
 traveller's page, which is a wrong currency on a document whose whole job is
 being trusted about money. `ItineraryPdf::money()` writes `PHP`, and
-`PdfWriter::escape()` maps `₱`→`PHP` as the last line of defence.
+`PdfWriter::escape()` maps `₱`→`PHP ` (with its own space — `PHP2,500` reads
+like a model number, and the money elsewhere is written `PHP 1,850.00`) as
+the last line of defence.
 `the_writer_refuses_a_peso_sign_even_from_a_caller_that_passes_one` exercises
 that mapping **directly**, because the itinerary path never reaches it and a
 test that only covered the happy path would let it rot unobserved.

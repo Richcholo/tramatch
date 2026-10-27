@@ -204,8 +204,6 @@ class ItineraryPdf
         $x = 54.0;
         $top = $p->height() - 92;
 
-        $p->tracked('F1', 8, $x, $top + 26, 'DAY '.$day->day_number, 2.0, self::BORACAY);
-
         $p->text('F5', 28, $x, $top, $this->dayTitle($day), self::CHARCOAL);
 
         if ($day->date) {
@@ -280,7 +278,7 @@ class ItineraryPdf
         $destination = $item->destination;
         $cardW = $p->width() - self::MARGIN - $x;
         $imageW = 92.0;
-        $cardH = 74.0;
+        $cardH = 80.0;
 
         // THE CARD. Light, because this page is light — the teal ground belongs
         // to the cover, and putting it here would make every page a different
@@ -294,11 +292,13 @@ class ItineraryPdf
         $timeX = $x + 14;
 
         if ($item->start_time) {
-            $p->text('F2', 12, $timeX, $y - 26, $this->clock($item->start_time), self::TEAL);
+            $p->text('F2', 12, $timeX, $y - 24, $this->clock($item->start_time), self::TEAL);
         }
 
-        if ($item->end_time) {
-            $p->text('F1', 9, $timeX, $y - 40, 'to '.$this->clock($item->end_time), self::MUTED);
+        // A zero-length window — the lodging rows carry none — prints one
+        // time: "08:00 to 08:00" reads as a rendering fault.
+        if ($item->end_time && $item->end_time !== $item->start_time) {
+            $p->text('F1', 9, $timeX, $y - 38, 'to '.$this->clock($item->end_time), self::MUTED);
         }
 
         // THE KIND, on the same column as the time, because a day reads as a
@@ -311,9 +311,9 @@ class ItineraryPdf
         // plan's spacing. "+45 min travel" on a trip nobody edited is the flat
         // estimate wearing a measurement's clothes.
         if ($item->routeSummary()) {
-            $p->text('F3', 7.5, $timeX, $y - 56, $item->routeSummary().' by road', self::MUTED);
+            $p->text('F3', 7.5, $timeX, $y - 52, $item->routeSummary().' by road', self::MUTED);
         } elseif ($item->travel_minutes_from_previous > 0) {
-            $p->text('F3', 7.5, $timeX, $y - 56, sprintf(
+            $p->text('F3', 7.5, $timeX, $y - 52, sprintf(
                 '+%d min gap (drive not measured)',
                 $item->travel_minutes_from_previous
             ), self::MUTED);
@@ -348,7 +348,7 @@ class ItineraryPdf
         }
 
         if ($item->note) {
-            $p->text('F3', 8, $textX, $y - 65, $this->fit((string) $item->note, 'F3', 8, $textW), self::MUTED);
+            $p->text('F3', 8, $textX, $y - 66, $this->fit((string) $item->note, 'F3', 8, $textW), self::MUTED);
         }
 
         // WHERE THE PRICE CAME FROM. Every curated place in this app carries a
@@ -364,7 +364,7 @@ class ItineraryPdf
         // THE IMAGE SLOT. A photograph when the owner has uploaded one, and a
         // typographic plate when they have not — which, for the whole catalogue
         // right now, is always.
-        $this->imageSlot($x + $cardW - $imageW - 8, $y - $cardH + 8, $imageW, $cardH - 16, $destination);
+        $this->imageSlot($x + $cardW - $imageW - 8, $y - $cardH + 8, $imageW, $cardH - 16, $item);
 
         return $y - $cardH - 14;
     }
@@ -436,11 +436,9 @@ class ItineraryPdf
         return $url === '' ? null : 'Source: '.$url;
     }
 
-    private function imageSlot(float $x, float $y, float $w, float $h, $destination): void
+    private function imageSlot(float $x, float $y, float $w, float $h, ItineraryItem $item): void
     {
         $p = $this->pdf;
-
-        $url = $destination?->image_url;
 
         /*
          * A BITMAP SLOT IS NOT IMPLEMENTED, DELIBERATELY.
@@ -455,8 +453,15 @@ class ItineraryPdf
          */
         $p->roundRect($x, $y, $w, $h, 4, self::SLAB, null);
 
-        $province = trim((string) ($destination?->province ?? ''));
-        $municipality = trim((string) ($destination?->municipality ?? ''));
+        // THE PLATE NAMES THE PLACE THE STOP IS AT. The item's own readers
+        // cover all four stop shapes: a destination stop names the
+        // destination's municipality and province, a meal or hotel names the
+        // PLACE's — which used to print the island fallback "Luzon" beside a
+        // Baguio hotel — and a custom stop falls back to the island.
+        $municipality = trim((string) ($item->destination?->municipality
+            ?? $item->place?->municipality ?? ''));
+        $province = trim((string) ($item->destination?->province
+            ?? $item->place?->province ?? ''));
 
         // Two centred lines: the place, and the larger unit it belongs to.
         $p->textCentred('F2', 8.5, $x + ($w / 2), $y + ($h / 2) + 3,
@@ -466,8 +471,6 @@ class ItineraryPdf
         $p->textCentred('F1', 7, $x + ($w / 2), $y + ($h / 2) - 9,
             $this->fit(strtoupper($province), 'F1', 7, $w - 12),
             self::GOLD);
-
-        unset($url);
     }
 
     private function emptyDay(float $x, float $y): void
@@ -767,12 +770,12 @@ class ItineraryPdf
 
     private function dayTitle(ItineraryDay $day): string
     {
-        // The day's title is the first stop, which is the one a traveller
-        // recognises. Falling back to the date alone would leave a page headed
-        // "Day 3" with nothing in it.
-        $first = $day->items->sortBy('sort_order')->first()?->destination?->name;
-
-        return $first ?: 'Day '.$day->day_number;
+        // EVERY DAY IS HEADED THE SAME WAY. The title used to be the first
+        // destination stop's name, so a day opening at a hotel was headed
+        // "Day 1" while its neighbour was headed "Camp John Hay" — two shapes
+        // of heading for the same kind of page. The stops name themselves on
+        // their cards; the day names itself here.
+        return 'Day '.$day->day_number;
     }
 
     private function dayWindow(ItineraryDay $day): string

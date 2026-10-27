@@ -319,7 +319,9 @@ class ItineraryPdfTest extends TestCase
         $pdf = $writer->output();
 
         $this->assertStringNotContainsString("\xE2\x82", $pdf, 'a raw UTF-8 byte sequence reached the stream');
-        $this->assertStringContainsString('PHP250', $this->textOf($pdf));
+        // The ₱ replacement carries its own space: "PHP250" reads like a
+        // model number, and the money elsewhere is written "PHP 1,850.00".
+        $this->assertStringContainsString('PHP 250', $this->textOf($pdf));
     }
 
     /**
@@ -408,7 +410,9 @@ class ItineraryPdfTest extends TestCase
         $pdf = $writer->output();
 
         $this->assertStringNotContainsString("\u{20B1}", $pdf);
-        $this->assertStringContainsString('PHP1,250', $pdf);
+        // The replacement carries its own space, matching the money() style:
+        // "PHP1,250" reads like a model number.
+        $this->assertStringContainsString('PHP 1,250', $pdf);
     }
 
     /**

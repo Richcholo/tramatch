@@ -581,7 +581,9 @@ class PdfWriter
     {
         // The peso sign first: it has no WinAnsi representation at all, so it
         // must be replaced before conversion rather than converted to `?`.
-        $text = strtr($text, ['₱' => 'PHP']);
+        // The replacement carries its own space — "PHP2,500" reads like a
+        // model number, and the money elsewhere is written "PHP 1,850.00".
+        $text = strtr($text, ['₱' => 'PHP ']);
 
         // Unmappable characters become `?` here, which is honest. Dropping them
         // silently leaves words with holes in them.
