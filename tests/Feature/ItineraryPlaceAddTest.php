@@ -169,6 +169,31 @@ class ItineraryPlaceAddTest extends TestCase
         $this->assertSame(0.0, (float) $stays[1]->estimated_cost);
     }
 
+    /**
+     * THE BROWSER'S EXACT URL, and the reason this file is the one that pins
+     * it: the suggestion panel posts the NUMERIC id from its JSON, but Place
+     * binds routes by slug (getRouteKeyName), so an unqualified {place} looked
+     * up slug "34", found nothing, and 404'd the first real click the panel
+     * ever got — while every test here stayed green, because route() builds
+     * the slug URL the binding expects. The route now binds {place:id}; this
+     * posts the id literally, the way the fetch does.
+     */
+    public function test_the_add_endpoint_binds_the_place_by_its_id(): void
+    {
+        $place = $this->place(['name' => 'Id Bound Hotel']);
+
+        $this->actingAs($this->owner)
+            ->post("/itineraries/{$this->trip->id}/places/{$place->id}/add", [
+                'day_id' => $this->trip->days->first()->id,
+            ])
+            ->assertRedirect();
+
+        $this->assertSame(
+            1,
+            $this->trip->days()->first()->items()->where('place_id', $place->id)->count()
+        );
+    }
+
     public function test_a_place_outside_the_trips_province_is_refused(): void
     {
         $far = $this->place(['province' => 'Ilocos Norte']);

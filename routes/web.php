@@ -173,11 +173,18 @@ Route::middleware('auth')->group(function () {
      * panel's Add button posts here; three segments, so route-model binding
      * cannot swallow it, and the day ownership check lives in the editor shim
      * the same way add-to-trip's does.
+     *
+     * {place:id} because the panel posts the NUMERIC id from the suggestion
+     * JSON while Place binds routes by slug — an unqualified {place} looked
+     * up slug "34", found nothing, and 404'd the first real click the panel
+     * ever got. The :id field alone turns the nested parameter into a SCOPED
+     * binding ($itinerary->places(), which does not exist), so the route
+     * declares withoutScopedBindings and binds Place plainly by id.
      */
-    Route::post('/itineraries/{itinerary}/places/{place}/add', [
+    Route::post('/itineraries/{itinerary}/places/{place:id}/add', [
         ItineraryController::class,
         'addPlace',
-    ])->name('itineraries.places.add');
+    ])->name('itineraries.places.add')->withoutScopedBindings();
 
     /*
      * The generation-form assist: the model ranks the traveller's own
