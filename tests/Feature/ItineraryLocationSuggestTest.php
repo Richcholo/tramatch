@@ -93,6 +93,32 @@ class ItineraryLocationSuggestTest extends TestCase
     // ------------------------------------------------------------- the pool
 
     /**
+     * The panel's Add button posts to the named route's own URL, with a
+     * PLACEID token for the place id. A hand-built path in the script is how
+     * a page and its backend drift apart — and the production error page the
+     * traveller then gets (404, or 405 from a stale route cache) names
+     * nothing they can act on.
+     */
+    #[Test]
+    public function the_add_button_posts_to_the_route_generated_endpoint(): void
+    {
+        $html = $this->actingAs($this->owner)
+            ->get(route('itineraries.show', $this->trip))
+            ->getContent();
+
+        $this->assertStringContainsString(
+            'itineraries/'.$this->trip->id.'/places/PLACEID/add',
+            $html,
+            'the add panel must post to the named route, not a hand-built path'
+        );
+
+        // The refusal path is JSON, not the redirect a plain form gets: the
+        // fetch sends Accept, and the server answers wantsJson(). Without it
+        // a refused add is followed to the page reload and looks like success.
+        $this->assertStringContainsString("'Accept': 'application/json'", $html);
+    }
+
+    /**
      * THE PROMPT CARRIES THE CANDIDATE ROWS AND NO PERSONAL DATA.
      *
      * A free-tier request is improving Google's products, so a traveller name,

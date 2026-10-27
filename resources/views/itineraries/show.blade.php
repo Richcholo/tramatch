@@ -88,6 +88,12 @@
 
                 const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '{{ csrf_token() }}';
 
+                // The add URL comes from the named route, once per card, with a
+                // PLACEID token swapped for the place id — a hand-built path is
+                // how a page and its backend drift apart, and the 405 that
+                // follows is a production error page nobody can act on.
+                const addUrl = '{{ route('itineraries.places.add', [$itinerary->id, 'PLACEID']) }}';
+
                 add.addEventListener('click', async function () {
                     add.disabled = true;
 
@@ -96,8 +102,17 @@
                     body.append('_token', csrf);
 
                     try {
-                        const response = await fetch('/itineraries/{{ $itinerary->id }}/places/' + encodeURIComponent(place.id) + '/add', {
+                        const response = await fetch(addUrl.replace('PLACEID', encodeURIComponent(place.id)), {
                             method: 'POST',
+                            headers: {
+                                // A refused add must come back as JSON, never as
+                                // the redirect a plain form would get: without
+                                // this header fetch follows the redirect, the
+                                // page reloads, and a refused add looks exactly
+                                // like a successful one.
+                                'Accept': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest',
+                            },
                             body,
                         });
 
@@ -108,7 +123,8 @@
                         }
 
                         const errors = await response.json().catch(() => null);
-                        const message = errors?.message || errors?.errors?.day_id?.[0] || 'Could not be added.';
+                        const message = errors?.message || errors?.errors?.day_id?.[0]
+                            || 'Could not be added (' + response.status + ').';
                         add.textContent = message;
                     } catch (error) {
                         add.textContent = 'Could not be added.';
