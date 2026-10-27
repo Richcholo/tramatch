@@ -1933,3 +1933,24 @@
  * The transition a traveller sees is .tm-loader above, which is a full-screen
  * overlay with a delay on it and no cover animation.
  */
+
+/*
+ * The itinerary map's numbered, day-coloured stop pins. The wrapper div is
+ * sized by Leaflet from iconSize; the span fills it and carries the colour,
+ * which app.js writes inline per day. A custom className replaces Leaflet's
+ * default white-box icon styling entirely.
+ */
+.tm-map-pin {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 100%;
+    border-radius: 999px;
+    border: 2px solid var(--color-island-white);
+    box-shadow: 0 1px 4px rgb(11 37 43 / 0.4);
+    color: var(--color-island-white);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+    user-select: none;
+}

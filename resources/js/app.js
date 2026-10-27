@@ -68,6 +68,39 @@ if (destinationMap) {
         .openPopup();
 }
 
+/*
+ * One colour per day, cycling past eight. Chosen dark enough that the white
+ * pin numeral and the route line both read on the light OSM tiles; day one
+ * stays in the teal family for brand continuity.
+ */
+const DAY_COLORS = [
+    '#007F73', '#C05621', '#6B46C1', '#2B6CB0',
+    '#B83280', '#2F855A', '#B7791F', '#4A5568',
+];
+
+const dayColor = (day) => DAY_COLORS[(day - 1) % DAY_COLORS.length];
+
+function drawDayRoute(map, geometry, stops, color) {
+    if (geometry) {
+        L.geoJSON(geometry, {
+            style: {
+                color,
+                weight: 4,
+                opacity: 0.9,
+                lineCap: 'round',
+                lineJoin: 'round',
+            },
+        }).addTo(map);
+    } else {
+        L.polyline(stops, {
+            color,
+            weight: 3,
+            opacity: 0.75,
+            dashArray: '6 8',
+        }).addTo(map);
+    }
+}
+
 const itineraryMap = document.querySelector('[data-itinerary-points]');
 
 if (itineraryMap) {
@@ -87,21 +120,24 @@ if (itineraryMap) {
     if (points.length === 0) {
         map.setView([14.5995, 120.9842], 6);
     } else {
-        const latLngs = points.map((point) => {
-            const marker = L.marker([
-                point.lat,
-                point.lng,
-            ]).addTo(map);
-
-            marker.bindPopup(
-                `Day ${point.day}: ${point.name}`
-            );
-
-            return [
-                point.lat,
-                point.lng,
-            ];
+        points.forEach((point) => {
+            L.marker([point.lat, point.lng], {
+                icon: L.divIcon({
+                    className: 'tm-map-pin-wrap',
+                    html: `<span class="tm-map-pin" style="background-color:${dayColor(point.day)}">${point.day}</span>`,
+                    iconSize: [26, 26],
+                    iconAnchor: [13, 13],
+                    popupAnchor: [0, -15],
+                }),
+            })
+                .addTo(map)
+                .bindPopup(`Day ${point.day}: ${point.name}`);
         });
+
+        const latLngs = points.map((point) => [
+            point.lat,
+            point.lng,
+        ]);
 
         if (latLngs.length === 1) {
             map.setView(latLngs[0], 13);
@@ -111,29 +147,35 @@ if (itineraryMap) {
             });
         }
 
-        loadDrivingRoute(points)
-            .then((geometry) => {
-                if (geometry) {
-                    L.geoJSON(geometry, {
-                        style: {
-                            color: '#00A896',
-                            weight: 5,
-                        },
-                    }).addTo(map);
-                } else {
-                    L.polyline(latLngs, {
-                        color: '#00A896',
-                        weight: 4,
-                        dashArray: '8 8',
-                    }).addTo(map);
-                }
-            })
-            .catch(() => {
-                L.polyline(latLngs, {
-                    color: '#00A896',
-                    weight: 4,
-                    dashArray: '8 8',
-                }).addTo(map);
-            });
+        const byDay = new Map();
+        points.forEach((point) => {
+            const group = byDay.get(point.day) ?? [];
+            group.push(point);
+            byDay.set(point.day, group);
+        });
+
+        byDay.forEach((group, day) => {
+            // A hotel's check-in, nights and check-out share one pin; zero-length
+            // legs between them tell the road nothing.
+            const stops = group.filter((point, index) =>
+                index === 0
+                || point.lat !== group[index - 1].lat
+                || point.lng !== group[index - 1].lng
+            );
+
+            if (stops.length < 2) {
+                return;
+            }
+
+            const dayLatLngs = stops.map((point) => [
+                point.lat,
+                point.lng,
+            ]);
+            const color = dayColor(day);
+
+            loadDrivingRoute(stops)
+                .then((geometry) => drawDayRoute(map, geometry, dayLatLngs, color))
+                .catch(() => drawDayRoute(map, null, dayLatLngs, color));
+        });
     }
 }
