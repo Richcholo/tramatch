@@ -598,13 +598,24 @@ class ItineraryEditor
             'place_id' => $place->id,
         ];
 
+        $known = $itinerary->days()
+            ->with('items')
+            ->get()
+            ->flatMap(fn ($existing) => $existing->items)
+            ->pluck('id');
+
         $this->apply($itinerary, $draft);
 
+        // THE NEWLY CREATED ROW, not the first with this place: a place can
+        // now legitimately be on the trip already, and the caller (the panel's
+        // no-reload add) needs the row that does not exist in its editor form
+        // yet — returning the older one would make the page re-insert a stop
+        // the form already carries.
         $added = $itinerary->days()
             ->with('items')
             ->get()
             ->flatMap(fn ($existing) => $existing->items)
-            ->first(fn ($item) => $item->place_id === $place->id);
+            ->first(fn ($item) => $item->place_id === $place->id && ! $known->contains($item->id));
 
         if ($added === null) {
             throw new RuntimeException(

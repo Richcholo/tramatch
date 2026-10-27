@@ -515,12 +515,80 @@ function initItineraryEditor(root) {
         // The rows the page shipped with are wired for dragging at init, so a
         // row cloned from the template has to be wired here or it can only be
         // moved with the arrow buttons until the page reloads.
-        draggable(row);
+        wireAppendedRow(row, list);
 
-        renumber(list);
-        refreshTravel(list);
         markDirty();
         schedulePreview();
+    }
+
+    /**
+     * The wiring every template-built row needs after it lands in a list:
+     * drag, a dense renumber, and the travel badges. Callers decide whether
+     * the row is unsaved work (the dialog marks the form dirty) or a stop the
+     * server just persisted.
+     */
+    function wireAppendedRow(row, list) {
+        draggable(row);
+        renumber(list);
+        refreshTravel(list);
+    }
+
+    /**
+     * A stop the SERVER just created, announced by the suggestion panel's
+     * no-reload add. One branch only — the panel suggests food and lodging —
+     * and a real item id, so the row enters the editor form exactly as it is
+     * stored. It has to: a draft without the new stop would delete it on this
+     * page's next save.
+     */
+    function addItemFromServer(item) {
+        const list = editView.querySelector(`[data-stop-list][data-day-id="${item.day_id}"]`);
+        const template = root.querySelector('[data-stop-template]');
+
+        if (!list || !template) {
+            return;
+        }
+
+        const key = String(item.id);
+        const fragment = template.content.cloneNode(true);
+        const row = fragment.querySelector('[data-stop]');
+
+        row.dataset.key = key;
+
+        fragment.querySelectorAll('[name]').forEach((input) => {
+            input.name = input.name.replace('__KEY__', key);
+        });
+
+        const field = (name) => row.querySelector(`[data-field="${name}"]`);
+
+        field('day-id').value = item.day_id;
+        field('sort-order').value = item.sort_order;
+        field('start-time').value = item.start_time || '';
+        field('end-time').value = item.end_time || '';
+        field('note').value = item.note || '';
+        field('item-type').value = item.item_type;
+        field('destination-id').value = '';
+        field('place-id').value = item.place_id;
+
+        const link = row.querySelector('[data-stop-name]');
+
+        link.textContent = item.name;
+        link.href = item.url;
+
+        row.querySelector('[data-stop-place]').textContent = item.place;
+        row.querySelector('[data-stop-cost]').textContent = item.cost;
+        row.querySelector('[data-remove]').setAttribute('aria-label', `Remove ${item.name}`);
+
+        for (const [label, verb] of [
+            ['[data-drag-handle]', 'Drag to reorder'],
+            ['[data-move="up"]', 'Move earlier'],
+            ['[data-move="down"]', 'Move later'],
+        ]) {
+            row.querySelector(label).setAttribute('aria-label', `${verb} ${item.name}`);
+        }
+
+        list.appendChild(row);
+
+        wireAppendedRow(row, list);
     }
 
     /**
@@ -805,6 +873,13 @@ function initItineraryEditor(root) {
         } else if (target.matches('[data-add]')) {
             openDialog(target.closest('[data-day-card]').dataset.dayId);
         }
+    });
+
+    // The suggestion panel adds without a page reload and announces the
+    // created stop; the editor owns every row it drafts, so it does the
+    // inserting (see addItemFromServer for why it must).
+    window.addEventListener('itinerary:place-added', (event) => {
+        addItemFromServer(event.detail);
     });
 
     function openDialog(dayId) {

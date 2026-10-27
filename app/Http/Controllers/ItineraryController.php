@@ -737,7 +737,7 @@ class ItineraryController extends Controller
         $day = $itinerary->days()->findOrFail($validated['day_id']);
 
         try {
-            $editor->addPlaceTo($itinerary, $place, $day);
+            $added = $editor->addPlaceTo($itinerary, $place, $day);
         } catch (RuntimeException $exception) {
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
@@ -752,6 +752,23 @@ class ItineraryController extends Controller
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
                 'status' => $place->name.' added to Day '.$day->day_number.'.',
+                // The created row, so the panel can keep the page in place:
+                // the editor's form must carry this stop on its next save or
+                // a draft without it would silently delete it.
+                'item' => [
+                    'id' => $added->id,
+                    'day_id' => $added->itinerary_day_id,
+                    'sort_order' => $added->sort_order,
+                    'item_type' => $added->item_type,
+                    'place_id' => $added->place_id,
+                    'start_time' => $added->start_time ? substr($added->start_time, 0, 5) : '',
+                    'end_time' => $added->end_time ? substr($added->end_time, 0, 5) : '',
+                    'note' => $added->note,
+                    'name' => $added->placeName(),
+                    'place' => $place->municipality.', '.$place->province,
+                    'cost' => $added->costLabel(),
+                    'url' => $place->source_url,
+                ],
             ]);
         }
 

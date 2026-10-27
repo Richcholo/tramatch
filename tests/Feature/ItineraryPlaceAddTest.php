@@ -170,6 +170,43 @@ class ItineraryPlaceAddTest extends TestCase
     }
 
     /**
+     * The panel keeps the page open after an add, so the JSON must carry the
+     * created row for the editor to insert — and on a REPEAT add it must be
+     * the NEW row, not the first one with that place id, which the page
+     * already carries in its editor form.
+     */
+    public function test_the_json_add_returns_the_created_item(): void
+    {
+        $hotel = $this->place([
+            'name' => 'Panel Hotel',
+            'type' => Place::TYPE_LODGING,
+            'price_min' => 4500,
+            'price_max' => 4500,
+            'price_basis' => Place::PRICE_PER_ROOM_NIGHT,
+        ]);
+
+        $firstId = $this->actingAs($this->owner)
+            ->postJson(route('itineraries.places.add', [$this->trip, $hotel]), [
+                'day_id' => $this->trip->days->first()->id,
+            ])
+            ->assertOk()
+            ->assertJsonPath('item.place_id', $hotel->id)
+            ->assertJsonPath('item.item_type', 'lodging')
+            ->json('item.id');
+
+        $second = $this->actingAs($this->owner)
+            ->postJson(route('itineraries.places.add', [$this->trip, $hotel]), [
+                'day_id' => $this->trip->days->first()->id,
+            ])
+            ->assertOk();
+
+        $this->assertNotSame($firstId, $second->json('item.id'));
+        $this->assertSame($hotel->id, $second->json('item.place_id'));
+        $this->assertNotEmpty($second->json('item.start_time'));
+        $this->assertNotEmpty($second->json('item.name'));
+    }
+
+    /**
      * THE BROWSER'S EXACT URL, and the reason this file is the one that pins
      * it: the suggestion panel posts the NUMERIC id from its JSON, but Place
      * binds routes by slug (getRouteKeyName), so an unqualified {place} looked

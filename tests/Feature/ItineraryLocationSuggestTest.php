@@ -116,6 +116,11 @@ class ItineraryLocationSuggestTest extends TestCase
         // fetch sends Accept, and the server answers wantsJson(). Without it
         // a refused add is followed to the page reload and looks like success.
         $this->assertStringContainsString("'Accept': 'application/json'", $html);
+
+        // The page STAYS after an add: no reload — the panel announces the
+        // created stop and the editor inserts it into its own form.
+        $this->assertStringNotContainsString('window.location.reload', $html);
+        $this->assertStringContainsString('itinerary:place-added', $html);
     }
 
     /**

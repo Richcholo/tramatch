@@ -116,14 +116,25 @@
                             body,
                         });
 
-                        if (response.ok) {
-                            window.location.reload();
+                        const data = await response.json().catch(() => null);
+
+                        if (response.ok && data?.item) {
+                            // THE PAGE STAYS WHERE IT IS. The panel keeps every
+                            // other card, and the editor inserts the created
+                            // stop into its own form (a draft that lacked it
+                            // would delete the stop on the next save). The
+                            // read-only trip list catches up on the next full
+                            // page load.
+                            add.textContent = '✓ ' + data.status;
+                            add.disabled = false;
+                            window.dispatchEvent(
+                                new CustomEvent('itinerary:place-added', { detail: data.item })
+                            );
 
                             return;
                         }
 
-                        const errors = await response.json().catch(() => null);
-                        const message = errors?.message || errors?.errors?.day_id?.[0]
+                        const message = data?.message || data?.errors?.day_id?.[0]
                             || 'Could not be added (' + response.status + ').';
                         add.textContent = message;
                     } catch (error) {
