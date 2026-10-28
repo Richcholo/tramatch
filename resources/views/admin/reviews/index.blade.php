@@ -43,7 +43,7 @@
                     @forelse ($reviews as $review)
                         <tr class="border-b border-boracay-light align-top last:border-0">
                             <td class="px-6 py-5 font-semibold text-volcanic-teal">
-                                {{ $review->user->name }}
+                                {{ $review->user?->name ?? 'Former member (archived)' }}
                             </td>
                             <td class="px-6 py-5 text-benguet-charcoal/70">
                                 {{ $review->destination->name }}
@@ -80,7 +80,7 @@
                                             Delete this review?
                                         </h2>
                                         <p class="mt-2 text-sm leading-6 text-benguet-charcoal/70">
-                                            This review by {{ $review->user->name }} will be permanently deleted.
+                                            This review by {{ $review->user?->name ?? 'a former member' }} will be permanently deleted.
                                         </p>
 
                                         <form method="POST" action="{{ route('admin.reviews.destroy', $review) }}" class="mt-7 flex justify-end gap-3">

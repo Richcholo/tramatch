@@ -154,7 +154,7 @@
                             </div>
 
                             <p class="mt-1 text-sm text-benguet-charcoal/60">
-                                By {{ $review->user->name }}
+                                By {{ $review->user?->name ?? 'a former member' }}
                             </p>
 
                             <p class="mt-3 line-clamp-2 text-sm leading-6 text-benguet-charcoal/75">

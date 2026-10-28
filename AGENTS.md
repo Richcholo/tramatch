@@ -1384,6 +1384,32 @@ falsifications). **No browser automation exists for admin pages**, so the
 bulk bar itself is unclicked; the markup contracts and the server behaviour
 are what the suite holds.
 
+### Deleting a user is an archive
+
+Admin and super admin can remove a user, and what that means is written down
+because the word "delete" lies: `User` carries SoftDeletes, the admin delete
+sets `deleted_at`, and NOTHING is destroyed — itineraries, swipes and
+reviews all stay, and a super admin can restore the account from the
+"Archived accounts" view. An archived account cannot sign in (the session
+guard's provider applies the soft-delete scope) and its sessions die with
+it.
+
+The fences, and why: nobody archives themselves; a super admin account is
+never archived; and an admin account only by a super admin — the same
+hierarchy `demoteAdmin` draws. The users list moved OUT of the super-admin
+middleware group so both roles reach it; promoting and demoting stayed
+there, because the roles that can grant roles are the escalation surface.
+
+Two consequences that were handled, not discovered in production: an
+archived user's review would render `$review->user` as null and 500 the
+destination page, admin reviews and the admin dashboard — all three are
+guarded ("Former member"). And the restore can be refused: the email column
+is unique across archived rows too (the check is `withTrashed`), so if the
+address was registered again in the meantime, restore names the collision
+instead of violating the constraint. Registering a new account with an
+archived user's email is refused by that same unique index — restore, don't
+re-register.
+
 ### The trip in a calendar, and a link to the drive
 
 `App\Services\ItineraryCalendar` writes the `.ics`; `ItineraryItem::directionsUrl()`

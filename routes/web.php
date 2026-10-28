@@ -338,12 +338,28 @@ Route::middleware(['auth', 'admin'])
             'destroy',
         ])->name('reviews.destroy');
 
-        Route::middleware('super-admin')->group(function () {
-            Route::get('/users', [
-                AdminUserController::class,
-                'index',
-            ])->name('users.index');
+        /*
+         * USER MANAGEMENT. Both admins and super admins see the list and can
+         * archive accounts; promoting and demoting stays a super-admin power,
+         * because the roles that can grant roles are the escalation surface
+         * and it ends there. The controller fences who may archive whom.
+         */
+        Route::get('/users', [
+            AdminUserController::class,
+            'index',
+        ])->name('users.index');
 
+        Route::delete('/users/{user}', [
+            AdminUserController::class,
+            'archive',
+        ])->name('users.archive');
+
+        Route::patch('/users/{id}/restore', [
+            AdminUserController::class,
+            'restore',
+        ])->name('users.restore');
+
+        Route::middleware('super-admin')->group(function () {
             Route::patch('/users/{user}/make-admin', [
                 AdminUserController::class,
                 'makeAdmin',

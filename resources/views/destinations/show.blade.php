@@ -458,7 +458,7 @@
                             <article class="border-t border-white/10 pt-5">
                                 <div class="flex items-center justify-between gap-3">
                                     <strong class="text-island-white">
-                                        {{ $review->user->name }}
+                                        {{ $review->user?->name ?? 'Former member' }}
                                     </strong>
 
                                     <span class="text-sm font-semibold text-boracay-light">
