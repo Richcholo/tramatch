@@ -303,24 +303,35 @@ class ItineraryPdf
 
         // THE KIND, on the same column as the time, because a day reads as a
         // schedule only if you can tell at a glance which stop is dinner.
-        $p->text('F3', 7.5, $timeX, $y - 68, $this->fit($item->kindLabel(), 'F3', 7.5, 56), self::GOLD);
+        $p->text('F3', 7.5, $timeX, $y - 72, $this->fit($item->kindLabel(), 'F3', 7.5, 86), self::GOLD);
 
         // The same rule the page follows, and for the same reason. A printed trip
         // is the one artefact a traveller takes away and trusts, so the gap
         // between two stops must say whether the drive was measured or is the
         // plan's spacing. "+45 min travel" on a trip nobody edited is the flat
         // estimate wearing a measurement's clothes.
+        //
+        // The column is 86pt wide and every line in it is FIT — an unfitted
+        // leg ran under the fee line beside it, which is the overlap the
+        // first printed sheet showed. The unmeasured label's full sentence is
+        // 114pt, so it takes two lines and keeps its wording.
         if ($item->routeSummary()) {
-            $p->text('F3', 7.5, $timeX, $y - 52, $item->routeSummary().' by road', self::MUTED);
+            $p->text('F3', 7.5, $timeX, $y - 52, $this->fit(
+                $item->routeSummary().' by road',
+                'F3',
+                7.5,
+                86
+            ), self::MUTED);
         } elseif ($item->travel_minutes_from_previous > 0) {
             $p->text('F3', 7.5, $timeX, $y - 52, sprintf(
-                '+%d min gap (drive not measured)',
+                '+%d min gap',
                 $item->travel_minutes_from_previous
             ), self::MUTED);
+            $p->text('F3', 7.5, $timeX, $y - 62, '(drive not measured)', self::MUTED);
         }
 
-        $textX = $x + 74;
-        $textW = $cardW - 74 - $imageW - 16;
+        $textX = $x + 100;
+        $textW = $cardW - 100 - $imageW - 16;
 
         // EVERY STOP IS READ THROUGH ITS OWN READERS. A meal, a hotel and a
         // traveller's own entry have no destination: this used to read
