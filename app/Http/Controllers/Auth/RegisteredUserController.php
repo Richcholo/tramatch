@@ -45,7 +45,18 @@ class RegisteredUserController extends Controller
             'password'   => Hash::make($request->password),
         ]);
 
-        event(new Registered($user));
+        // THE ACCOUNT EXISTS EVEN IF THE MAIL DOES NOT. A first-send failure
+        // (bad SMTP credentials, a refused relay) must not eat the signup:
+        // the traveller lands on the code page with the reason, and the
+        // resend button retries against the same stored code.
+        try {
+            event(new Registered($user));
+        } catch (\RuntimeException $exception) {
+            Auth::login($user);
+
+            return redirect(route('verification.notice', absolute: false))
+                ->withErrors(['code' => $exception->getMessage()]);
+        }
 
         Auth::login($user);
 

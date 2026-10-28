@@ -6,7 +6,13 @@ use App\Models\User;
 use App\Notifications\VerifyEmailCode;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
+use Symfony\Component\Mailer\Envelope;
+use Symfony\Component\Mailer\Exception\TransportException;
+use Symfony\Component\Mailer\SentMessage;
+use Symfony\Component\Mailer\Transport\TransportInterface;
+use Symfony\Component\Mime\RawMessage;
 use Tests\TestCase;
 
 /**
@@ -143,6 +149,70 @@ class EmailVerificationTest extends TestCase
 
         $this->assertNotSame($oldHash, $user->fresh()->verification_code_hash);
         $this->assertFalse($user->fresh()->hasVerifiedEmail());
+    }
+
+    /**
+     * SMTP credentials, a refused relay, a dead host: any of them used to
+     * surface as a 500 with no sentence and no log. A mail failure now
+     * reaches the traveller as a sentence under the code input — and the
+     * failure is LOGGED, because 'the send worked' being indistinguishable
+     * from 'the credentials are wrong' is how a broken deployment hides.
+     * The throwing transport rides the real mail path, not a mock of it.
+     */
+    public function test_a_mail_failure_reaches_the_traveller_as_a_sentence_not_a_500(): void
+    {
+        Mail::extend(config('mail.default'), fn () => new class implements TransportInterface
+        {
+            public function send(RawMessage $message, ?Envelope $envelope = null): SentMessage
+            {
+                throw new TransportException('smtp auth failed');
+            }
+
+            public function __toString(): string
+            {
+                return 'failing';
+            }
+        });
+
+        $user = User::factory()->unverified()->create();
+
+        $this->actingAs($user)
+            ->post('/email/verification-notification')
+            ->assertRedirect()
+            ->assertSessionHasErrors('code');
+
+        $this->assertFalse($user->fresh()->hasVerifiedEmail());
+    }
+
+    public function test_registration_survives_a_mail_failure_and_lands_on_the_code_page(): void
+    {
+        Mail::extend(config('mail.default'), fn () => new class implements TransportInterface
+        {
+            public function send(RawMessage $message, ?Envelope $envelope = null): SentMessage
+            {
+                throw new TransportException('smtp auth failed');
+            }
+
+            public function __toString(): string
+            {
+                return 'failing';
+            }
+        });
+
+        $this->post('/register', [
+            'first_name' => 'Test',
+            'last_name' => 'User',
+            'email' => 'failed-mail@example.com',
+            'password' => 'password',
+            'password_confirmation' => 'password',
+        ])->assertRedirect(route('verification.notice', absolute: false))
+            ->assertSessionHasErrors('code');
+
+        $user = User::where('email', 'failed-mail@example.com')->first();
+
+        $this->assertNotNull($user, 'the account must exist even though the mail did not send');
+        $this->assertFalse($user->hasVerifiedEmail());
+        $this->assertAuthenticatedAs($user);
     }
 
     public function test_an_already_verified_traveller_bypasses_the_code_page(): void

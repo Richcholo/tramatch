@@ -49,7 +49,24 @@ class User extends Authenticatable implements MustVerifyEmail
             'verification_code_expires_at' => now()->addMinutes(15),
         ])->save();
 
-        $this->notify(new \App\Notifications\VerifyEmailCode($code));
+        try {
+            $this->notify(new \App\Notifications\VerifyEmailCode($code));
+        } catch (Throwable $e) {
+            // A mail failure must reach the traveller as a sentence, not a
+            // 500 — and the log line is the only thing that names the SMTP
+            // fault for whoever runs the deployment. The stored code stays
+            // valid, so a resend can succeed without a new one.
+            \Illuminate\Support\Facades\Log::warning('mail.verification_failed', [
+                'user' => $this->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            throw new \RuntimeException(
+                'We could not send the code just now. Check the address and try again in a minute.',
+                0,
+                $e
+            );
+        }
     }
 
     /**
