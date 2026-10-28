@@ -27,6 +27,9 @@ class RegistrationTest extends TestCase
         ]);
 
         $this->assertAuthenticated();
-        $response->assertRedirect(route('dashboard', absolute: false));
+
+        // The six-digit code is on its way; the dashboard is gated on a
+        // verified address.
+        $response->assertRedirect(route('verification.notice', absolute: false));
     }
 }

@@ -29,7 +29,7 @@ Route::get('/', function () {
 });
 
 Route::get('/dashboard', DashboardController::class)
-    ->middleware('auth')
+    ->middleware(['auth', 'verified'])
     ->name('dashboard');
 
 Route::get('/destinations', [
@@ -58,7 +58,7 @@ Route::get('/destinations/{destination:slug}', [
     'show',
 ])->name('destinations.show');
 
-Route::middleware('auth')->group(function () {
+Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/profile', [
         ProfileController::class,
         'show',

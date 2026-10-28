@@ -49,6 +49,8 @@ class RegisteredUserController extends Controller
 
         Auth::login($user);
 
-        return redirect(route('dashboard', absolute: false));
+        // The six-digit code is on its way; the dashboard is gated on a
+        // verified address and would bounce here anyway.
+        return redirect(route('verification.notice', absolute: false));
     }
 }

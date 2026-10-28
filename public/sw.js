@@ -43,6 +43,7 @@ self.addEventListener('fetch', (event) => {
         '/discover',
         '/itineraries',
         '/admin',
+        '/verify-email',
     ];
 
     const isPrivate = privatePaths.some((path) => {

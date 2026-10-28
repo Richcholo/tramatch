@@ -3983,9 +3983,14 @@ the runtime never executes it.
   `verification.notice` / `verification.send` — also `routes/auth.php`, not
   `web.php`. With the log mailer the traveller is told the link is on its way and
   it never arrives; the only trace is the link in `storage/logs/laravel.log`.
-  Set `MAIL_MAILER=smtp` and real credentials before going live.
-  Note `User` does **not** implement `MustVerifyEmail`, so nothing enforces a
-  verified address even though the routes exist.
+  Set `MAIL_MAILER=smtp` and real credentials before going live — and since
+  2026-10-28 that is not optional: **email verification is a six-digit code**
+  (`User` implements `MustVerifyEmail`), so an unverified traveller cannot
+  reach the dashboard, the preferences, discovery, or the itineraries at all,
+  and with the log mailer the code arrives nowhere they can read. Every
+  authed page is behind `['auth', 'verified']`; the code lives hashed on the
+  user (15-minute expiry, burned on success) and the verify route is
+  throttled.
 - Crawling from a host means crawling from a **datacentre IP**. The Azure WAF
   refusal noted above commonly rejects those while serving the same page to a
   home connection, so re-run `sources:check` on the host before trusting any
