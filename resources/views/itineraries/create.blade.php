@@ -125,7 +125,7 @@
                             >
 
                             <span class="mt-2 block text-xs leading-5 text-benguet-charcoal/60">
-                                Defaults to the {{ $profile->trip_duration_days }} in your preferences. More days than stops leaves the extra days open.
+                                Defaults to the {{ $profile->trip_duration_days }} {{ $profile->trip_duration_days === 1 ? 'day' : 'days' }} set in your preferences. More days than stops leaves the extra days open.
                             </span>
                         </label>
                     </div>
@@ -547,10 +547,20 @@
                     return;
                 }
 
-                picks.forEach((pick) => {
+                picks.forEach((pick, index) => {
                     const id = String(pick.destination?.id ?? '');
                     const card = document.createElement('div');
                     card.className = 'rounded-xl border border-boracay-light bg-palawan-sand p-4';
+
+                    // THE RANK IS THE MODEL'S OWN ORDER, as a number. The
+                    // suggestions arrive ranked; without the numeral a
+                    // traveller sees an unordered pile of cards.
+                    const header = document.createElement('div');
+                    header.className = 'flex items-start gap-3';
+
+                    const rank = document.createElement('span');
+                    rank.className = 'flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-philippine-gold text-sm font-bold text-benguet-charcoal';
+                    rank.textContent = String(index + 1);
 
                     const title = document.createElement('button');
                     title.type = 'button';
@@ -579,7 +589,8 @@
                     label.className = 'mt-2 text-xs font-semibold uppercase tracking-wide text-benguet-charcoal/50';
                     label.textContent = "The model's own words, unchecked";
 
-                    card.append(title, reason, label);
+                    header.append(rank, title);
+                    card.append(header, reason, label);
                     assistResults.appendChild(card);
                 });
             } catch (error) {

@@ -35,6 +35,29 @@
             <p class="mt-6 max-w-2xl leading-7 text-white/70">
                 These destinations were liked during discovery and ranked against your travel profile.
             </p>
+
+            {{-- THE PRIMARY ACTION LIVES IN THE HERO, above the grid it acts on:
+                 a button at the bottom of twenty cards is invisible until you
+                 have scrolled past all of them. --}}
+            <div class="mt-8 flex flex-wrap gap-4">
+                @if (Route::has('itineraries.create'))
+                    <a
+                        href="{{ route('itineraries.create') }}"
+                        class="rounded-full bg-philippine-gold px-6 py-3 font-bold text-benguet-charcoal transition hover:bg-white"
+                    >
+                        Build itinerary →
+                    </a>
+                @endif
+
+                @if (Route::has('discover.index'))
+                    <a
+                        href="{{ route('discover.index') }}"
+                        class="rounded-full border border-white/40 px-6 py-3 font-semibold text-white transition hover:bg-white/10"
+                    >
+                        Discover more
+                    </a>
+                @endif
+            </div>
         </section>
 
         @if ($needsProfile)
@@ -150,26 +173,6 @@
                         </div>
                     </article>
                 @endforeach
-            </div>
-
-            <div class="flex flex-wrap gap-4">
-                @if (Route::has('itineraries.create'))
-                    <a
-                        href="{{ route('itineraries.create') }}"
-                        class="tm-primary-button rounded-full"
-                    >
-                        Build itinerary →
-                    </a>
-                @endif
-
-                @if (Route::has('discover.index'))
-                    <a
-                        href="{{ route('discover.index') }}"
-                        class="inline-flex items-center rounded-full border border-boracay px-6 py-3 font-semibold text-boracay-dark transition hover:bg-boracay-light"
-                    >
-                        Discover more
-                    </a>
-                @endif
             </div>
         @endif
     </div>

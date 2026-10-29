@@ -34,7 +34,7 @@
                         </h2>
 
                         <p class="mt-3 text-sm text-benguet-charcoal/60">
-                            {{ $itinerary->trip_duration_days }} day(s)
+                            Trip duration: {{ $itinerary->trip_duration_days }} {{ $itinerary->trip_duration_days === 1 ? 'day' : 'days' }}
                             · {{ $itinerary->match_score }}% average match
                             · ₱{{ number_format($itinerary->total_estimated_cost, 2) }}
                         </p>
